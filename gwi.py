@@ -124,7 +124,40 @@ def a_params(gas):
         return a_n2o
 
 
-# BEGIN CALCULATION
+def regress_single_gwi(forc_All, temp_Obs):
+    """Regress GWI timeseries for single given ERF and Observed Temperature."""
+    
+    temp_All = forc_All.copy()
+    vars = list(forc_All)[1:]
+    for var in vars:
+        # Calculate the temperature from ERF
+        _forc = forc_All[var]
+        _temp =  FTmod(forc_All.shape[0], a_params('Carbon Dioxide')) @ _forc
+        temp_All[var] = _temp
+        # Substract preindustrial baseline
+        _ofst = temp_All.loc[(temp_All['Year'] >= start_pi) & (df_forc['Year'] <= end_pi),
+                             var].mean()
+        temp_All[var] = temp_All.loc[(temp_All['Year'] >= start_yr) & (df_forc['Year'] <= end_yr),
+                            var] - _ofst
+        
+    # Calculate regression coefficients
+    # The following code below is equivalent to the (more easily readable)
+    # three lines of code immediately below
+    # a = np.vstack([temp_GHG, temp_Aer, temp_Nat, np.ones(len(temp_GHG))]).T
+    # b = np.linalg.lstsq(a, temp_Obs)[0]
+    # coef_GHG, coef_Aer, coef_Nat, coef_Cst = b[0], b[1], b[2], b[3]
+
+    # Then we regain (outside this function function for now)
+    # temp_TOT = coef_GHG * temp_GHG + coef_Aer * temp_Aer + coef_Nat * temp_Nat + coef_Cst
+
+    temp_All['ones'] = np.ones(temp_All.shape[0])
+    temp_Mod = np.array(temp_All)[:, 1:]
+    coef_Reg = np.linalg.lstsq(temp_Mod, temp_Obs)[0]
+    for i in range(temp_Mod.shape[1]):  # ie number of variables
+        temp_Mod[:, i] *= coef_Reg[i]
+    
+    return temp_Mod
+    
 
 # READ IN THE DATA
 df = pd.read_excel('.\data\otto_2016_gwi_excel.xlsx', sheet_name='Main',
@@ -141,70 +174,49 @@ ofst_Obs = df.loc[(df['Year'] >= start_pi) & (df['Year'] <= end_pi),
                   'Obs warm'].mean()
 temp_Obs = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr),
                   'Obs warm'] - ofst_Obs
-
+# temp_df = pd.read_csv('data\HadCRUT.5.0.1.0.analysis.summary_series.global.annual.csv')
+# ofst_Obs = temp_df.loc[(temp_df['Time'] >= start_pi) & (temp_df['Year'] <= end_pi),
+#                   'Anomaly (deg C)'].mean()
+# temp_Obs = temp_df.loc[(temp_df['Time'] >= start_yr) & (temp_df['Year'] <= end_yr),
+#                   'Anomaly (deg C)'] - ofst_Obs
 
 # Read Anthropogenic and Natural Forcing
-rf = pd.read_excel('.\data\otto_2016_gwi_excel.xlsx', sheet_name='RF',
+df_forc = pd.read_excel('.\data\otto_2016_gwi_excel.xlsx', sheet_name='RF',
                    header=59).rename(columns={"v YEARS/GAS >": 'Year'},
                                      errors="raise")
-# print(rf.head())
-forc_GHG = rf.loc[(rf['Year'] >= 1765) & (rf['Year'] <= end_yr),
+# print(df_forc.head())
+forc_GHG = df_forc.loc[(df_forc['Year'] >= 1765) & (df_forc['Year'] <= end_yr),
                   'GHG_RF']
-forc_Ant = rf.loc[(rf['Year'] >= 1765) & (rf['Year'] <= end_yr),
+forc_Ant = df_forc.loc[(df_forc['Year'] >= 1765) & (df_forc['Year'] <= end_yr),
                   'TOTAL_ANTHRO_RF']
 
-forc_Aer = forc_Ant - forc_GHG
+df_forc['Ant'] = df_forc['TOTAL_ANTHRO_RF']
+df_forc['GHG'] = df_forc['GHG_RF']
+df_forc['Aer'] = df_forc['TOTAL_ANTHRO_RF'] - df_forc['GHG_RF']
+df_forc['Nat'] = df_forc['SOLAR_RF'] + df_forc['VOLCANIC_ANNUAL_RF']
 
-forc_Vol = rf.loc[(rf['Year'] >= 1765) & (rf['Year'] <= end_yr),
-                  'VOLCANIC_ANNUAL_RF']
-forc_Sol = rf.loc[(rf['Year'] >= 1765) & (rf['Year'] <= end_yr),
-                  'SOLAR_RF']
-forc_Nat = forc_Sol + forc_Vol
+forc_All = df_forc.loc[(df_forc['Year'] >= start_yr) & (df_forc['Year'] <= end_yr),
+                    ['Year', 'Nat', 'GHG', 'Aer']]
 
-temp_GHG = FTmod(len(forc_GHG), a_params('Carbon Dioxide')) @ forc_GHG
-temp_Aer = FTmod(len(forc_Aer), a_params('Carbon Dioxide')) @ forc_Aer
-temp_Nat = FTmod(len(forc_Nat), a_params('Carbon Dioxide')) @ forc_Nat
-
-temp_All = pd.DataFrame({'Year': year_All,
-                         'temp_GHG': temp_GHG,
-                         'temp_Aer': temp_Aer,
-                         'temp_Nat': temp_Nat})
-ofst_GHG = temp_All.loc[(temp_All['Year'] >= start_pi) & (rf['Year'] <= end_pi),
-                        'temp_GHG'].mean()
-temp_GHG = temp_All.loc[(temp_All['Year'] >= start_yr) & (rf['Year'] <= end_yr),
-                        'temp_GHG'] - ofst_GHG
-ofst_Aer = temp_All.loc[(temp_All['Year'] >= start_pi) & (rf['Year'] <= end_pi),
-                        'temp_Aer'].mean()
-temp_Aer = temp_All.loc[(temp_All['Year'] >= start_yr) & (rf['Year'] <= end_yr),
-                        'temp_Aer'] - ofst_Aer
-ofst_Nat = temp_All.loc[(temp_All['Year'] >= start_pi) & (rf['Year'] <= end_pi),
-                        'temp_Nat'].mean()
-temp_Nat = temp_All.loc[(temp_All['Year'] >= start_yr) & (rf['Year'] <= end_yr),
-                        'temp_Nat'] - ofst_Nat
-        
+# Regress
+# for ensemble_ERF in ensembles_ERF:
+#     for temp_Obs in ensembles_Obs:
+#         for ensemble_Par in ensemble_Par:
 
 
+# # ERFs are of shape (variable, ensemble, timeseries) dimension:
+# # * variable is variable (Nat, Ant, ...)
+# # * ensemble is ensemble (1, 2, 3, ...)
+# # * timeseries is time dimension, ie the actual timeseries
+# # Note that i = j
 
 
-# CALCULATE REGRESSION COEFFICIENTS
+temp_Att = regress_single_gwi(forc_All, temp_Obs)
 
-# Read Regression Coefficients from Excel
-# coef_Ant = 0.775125119
-# coef_Nat = 0.608315039
-# coef_Cst =  -0.449058791
-
-
-# Calculate Regression Coefficients
-a = np.vstack([temp_GHG, temp_Aer, temp_Nat, np.ones(len(temp_GHG))]).T
-b = np.linalg.lstsq(a, temp_Obs)[0]
-coef_GHG, coef_Aer, coef_Nat, coef_Cst = b[0], b[1], b[2], b[3]
-
-temp_TOT = coef_GHG * temp_GHG + coef_Aer * temp_Aer + coef_Nat * temp_Nat + coef_Cst
 # PLOT DATA
 plt.scatter(year_Ind, temp_Obs)
-plt.plot(year_Ind, coef_GHG * temp_GHG, label='GHG')
-plt.plot(year_Ind, coef_Aer * temp_Aer, label='Aer')
-plt.plot(year_Ind, coef_Nat * temp_Nat, label='Nat')
-plt.plot(year_Ind, temp_TOT, label='TOT')
+plt.plot(year_Ind, temp_Att.sum(axis=1), label='TOT')
+for i in range(len(list(forc_All)[1:])):
+    plt.plot(year_Ind, temp_Att[:, i], label=list(forc_All)[1:][i])
 plt.legend()
 plt.show()
