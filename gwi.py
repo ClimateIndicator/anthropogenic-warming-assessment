@@ -127,7 +127,7 @@ def a_params(gas):
 # BEGIN CALCULATION
 
 # READ IN THE DATA
-df = pd.read_excel('./otto_2016_gwi_excel.xlsx', sheet_name='Main',
+df = pd.read_excel('.\data\otto_2016_gwi_excel.xlsx', sheet_name='Main',
                    header=5, skiprows=[6])
 
 start_yr, end_yr = 1850, 2015
@@ -144,10 +144,10 @@ temp_Obs = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr),
 
 
 # Read Anthropogenic and Natural Forcing
-rf = pd.read_excel('./otto_2016_gwi_excel.xlsx', sheet_name='RF',
+rf = pd.read_excel('.\data\otto_2016_gwi_excel.xlsx', sheet_name='RF',
                    header=59).rename(columns={"v YEARS/GAS >": 'Year'},
                                      errors="raise")
-print(rf.head())
+# print(rf.head())
 forc_GHG = rf.loc[(rf['Year'] >= 1765) & (rf['Year'] <= end_yr),
                   'GHG_RF']
 forc_Ant = rf.loc[(rf['Year'] >= 1765) & (rf['Year'] <= end_yr),
