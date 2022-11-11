@@ -170,15 +170,17 @@ start_pi, end_pi = 1860, 1879
 year_All = df.loc[(df['Year'] >= 1765) & (df['Year'] <= end_yr), 'Year']
 year_Ind = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr), 'Year']
 
-ofst_Obs = df.loc[(df['Year'] >= start_pi) & (df['Year'] <= end_pi),
-                  'Obs warm'].mean()
-temp_Obs = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr),
-                  'Obs warm'] - ofst_Obs
-# temp_df = pd.read_csv('data\HadCRUT.5.0.1.0.analysis.summary_series.global.annual.csv')
-# ofst_Obs = temp_df.loc[(temp_df['Time'] >= start_pi) & (temp_df['Year'] <= end_pi),
-#                   'Anomaly (deg C)'].mean()
-# temp_Obs = temp_df.loc[(temp_df['Time'] >= start_yr) & (temp_df['Year'] <= end_yr),
-#                   'Anomaly (deg C)'] - ofst_Obs
+# ofst_Obs = df.loc[(df['Year'] >= start_pi) & (df['Year'] <= end_pi),
+#                   'Obs warm'].mean()
+# temp_Obs = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr),
+#                   'Obs warm'] - ofst_Obs#
+
+temp_Path = 'data\HadCRUT.5.0.1.0.analysis.summary_series.global.annual.csv'
+temp_df = pd.read_csv(temp_Path).rename(columns={'Time': 'Year'})
+ofst_Obs = temp_df.loc[(temp_df['Year'] >= start_pi) & (temp_df['Year'] <= end_pi),
+                  'Anomaly (deg C)'].mean()
+temp_Obs = temp_df.loc[(temp_df['Year'] >= start_yr) & (temp_df['Year'] <= end_yr),
+                  'Anomaly (deg C)'] - ofst_Obs
 
 # Read Anthropogenic and Natural Forcing
 df_forc = pd.read_excel('.\data\otto_2016_gwi_excel.xlsx', sheet_name='RF',
