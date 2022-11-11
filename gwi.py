@@ -124,7 +124,7 @@ def a_params(gas):
         return a_n2o
 
 
-def regress_single_gwi(forc_All, temp_Obs):
+def regress_single_gwi(forc_All, temp_Obs, params):
     """Regress GWI timeseries for single given ERF and Observed Temperature."""
     
     temp_All = forc_All.copy()
@@ -132,13 +132,17 @@ def regress_single_gwi(forc_All, temp_Obs):
     for var in vars:
         # Calculate the temperature from ERF
         _forc = forc_All[var]
-        _temp =  FTmod(forc_All.shape[0], a_params('Carbon Dioxide')) @ _forc
+        _temp =  FTmod(forc_All.shape[0], params) @ _forc
         temp_All[var] = _temp
         # Substract preindustrial baseline
-        _ofst = temp_All.loc[(temp_All['Year'] >= start_pi) & (df_forc['Year'] <= end_pi),
-                             var].mean()
-        temp_All[var] = temp_All.loc[(temp_All['Year'] >= start_yr) & (df_forc['Year'] <= end_yr),
-                            var] - _ofst
+        _ofst = temp_All.loc[(temp_All['Year'] >= start_pi) &
+                             (df_forc['Year'] <= end_pi),
+                             var
+                             ].mean()
+        temp_All[var] = temp_All.loc[(temp_All['Year'] >= start_yr) &
+                                     (df_forc['Year'] <= end_yr),
+                                     var
+                                     ] - _ofst
         
     # Calculate regression coefficients
     # The following code below is equivalent to the (more easily readable)
@@ -167,7 +171,6 @@ start_yr, end_yr = 1850, 2015
 start_pi, end_pi = 1860, 1879
 
 # Read observed temperatures
-year_All = df.loc[(df['Year'] >= 1765) & (df['Year'] <= end_yr), 'Year']
 year_Ind = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr), 'Year']
 
 # ofst_Obs = df.loc[(df['Year'] >= start_pi) & (df['Year'] <= end_pi),
@@ -177,10 +180,14 @@ year_Ind = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr), 'Year']
 
 temp_Path = 'data\HadCRUT.5.0.1.0.analysis.summary_series.global.annual.csv'
 temp_df = pd.read_csv(temp_Path).rename(columns={'Time': 'Year'})
-ofst_Obs = temp_df.loc[(temp_df['Year'] >= start_pi) & (temp_df['Year'] <= end_pi),
-                  'Anomaly (deg C)'].mean()
-temp_Obs = temp_df.loc[(temp_df['Year'] >= start_yr) & (temp_df['Year'] <= end_yr),
-                  'Anomaly (deg C)'] - ofst_Obs
+ofst_Obs = temp_df.loc[(temp_df['Year'] >= start_pi) &
+                       (temp_df['Year'] <= end_pi),
+                       'Anomaly (deg C)'
+                       ].mean()
+temp_Obs = temp_df.loc[(temp_df['Year'] >= start_yr) &
+                       (temp_df['Year'] <= end_yr),
+                       'Anomaly (deg C)'
+                       ] - ofst_Obs
 
 # Read Anthropogenic and Natural Forcing
 df_forc = pd.read_excel('.\data\otto_2016_gwi_excel.xlsx', sheet_name='RF',
@@ -197,8 +204,13 @@ df_forc['GHG'] = df_forc['GHG_RF']
 df_forc['Aer'] = df_forc['TOTAL_ANTHRO_RF'] - df_forc['GHG_RF']
 df_forc['Nat'] = df_forc['SOLAR_RF'] + df_forc['VOLCANIC_ANNUAL_RF']
 
-forc_All = df_forc.loc[(df_forc['Year'] >= start_yr) & (df_forc['Year'] <= end_yr),
-                    ['Year', 'Nat', 'GHG', 'Aer']]
+forc_All = df_forc.loc[(df_forc['Year'] >= start_yr) &
+                       (df_forc['Year'] <= end_yr),
+                       ['Year', 'Nat', 'GHG', 'Aer']]
+
+# forc_All = df_forc.loc[(df_forc['Year'] >= start_yr) &
+#                        (df_forc['Year'] <= end_yr),
+#                        ['Year', 'Nat', 'Ant']]
 
 # Regress
 # for ensemble_ERF in ensembles_ERF:
@@ -212,8 +224,7 @@ forc_All = df_forc.loc[(df_forc['Year'] >= start_yr) & (df_forc['Year'] <= end_y
 # # * timeseries is time dimension, ie the actual timeseries
 # # Note that i = j
 
-
-temp_Att = regress_single_gwi(forc_All, temp_Obs)
+temp_Att = regress_single_gwi(forc_All, temp_Obs, a_params('Carbon Dioxide'))
 
 # PLOT DATA
 plt.scatter(year_Ind, temp_Obs)
