@@ -132,7 +132,7 @@ def regress_single_gwi(forc_All, temp_Obs, params):
     for var in vars:
         # Calculate the temperature from ERF
         _forc = forc_All[var]
-        _temp =  FTmod(forc_All.shape[0], params) @ _forc
+        _temp = FTmod(forc_All.shape[0], params) @ _forc
         temp_All[var] = _temp
         # Substract preindustrial baseline
         _ofst = temp_All.loc[(temp_All['Year'] >= start_pi) &
@@ -170,7 +170,7 @@ df = pd.read_excel('.\data\otto_2016_gwi_excel.xlsx', sheet_name='Main',
 start_yr, end_yr = 1850, 2015
 start_pi, end_pi = 1860, 1879
 
-# Read observed temperatures
+# Read Observed Temperatures
 year_Ind = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr), 'Year']
 
 # ofst_Obs = df.loc[(df['Year'] >= start_pi) & (df['Year'] <= end_pi),
@@ -178,58 +178,66 @@ year_Ind = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr), 'Year']
 # temp_Obs = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr),
 #                   'Obs warm'] - ofst_Obs#
 
-temp_Path = 'data\HadCRUT.5.0.1.0.analysis.summary_series.global.annual.csv'
+temp_Path = './data/HadCRUT/HadCRUT.5.0.1.0.analysis.ensemble_series.global.annual.csv'
 temp_df = pd.read_csv(temp_Path).rename(columns={'Time': 'Year'})
 ofst_Obs = temp_df.loc[(temp_df['Year'] >= start_pi) &
-                       (temp_df['Year'] <= end_pi),
-                       'Anomaly (deg C)'
-                       ].mean()
+                       (temp_df['Year'] <= end_pi)
+                       ].mean(axis=0)
+temp_Obs_ensemble_names = list(temp_df)[3:]
 temp_Obs = temp_df.loc[(temp_df['Year'] >= start_yr) &
                        (temp_df['Year'] <= end_yr),
-                       'Anomaly (deg C)'
-                       ] - ofst_Obs
+                       temp_Obs_ensemble_names] - ofst_Obs
 
-# Read Anthropogenic and Natural Forcing
-df_forc = pd.read_excel('.\data\otto_2016_gwi_excel.xlsx', sheet_name='RF',
-                   header=59).rename(columns={"v YEARS/GAS >": 'Year'},
-                                     errors="raise")
-# print(df_forc.head())
-forc_GHG = df_forc.loc[(df_forc['Year'] >= 1765) & (df_forc['Year'] <= end_yr),
-                  'GHG_RF']
-forc_Ant = df_forc.loc[(df_forc['Year'] >= 1765) & (df_forc['Year'] <= end_yr),
-                  'TOTAL_ANTHRO_RF']
+# Read ERF
+forc_Path = './data/ERF Samples/'
+df_forc_Ant = pd.read_csv(forc_Path + 'rf_ant_200samples.csv', skiprows=[1])
+df_forc_Nat = pd.read_csv(forc_Path + 'rf_nat_200samples.csv', skiprows=[1])
+df_forc_Ant.rename(columns={'Unnamed: 0': 'Year'}, inplace=True)
+df_forc_Nat.rename(columns={'Unnamed: 0': 'Year'}, inplace=True)
 
-df_forc['Ant'] = df_forc['TOTAL_ANTHRO_RF']
-df_forc['GHG'] = df_forc['GHG_RF']
-df_forc['Aer'] = df_forc['TOTAL_ANTHRO_RF'] - df_forc['GHG_RF']
-df_forc['Nat'] = df_forc['SOLAR_RF'] + df_forc['VOLCANIC_ANNUAL_RF']
+forc_All_ensemble_names = list(df_forc_Ant)[1:]
 
-forc_All = df_forc.loc[(df_forc['Year'] >= start_yr) &
-                       (df_forc['Year'] <= end_yr),
-                       ['Year', 'Nat', 'GHG', 'Aer']]
+# # Read Anthropogenic and Natural Forcing
+# df_forc = pd.read_excel('.\data\otto_2016_gwi_excel.xlsx', sheet_name='RF',
+#                    header=59).rename(columns={"v YEARS/GAS >": 'Year'},
+#                                      errors="raise")
+# # print(df_forc.head())
+# forc_GHG = df_forc.loc[(df_forc['Year'] >= 1765) & (df_forc['Year'] <= end_yr),
+#                   'GHG_RF']
+# forc_Ant = df_forc.loc[(df_forc['Year'] >= 1765) & (df_forc['Year'] <= end_yr),
+#                   'TOTAL_ANTHRO_RF']
+
+# df_forc['Ant'] = df_forc['TOTAL_ANTHRO_RF']
+# df_forc['GHG'] = df_forc['GHG_RF']
+# df_forc['Aer'] = df_forc['TOTAL_ANTHRO_RF'] - df_forc['GHG_RF']
+# df_forc['Nat'] = df_forc['SOLAR_RF'] + df_forc['VOLCANIC_ANNUAL_RF']
+
+# forc_All = df_forc.loc[(df_forc['Year'] >= start_yr) &
+#                        (df_forc['Year'] <= end_yr),
+#                        ['Year', 'Nat', 'GHG', 'Aer']]
 
 # forc_All = df_forc.loc[(df_forc['Year'] >= start_yr) &
 #                        (df_forc['Year'] <= end_yr),
 #                        ['Year', 'Nat', 'Ant']]
 
 # Regress
-# for ensemble_ERF in ensembles_ERF:
-#     for temp_Obs in ensembles_Obs:
-#         for ensemble_Par in ensemble_Par:
+# for forc_Ens in forc_All_ensemble_names:
+#     for temp_Ens in temp_Obs_ensemble_names:
+#         forc_All = pd.DataFrame({'Ant': })
+        
 
+# ERFs are of shape (variable, ensemble, timeseries) dimension:
+# * variable is variable (Nat, Ant, ...)
+# * ensemble is ensemble (1, 2, 3, ...)
+# * timeseries is time dimension, ie the actual timeseries
+# Note that i = j
 
-# # ERFs are of shape (variable, ensemble, timeseries) dimension:
-# # * variable is variable (Nat, Ant, ...)
-# # * ensemble is ensemble (1, 2, 3, ...)
-# # * timeseries is time dimension, ie the actual timeseries
-# # Note that i = j
+# temp_Att = regress_single_gwi(forc_All, temp_Obs, a_params('Carbon Dioxide'))
 
-temp_Att = regress_single_gwi(forc_All, temp_Obs, a_params('Carbon Dioxide'))
-
-# PLOT DATA
-plt.scatter(year_Ind, temp_Obs)
-plt.plot(year_Ind, temp_Att.sum(axis=1), label='TOT')
-for i in range(len(list(forc_All)[1:])):
-    plt.plot(year_Ind, temp_Att[:, i], label=list(forc_All)[1:][i])
-plt.legend()
-plt.show()
+# # PLOT DATA
+# plt.scatter(year_Ind, temp_Obs)
+# plt.plot(year_Ind, temp_Att.sum(axis=1), label='TOT')
+# for i in range(len(list(forc_All)[1:])):
+#     plt.plot(year_Ind, temp_Att[:, i], label=list(forc_All)[1:][i])
+# plt.legend()
+# plt.show()
