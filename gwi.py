@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import datetime as dt
+import os
+import sys
+import functools
 
 # DEFINE AR5-IR MODEL
 # Code copied from warming contributions
@@ -199,40 +202,50 @@ df_temp_Obs = df_temp_Obs.loc[(df_temp_Obs.index >= start_yr) &
                               temp_Obs_ensemble_names] - ofst_Obs
 # Read ERF
 forc_Path = './data/ERF Samples/'
-df_forc_Ant = pd.read_csv(forc_Path + 'rf_ant_200samples.csv', skiprows=[1]
-                          ).rename(columns={'Unnamed: 0': 'Year'}
-                          ).set_index('Year')
-df_forc_Nat = pd.read_csv(forc_Path + 'rf_nat_200samples.csv', skiprows=[1]
-                          ).rename(columns={'Unnamed: 0': 'Year'}
-                          ).set_index('Year')
-df_forc_co2 = pd.read_csv(forc_Path + 'rf_co2_200samples.csv', skiprows=[1]
-                          ).rename(columns={'Unnamed: 0': 'Year'}
-                          ).set_index('Year')
-df_forc_ch4 = pd.read_csv(forc_Path + 'rf_ch4_200samples.csv', skiprows=[1]
-                          ).rename(columns={'Unnamed: 0': 'Year'}
-                          ).set_index('Year')
-df_forc_n2o = pd.read_csv(forc_Path + 'rf_n2o_200samples.csv', skiprows=[1]
-                          ).rename(columns={'Unnamed: 0': 'Year'}
-                          ).set_index('Year')
-df_forc_other_wmghg = pd.read_csv(forc_Path + 'rf_other_wmghg_200samples.csv', skiprows=[1]
-                          ).rename(columns={'Unnamed: 0': 'Year'}
-                          ).set_index('Year')
-df_forc_Ant = df_forc_Ant.loc[df_forc_Ant.index <= end_yr]
-df_forc_Nat = df_forc_Nat.loc[df_forc_Nat.index <= end_yr]
-df_forc_co2 = df_forc_co2.loc[df_forc_co2.index <= end_yr]
-df_forc_ch4 = df_forc_ch4.loc[df_forc_ch4.index <= end_yr]
-df_forc_n2o = df_forc_n2o.loc[df_forc_n2o.index <= end_yr]
-df_forc_other_wmghg = df_forc_other_wmghg.loc[df_forc_other_wmghg.index <= end_yr]
+list_ERF = ['_'.join(file.split('_')[1:-1])
+            for file in os.listdir(forc_Path)
+            if '.csv' in file]
+forc_Group = {
+            #   'Ant': {'Consists': ['ant']},
+              'Nat': {'Consists': ['nat']},
+              'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'h2o_stratospheric',
+                                   'o3_tropospheric', 'o3_stratospheric',
+                                   'other_wmghg', 'land_use',]},
+              'Aer': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails']}
+              }
 
-df_forc_GHG = df_forc_co2 + df_forc_ch4 + df_forc_n2o + df_forc_other_wmghg
-df_forc_Aer = df_forc_Ant - df_forc_GHG
+# forc_Group = {x: {'Consists': [x]} for x in list_ERF}
 
-forc_Nat_ensemble_names = list(df_forc_Ant)
-forc_Ant_ensemble_names = list(df_forc_Nat)
-if forc_Nat_ensemble_names != forc_Ant_ensemble_names:
-    print('WARNING: differing ensembles between forcing agents')
-else:
-    forc_All_ensemble_names = forc_Ant_ensemble_names
+for grouping in forc_Group:
+    list_df = []
+    for element in forc_Group[grouping]['Consists']:
+        _df = pd.read_csv(forc_Path + f'rf_{element}_200samples.csv',
+                          skiprows=[1]
+                          ).rename(columns={'Unnamed: 0': 'Year'}
+                          ).set_index('Year')
+        list_df.append(_df.loc[_df.index <= end_yr])
+    
+    forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y), list_df)
+
+forc_Group_names = sorted(list(forc_Group.keys()))
+print(forc_Group_names)
+# for group in forc_Group:
+#     plt.plot(forc_Group[group]['df'].quantile(q=0.5, axis=1), label=group)
+# plt.legend()
+# plt.show()
+# sys.exit()
+
+# df_forc_Ant = pd.read_csv(forc_Path + 'rf_ant_200samples.csv', skiprows=[1]
+#                           ).rename(columns={'Unnamed: 0': 'Year'}
+#                           ).set_index('Year')
+# df_forc_Nat = pd.read_csv(forc_Path + 'rf_nat_200samples.csv', skiprows=[1]
+#                           ).rename(columns={'Unnamed: 0': 'Year'}
+#                           ).set_index('Year')
+# df_forc_Ant = df_forc_Ant.loc[df_forc_Ant.index <= end_yr]
+# df_forc_Nat = df_forc_Nat.loc[df_forc_Nat.index <= end_yr]
+
+
+forc_All_ensemble_names = list(forc_Group['Nat']['df'])
 
 
 
@@ -289,10 +302,10 @@ n = samples ** 2
 
 
 ################
-forc_Yrs = np.array(df_forc_Ant.index)
+forc_Yrs = np.array(forc_Group['Nat']['df'].index)
 temp_Yrs = np.array(df_temp_Obs.index)
 
-temp_Att_Results = np.empty((173, 2, n))
+temp_Att_Results = np.empty((173, len(forc_Group_names), n))
 
 
 i = 0
@@ -300,12 +313,14 @@ t1 = dt.datetime.now()
 for forc_Ens in forc_All_ensemble_names[:samples]:
     # Calculate forcing -> temperature response. The below steps calculate
     # temperature for all sources simultaneously (eg Nat, GHG, and Aer)
-    forc_All = np.array([df_forc_Nat[forc_Ens], df_forc_Ant[forc_Ens]]).T
+    # forc_All = np.array([df_forc_Nat[forc_Ens], df_forc_Ant[forc_Ens]]).T
+    forc_All = np.array([forc_Group[group]['df'][forc_Ens]
+                         for group in forc_Group_names]).T
     params = a_params('Carbon Dioxide')
     temp_All = FTmod(forc_All.shape[0], params) @ forc_All
     _ofst = temp_All[(forc_Yrs >= start_pi) & (forc_Yrs <= end_pi), :].mean(axis=0)
     temp_Mod = temp_All[(forc_Yrs >= start_yr) & (forc_Yrs <= end_yr)] - _ofst
-
+    
     # Decide whether to include a constant offset term in regression
     offset = False
     if offset:
@@ -316,11 +331,11 @@ for forc_Ens in forc_All_ensemble_names[:samples]:
         temp_Obs = np.array(df_temp_Obs[temp_Ens])
 
         # Carry out regression calculation
-
         coef_Reg = np.linalg.lstsq(temp_Mod, temp_Obs, rcond=None)[0]
         temp_Att = temp_Mod * coef_Reg
         temp_Att_Results[:, :, i] = temp_Att
-        # Visual display
+
+        # Visual display of pregress through calculation
         percentage = int((i+1)/n*100)
         loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
         print(f'calculating {loading_bar} {percentage}%', end='\r')
@@ -340,13 +355,13 @@ plt.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
 #                  df_temp_Obs.quantile(q=0.95, axis=1),
 #                  color='black', alpha=0.05)
 
-vars = ['Nat', 'Ant']
-var_cols = ['blue', 'orange']
-for i in range(len(vars)):
+var_cols = ['orange', 'green', 'blue']
+for i in range(len(forc_Group_names)):
     plt.fill_between(temp_Yrs,  
                      np.percentile(temp_Att_Results[:, i, :], (5), axis=1),
                      np.percentile(temp_Att_Results[:, i, :], (95), axis=1),
-                     color=var_cols[i], label=vars[i], alpha=0.5)
+                     label=forc_Group_names[i],
+                     color=var_cols[i], alpha=0.5)
     plt.plot(temp_Yrs, np.percentile(temp_Att_Results[:, i, :], (50), axis=1),
              color=var_cols[i])
 
@@ -356,8 +371,8 @@ plt.fill_between(temp_Yrs,
                  np.percentile(temp_TOT_Results[:, :], (95), axis=1),
                  color='red', alpha=0.5)
 plt.plot(temp_Yrs, np.percentile(temp_TOT_Results[:, :], (50), axis=1),
-         color='red')
-
+         color='red', label='TOTAL')
+plt.legend()
 plt.show()
 
 
