@@ -2,11 +2,25 @@
 
 import numpy as np
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
 import datetime as dt
 import os
 import sys
 import functools
+import scipy as sp
+
+matplotlib.rcParams.update(  
+    {'font.size': 11, 'font.weight': 'light',  
+     'axes.linewidth': 0.5, 'axes.titleweight': 'regular',  
+     'axes.grid': True, 'grid.linewidth': 0.5,  
+     'grid.color': 'gainsboro',  
+    #  'figure.dpi': 200, 'figure.figsize': (15, 10),  
+     'figure.titlesize': 17,  
+     'figure.titleweight': 'light',  
+     'legend.frameon': False}
+)
+
 
 # DEFINE AR5-IR MODEL
 # Code copied from warming contributions
@@ -18,7 +32,7 @@ def EFmod(nyr, a):
     # extend time array to compute derivatives
     time = np.arange(nyr + 1)
 
-    # compute constant term (if there is one, otherwise a[0]=0)
+    # compute inc_Constant term (if there is one, otherwise a[0]=0)
     F_0 = a[4] * a[13] * a[0] * time
 
     # loop over gas decay terms to calculate AGWP using AR5 formula
@@ -100,7 +114,7 @@ def a_params(gas):
     a_ar5[10:12] = [0.631, 0.429]                      # AR5 thermal sensitivity coeffs
     a_ar5[13] = 1.37e-2                                # AR5 rad efficiency in W/m2/ppm
     a_ar5[14] = 0
-    a_ar5[15:17] = [8.400, 409.5]                      # AR5 thermal time-constants -- could use Geoffroy et al [4.1,249.]
+    a_ar5[15:17] = [8.400, 409.5]                      # AR5 thermal time-inc_Constants -- could use Geoffroy et al [4.1,249.]
     a_ar5[18:21] = 0
 
     ECS = 3.0
@@ -172,6 +186,23 @@ def regress_single_gwi(forc_All, temp_Obs, params, offset=False):
     return temp_Mod_arr, temp_Mod_df
 
 
+# Request whether to include pre-industrial offset and constant term in
+# regression
+
+allowed_options = ['y', 'n']
+ao = '/'.join(allowed_options)
+
+inc_pi_offset = input(f'Subtract 1860-1879 PI baseline? {ao}: ')
+inc_reg_const = input(f'Include a constant term in regression? {ao}: ')
+
+if inc_pi_offset not in allowed_options:
+    print(f'{inc_pi_offset} not one of {ao}')
+elif inc_reg_const not in allowed_options:
+    print(f'{inc_reg_const} not one of {ao}')
+
+inc_pi_offset = True if inc_pi_offset == 'y' else False
+inc_reg_const = True if inc_pi_offset == 'y' else False
+
 
 # READ IN THE DATA
 # df = pd.read_excel('.\data\otto_2016_gwi_excel.xlsx', sheet_name='Main',
@@ -207,14 +238,14 @@ list_ERF = ['_'.join(file.split('_')[1:-1])
             if '.csv' in file]
 forc_Group = {
             #   'Ant': {'Consists': ['ant']},
-              'Nat': {'Consists': ['nat']},
+              'Nat': {'Consists': ['nat'], 'Colour': 'blue'},
               'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'h2o_stratospheric',
                                    'o3_tropospheric', 'o3_stratospheric',
-                                   'other_wmghg', 'land_use',]},
-              'Aer': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails']}
+                                   'other_wmghg', 'land_use'],
+                      'Colour': 'green'},
+              'Aer': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails'],
+                      'Colour': 'orange'}
               }
-
-# forc_Group = {x: {'Consists': [x]} for x in list_ERF}
 
 for grouping in forc_Group:
     list_df = []
@@ -225,10 +256,10 @@ for grouping in forc_Group:
                           ).set_index('Year')
         list_df.append(_df.loc[_df.index <= end_yr])
     
-    forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y), list_df)
+    forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y),
+                                                  list_df)
 
 forc_Group_names = sorted(list(forc_Group.keys()))
-print(forc_Group_names)
 # for group in forc_Group:
 #     plt.plot(forc_Group[group]['df'].quantile(q=0.5, axis=1), label=group)
 # plt.legend()
@@ -245,7 +276,7 @@ print(forc_Group_names)
 # df_forc_Nat = df_forc_Nat.loc[df_forc_Nat.index <= end_yr]
 
 
-forc_All_ensemble_names = list(forc_Group['Nat']['df'])
+forc_All_ensemble_names = list(forc_Group[forc_Group_names[0]]['df'])
 
 
 
@@ -302,11 +333,11 @@ n = samples ** 2
 
 
 ################
-forc_Yrs = np.array(forc_Group['Nat']['df'].index)
+forc_Yrs = np.array(forc_Group[forc_Group_names[0]]['df'].index)
 temp_Yrs = np.array(df_temp_Obs.index)
 
-temp_Att_Results = np.empty((173, len(forc_Group_names), n))
-
+temp_Att_Results = np.empty(
+    (173, len(forc_Group_names) + int(inc_reg_const), n))
 
 i = 0
 t1 = dt.datetime.now()
@@ -318,12 +349,16 @@ for forc_Ens in forc_All_ensemble_names[:samples]:
                          for group in forc_Group_names]).T
     params = a_params('Carbon Dioxide')
     temp_All = FTmod(forc_All.shape[0], params) @ forc_All
-    _ofst = temp_All[(forc_Yrs >= start_pi) & (forc_Yrs <= end_pi), :].mean(axis=0)
+    if inc_pi_offset:
+        _ofst = temp_All[(forc_Yrs >= start_pi) & (forc_Yrs <= end_pi), :
+                         ].mean(axis=0)
+    else:
+        _ofst = 0
     temp_Mod = temp_All[(forc_Yrs >= start_yr) & (forc_Yrs <= end_yr)] - _ofst
-    
-    # Decide whether to include a constant offset term in regression
-    offset = False
-    if offset:
+    # temp_Mod = temp_All[(forc_Yrs >= start_yr) & (forc_Yrs <= end_yr)]
+
+    # Decide whether to include a Constant offset term in regression
+    if inc_reg_const:
         temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)), axis=1)
 
     for temp_Ens in temp_Obs_ensemble_names[:samples]:
@@ -343,53 +378,146 @@ for forc_Ens in forc_All_ensemble_names[:samples]:
 
 t2 = dt.datetime.now()
 print(f'Total calculation took {t2-t1}')
+
+
 err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
            df_temp_Obs.quantile(q=0.5, axis=1))
 err_neg = (df_temp_Obs.quantile(q=0.5, axis=1) -
            df_temp_Obs.quantile(q=0.05, axis=1))
 plt.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
-             yerr=(err_neg, err_pos), fmt='o',
-             color='black')
-# plt.fill_between(temp_Yrs,
-#                  df_temp_Obs.quantile(q=0.05, axis=1),
-#                  df_temp_Obs.quantile(q=0.95, axis=1),
-#                  color='black', alpha=0.05)
+             yerr=(err_neg, err_pos),
+             fmt='o', color='black', label='HadCRUT5')
 
-var_cols = ['orange', 'green', 'blue']
-for i in range(len(forc_Group_names)):
-    plt.fill_between(temp_Yrs,  
-                     np.percentile(temp_Att_Results[:, i, :], (5), axis=1),
-                     np.percentile(temp_Att_Results[:, i, :], (95), axis=1),
-                     label=forc_Group_names[i],
-                     color=var_cols[i], alpha=0.5)
-    plt.plot(temp_Yrs, np.percentile(temp_Att_Results[:, i, :], (50), axis=1),
-             color=var_cols[i])
-
+temp_Ant_Results = (temp_Att_Results.sum(axis=1) -
+                    temp_Att_Results[:, forc_Group_names.index('Nat'), :])
 temp_TOT_Results = temp_Att_Results.sum(axis=1)
-plt.fill_between(temp_Yrs,  
-                 np.percentile(temp_TOT_Results[:, :], (5), axis=1),
-                 np.percentile(temp_TOT_Results[:, :], (95), axis=1),
-                 color='red', alpha=0.5)
-plt.plot(temp_Yrs, np.percentile(temp_TOT_Results[:, :], (50), axis=1),
-         color='red', label='TOTAL')
+
+sigmas = [[32, 68], [5, 95], [0.3, 99.7]]
+for p in sigmas:
+    for i in range(len(forc_Group_names)):
+        plt.fill_between(temp_Yrs,
+            np.percentile(temp_Att_Results[:, i, :], (p[0]), axis=1),
+            np.percentile(temp_Att_Results[:, i, :], (p[1]), axis=1),
+            color=forc_Group[forc_Group_names[i]]['Colour'],
+            alpha=0.1
+            )
+        if p == sigmas[-1]:
+            plt.plot(temp_Yrs,
+                np.percentile(temp_Att_Results[:, i, :], (50), axis=1),
+                color=forc_Group[forc_Group_names[i]]['Colour'],
+                label=(forc_Group_names[i]),
+                )
+
+    plt.fill_between(temp_Yrs,  
+                     np.percentile(temp_TOT_Results[:, :], (p[0]), axis=1),
+                     np.percentile(temp_TOT_Results[:, :], (p[1]), axis=1),
+                     color='gray',
+                     alpha=0.1)
+    plt.fill_between(temp_Yrs,
+                     np.percentile(temp_Ant_Results[:, :], (p[0]), axis=1),
+                     np.percentile(temp_Ant_Results[:, :], (p[1]), axis=1),
+                     color='red',
+                     alpha=0.1) 
+
+    if p == sigmas[-1]:
+        plt.plot(temp_Yrs, np.percentile(temp_TOT_Results[:, :], (50), axis=1),
+                 color='gray', label='TOTAL')
+        plt.plot(temp_Yrs, np.percentile(temp_Ant_Results[:, :], (50), axis=1),
+                 color='red', label='Ant')
+
+
 plt.legend()
 plt.show()
+sys.exit()
 
 
-# plt.show()
+###############################################################################
+# Now calculate the historical-only GWI #######################################
+###############################################################################
+hist_start = 1900
+historical_samples = 10
+n = historical_samples ** 2
+hist_temp_Att_Results = np.empty((
+                                  end_yr - hist_start + 1,  # num generated years
+                                  len(forc_Group_names) + int(inc_reg_const),  # forcings
+                                  n  # samples
+                                  ))
 
-        
-# ERFs are of shape (variable, ensemble, timeseries) dimension:
-# * variable is variable (Nat, Ant, ...)
-# * ensemble is ensemble (1, 2, 3, ...)
-# * timeseries is time dimension, ie the actual timeseries
-# Note that i = j
 
 
-# # PLOT DATA
-# plt.scatter(year_Ind, temp_Obs)
-# plt.plot(year_Ind, temp_Att.sum(axis=1), label='TOT')
-# for i in range(len(list(forc_All)[1:])):
-#     plt.plot(year_Ind, temp_Att[:, i], label=list(forc_All)[1:][i])
-# plt.legend()
-# plt.show()
+for y in temp_Yrs[temp_Yrs >= hist_start]:
+    i = 0
+    t1 = dt.datetime.now()
+    
+    yi = np.where(temp_Yrs[temp_Yrs >= hist_start] == y)
+    forc_Yrs_y = forc_Yrs[forc_Yrs <= y]
+
+    for forc_Ens in forc_All_ensemble_names[:historical_samples]:
+        # Calculate forcing -> temperature response. The below steps calculate
+        # temperature for all sources simultaneously (eg Nat, GHG, and Aer)
+        # forc_All = np.array([df_forc_Nat[forc_Ens], df_forc_Ant[forc_Ens]]).T
+
+        forc_All = np.array([forc_Group[group]['df'][forc_Ens].loc[
+                                forc_Group[group]['df'][forc_Ens].index <= y]
+                            for group in forc_Group_names]).T
+        params = a_params('Carbon Dioxide')
+        temp_All = FTmod(forc_All.shape[0], params) @ forc_All
+
+
+        _ofst = temp_All[(forc_Yrs_y >= start_pi) & (forc_Yrs_y <= min(end_pi, y)), :].mean(axis=0)
+
+        temp_Mod = temp_All[(forc_Yrs_y >= start_yr) & (forc_Yrs_y <= y)] - _ofst
+
+        # Decide whether to include a inc_Constant offset term in regression
+        if inc_reg_const:
+            temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)), axis=1)
+
+        for temp_Ens in temp_Obs_ensemble_names[:historical_samples]:
+            # Select the relevant observational data
+            temp_Obs = np.array(df_temp_Obs[temp_Ens])[(temp_Yrs >= start_yr) & (temp_Yrs <= y)]
+
+            # Carry out regression calculation
+            coef_Reg = np.linalg.lstsq(temp_Mod, temp_Obs, rcond=None)[0]
+            # coef_Reg = sp.optimize.lsq_linear(temp_Mod, temp_Obs, bounds=(1, 1.5))['x']
+            
+            GWI_y = temp_Mod[-1, :] * coef_Reg
+            hist_temp_Att_Results[yi, :, i] = GWI_y
+    
+            # Visual display of pregress through calculation
+            percentage = int((i+1)/(n*len(forc_Yrs_y))*100*len(forc_Yrs_y))
+            loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
+            # print(f'calculating {loading_bar} {percentage}%', end='\r')
+            i += 1
+
+t2 = dt.datetime.now()
+print(f'Total calculation took {t2-t1}')
+
+
+plt.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
+             yerr=(err_neg, err_pos),
+             fmt='o', color='black', label='HadCRUT5')
+
+for i in range(len(forc_Group_names)):
+    plt.fill_between(temp_Yrs[temp_Yrs >= hist_start],  
+                     np.percentile(hist_temp_Att_Results[:, i, :], (5), axis=1),
+                     np.percentile(hist_temp_Att_Results[:, i, :], (95), axis=1),
+                     label=forc_Group_names[i],
+                    #  color=var_cols[i],
+                     alpha=0.5)
+    plt.plot(temp_Yrs[temp_Yrs >= hist_start], np.percentile(hist_temp_Att_Results[:, i, :], (50), axis=1),
+            #  color=var_cols[i]
+             )
+
+hist_temp_TOT_Results = hist_temp_Att_Results.sum(axis=1)
+plt.plot(temp_Yrs[temp_Yrs >= hist_start],
+         np.percentile(hist_temp_TOT_Results, (50), axis=1),
+         color='pink')
+plt.fill_between(temp_Yrs[temp_Yrs >= hist_start],
+                 np.percentile(hist_temp_TOT_Results, (5), axis=1),
+                 np.percentile(hist_temp_TOT_Results, (95), axis=1),
+                 color='pink', label='hist_TOT', alpha=0.5)
+
+
+
+plt.legend()
+plt.show()
