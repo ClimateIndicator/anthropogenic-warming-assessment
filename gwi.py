@@ -10,16 +10,19 @@ import sys
 import functools
 import scipy as sp
 
-matplotlib.rcParams.update(  
-    {'font.size': 11, 'font.weight': 'light',  
-     'axes.linewidth': 0.5, 'axes.titleweight': 'regular',  
-     'axes.grid': True, 'grid.linewidth': 0.5,  
-     'grid.color': 'gainsboro',  
-    #  'figure.dpi': 200, 'figure.figsize': (15, 10),  
-     'figure.titlesize': 17,  
-     'figure.titleweight': 'light',  
+matplotlib.rcParams.update(
+    {'font.size': 11,
+    #  'font.family': 'Helvetica',
+     'font.weight': 'light',
+     'axes.linewidth': 0.5, 'axes.titleweight': 'regular',
+     'axes.grid': True, 'grid.linewidth': 0.5,
+     'grid.color': 'gainsboro',
+     'figure.dpi': 200, 'figure.figsize': (15, 10),
+     'figure.titlesize': 17,
+     'figure.titleweight': 'light',
      'legend.frameon': False}
 )
+# Fontweights~: light, regular, normal,
 
 
 # DEFINE AR5-IR MODEL
@@ -192,7 +195,7 @@ def regress_single_gwi(forc_All, temp_Obs, params, offset=False):
 allowed_options = ['y', 'n']
 ao = '/'.join(allowed_options)
 
-inc_pi_offset = input(f'Subtract 1860-1879 PI baseline? {ao}: ')
+inc_pi_offset = input(f'Subtract 1850-1900 PI baseline? {ao}: ')
 inc_reg_const = input(f'Include a constant term in regression? {ao}: ')
 
 if inc_pi_offset not in allowed_options:
@@ -201,7 +204,7 @@ elif inc_reg_const not in allowed_options:
     print(f'{inc_reg_const} not one of {ao}')
 
 inc_pi_offset = True if inc_pi_offset == 'y' else False
-inc_reg_const = True if inc_pi_offset == 'y' else False
+inc_reg_const = True if inc_reg_const == 'y' else False
 
 
 # READ IN THE DATA
@@ -209,7 +212,7 @@ inc_reg_const = True if inc_pi_offset == 'y' else False
 #                    header=5, skiprows=[6])
 
 start_yr, end_yr = 1850, 2022
-start_pi, end_pi = 1860, 1879
+start_pi, end_pi = 1850, 1900
 
 # Read Observed Temperatures
 # year_Ind = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr), 'Year']
@@ -304,7 +307,7 @@ forc_All_ensemble_names = list(forc_Group[forc_Group_names[0]]['df'])
 #                        ['Year', 'Nat', 'Ant']]
 
 # Regress
-samples = 200
+samples = int(input('numer of samples (0-200): '))
 n = samples ** 2
 
 ###############################
@@ -338,6 +341,7 @@ temp_Yrs = np.array(df_temp_Obs.index)
 
 temp_Att_Results = np.empty(
     (173, len(forc_Group_names) + int(inc_reg_const), n))
+temp_TOT_Residuals = np.empty((173, n))
 
 i = 0
 t1 = dt.datetime.now()
@@ -369,6 +373,7 @@ for forc_Ens in forc_All_ensemble_names[:samples]:
         coef_Reg = np.linalg.lstsq(temp_Mod, temp_Obs, rcond=None)[0]
         temp_Att = temp_Mod * coef_Reg
         temp_Att_Results[:, :, i] = temp_Att
+        temp_TOT_Residuals[:, i] = temp_Att.sum(axis=1) - temp_Obs
 
         # Visual display of pregress through calculation
         percentage = int((i+1)/n*100)
@@ -380,78 +385,168 @@ t2 = dt.datetime.now()
 print(f'Total calculation took {t2-t1}')
 
 
+
+
+
+# Plot the data
+
+fig = plt.figure(figsize=(15,10))
+ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
+ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
+ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
+
+
 err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
            df_temp_Obs.quantile(q=0.5, axis=1))
 err_neg = (df_temp_Obs.quantile(q=0.5, axis=1) -
            df_temp_Obs.quantile(q=0.05, axis=1))
-plt.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
+ax1.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
              yerr=(err_neg, err_pos),
-             fmt='o', color='black', label='HadCRUT5')
+             fmt='o', color='black', ms=2.5, lw=1,
+             label='HadCRUT5')
 
 temp_Ant_Results = (temp_Att_Results.sum(axis=1) -
                     temp_Att_Results[:, forc_Group_names.index('Nat'), :])
 temp_TOT_Results = temp_Att_Results.sum(axis=1)
 
 sigmas = [[32, 68], [5, 95], [0.3, 99.7]]
+
 for p in sigmas:
     for i in range(len(forc_Group_names)):
-        plt.fill_between(temp_Yrs,
+        ax1.fill_between(temp_Yrs,
             np.percentile(temp_Att_Results[:, i, :], (p[0]), axis=1),
             np.percentile(temp_Att_Results[:, i, :], (p[1]), axis=1),
             color=forc_Group[forc_Group_names[i]]['Colour'],
             alpha=0.1
             )
         if p == sigmas[-1]:
-            plt.plot(temp_Yrs,
+            ax1.plot(temp_Yrs,
                 np.percentile(temp_Att_Results[:, i, :], (50), axis=1),
                 color=forc_Group[forc_Group_names[i]]['Colour'],
                 label=(forc_Group_names[i]),
                 )
 
-    plt.fill_between(temp_Yrs,  
+    ax1.fill_between(temp_Yrs,  
                      np.percentile(temp_TOT_Results[:, :], (p[0]), axis=1),
                      np.percentile(temp_TOT_Results[:, :], (p[1]), axis=1),
                      color='gray',
                      alpha=0.1)
-    plt.fill_between(temp_Yrs,
+    ax1.fill_between(temp_Yrs,
                      np.percentile(temp_Ant_Results[:, :], (p[0]), axis=1),
                      np.percentile(temp_Ant_Results[:, :], (p[1]), axis=1),
                      color='red',
-                     alpha=0.1) 
+                     alpha=0.1)
 
     if p == sigmas[-1]:
-        plt.plot(temp_Yrs, np.percentile(temp_TOT_Results[:, :], (50), axis=1),
+        ax1.plot(temp_Yrs, np.percentile(temp_TOT_Results[:, :], (50), axis=1),
                  color='gray', label='TOTAL')
-        plt.plot(temp_Yrs, np.percentile(temp_Ant_Results[:, :], (50), axis=1),
+        ax1.plot(temp_Yrs, np.percentile(temp_Ant_Results[:, :], (50), axis=1),
                  color='red', label='Ant')
 
+ax1.set_ylabel('Warming Anomaly (⁰C)')
 
-plt.legend()
-plt.show()
-sys.exit()
+for p in sigmas:
+    ax3.fill_between(temp_Yrs,
+        np.percentile(temp_TOT_Residuals[:, :], (p[0]), axis=1),
+        np.percentile(temp_TOT_Residuals[:, :], (p[1]), axis=1),
+        color='gray',
+        alpha=0.1
+        )
+    if p == sigmas[-1]:
+        ax3.plot(temp_Yrs,
+            np.percentile(temp_TOT_Residuals[:, :], (50), axis=1),
+            color='gray',
+            label=(forc_Group_names[i]),
+            )
+ax3.set_ylabel('Regression Residuals (⁰C)')
+
+
+for i in range(len(forc_Group_names)):
+    binwidth = 0.01
+    bins = np.arange(np.min(temp_Att_Results[-1, i, :]),
+                     np.max(temp_Att_Results[-1, i, :]) + binwidth,
+                     binwidth)
+    ax2.hist(temp_Att_Results[-1, i, :], bins=bins,
+             density=True, orientation='horizontal',
+             color=forc_Group[forc_Group_names[i]]['Colour'],
+             alpha=0.3
+             )
+
+bins = np.arange(np.min(temp_Ant_Results[-1, :]),
+                 np.max(temp_Ant_Results[-1, :]) + binwidth,
+                 binwidth)
+ax2.hist(temp_Ant_Results[-1, :], bins=bins,
+         density=True, orientation='horizontal',
+         color='pink', alpha=0.3
+         )
+
+bins = np.arange(np.min(temp_TOT_Results[-1, :]),
+                 np.max(temp_TOT_Results[-1, :]) + binwidth,
+                 binwidth)
+ax2.hist(temp_TOT_Results[-1, :], bins=bins,
+         density=True, orientation='horizontal',
+         color='gray', alpha=0.3
+         )
+
+
+ax2.set_xlabel(f'PDF in {end_yr}')
+ax2.set_ylim(ax1.get_ylim())
+# ax2.set_xticklabels([])
+# ax2.set_yticklabels([])
+# ax2.set_xticks([])
+# ax2.set_yticks([])
+# ax2.text()
+
+gwi = np.around(np.percentile(temp_TOT_Results[-1, :], (50)), decimals=3)
+gwi_pls = np.around(np.percentile(temp_TOT_Results[-1, :], (95)) -
+                    np.percentile(temp_TOT_Results[-1, :], (50)),
+                    decimals=3)
+gwi_min = np.around(np.percentile(temp_TOT_Results[-1, :], (50)) -
+                    np.percentile(temp_TOT_Results[-1, :], (5)),
+                    decimals=3)
+# tmp = np.around(np.percentile(df_temp_Obs[-1, :], (50)), decimals=2)
+# tmp_pls = np.around(np.percentile(np.array(df_temp_Obs)[-1, :], (95)) -
+#                     np.percentile(np.array(df_temp_Obs)[-1, :], (50)),
+#                     decimals=2)
+# tmp_min = np.around(np.percentile(np.array(df_temp_Obs)[-1, :], (50)) -
+#                     np.percentile(np.array(df_temp_Obs)[-1, :], (5)),
+#                     decimals=2)
+str_GWI = r'${%s}^{+{%s}}_{-{%s}}$' % (gwi, gwi_pls, gwi_min)
+# str_temp_Obs = r'${%s}^{+{%s}}_{-{%s}}$' % (tmp, tmp_pls, tmp_min)
+fig.text(s=(f'Warming in {end_yr}: ' +
+            f'human-induced-warming = {str_GWI} (⁰C)'),
+            # f'observed warming = {str_temp_Obs}'),
+         y=0.9, x=0.5, horizontalalignment='center')
+
+fig.suptitle('Global Warming Index')
+ax1.legend()
+
+
+plt.savefig('GWI.png')
+plt.close()
+# plt.show()
+
 
 
 ###############################################################################
 # Now calculate the historical-only GWI #######################################
 ###############################################################################
+
 hist_start = 1900
-historical_samples = 10
+historical_samples = 50
 n = historical_samples ** 2
 hist_temp_Att_Results = np.empty((
-                                  end_yr - hist_start + 1,  # num generated years
-                                  len(forc_Group_names) + int(inc_reg_const),  # forcings
-                                  n  # samples
-                                  ))
+    end_yr - hist_start + 1,  # num generated years
+    len(forc_Group_names) + int(inc_reg_const),  # forcings
+    n  # samples
+    ))
 
 
-
+t1 = dt.datetime.now()
 for y in temp_Yrs[temp_Yrs >= hist_start]:
-    i = 0
-    t1 = dt.datetime.now()
-    
     yi = np.where(temp_Yrs[temp_Yrs >= hist_start] == y)
     forc_Yrs_y = forc_Yrs[forc_Yrs <= y]
-
+    i = 0
     for forc_Ens in forc_All_ensemble_names[:historical_samples]:
         # Calculate forcing -> temperature response. The below steps calculate
         # temperature for all sources simultaneously (eg Nat, GHG, and Aer)
@@ -482,12 +577,12 @@ for y in temp_Yrs[temp_Yrs >= hist_start]:
             
             GWI_y = temp_Mod[-1, :] * coef_Reg
             hist_temp_Att_Results[yi, :, i] = GWI_y
-    
-            # Visual display of pregress through calculation
-            percentage = int((i+1)/(n*len(forc_Yrs_y))*100*len(forc_Yrs_y))
-            loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
-            # print(f'calculating {loading_bar} {percentage}%', end='\r')
             i += 1
+    
+    # Visual display of pregress through calculation
+    percentage = int((yi[0]+1)/len(list(temp_Yrs[temp_Yrs >= hist_start]))*100)
+    loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
+    print(f'calculating {loading_bar} {percentage}%', end='\r')
 
 t2 = dt.datetime.now()
 print(f'Total calculation took {t2-t1}')
@@ -495,29 +590,37 @@ print(f'Total calculation took {t2-t1}')
 
 plt.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
              yerr=(err_neg, err_pos),
-             fmt='o', color='black', label='HadCRUT5')
+             fmt='o', color='black', ms=2.5, lw=1,
+             label='HadCRUT5')
 
-for i in range(len(forc_Group_names)):
-    plt.fill_between(temp_Yrs[temp_Yrs >= hist_start],  
-                     np.percentile(hist_temp_Att_Results[:, i, :], (5), axis=1),
-                     np.percentile(hist_temp_Att_Results[:, i, :], (95), axis=1),
-                     label=forc_Group_names[i],
-                    #  color=var_cols[i],
-                     alpha=0.5)
-    plt.plot(temp_Yrs[temp_Yrs >= hist_start], np.percentile(hist_temp_Att_Results[:, i, :], (50), axis=1),
-            #  color=var_cols[i]
-             )
+for p in sigmas:
+    for i in range(len(forc_Group_names)):
+        plt.fill_between(temp_Yrs[temp_Yrs >= hist_start],  
+            np.percentile(hist_temp_Att_Results[:, i, :], (p[0]), axis=1),
+            np.percentile(hist_temp_Att_Results[:, i, :], (p[1]), axis=1),
+            color=forc_Group[forc_Group_names[i]]['Colour'],
+            alpha=0.1)
+
+        if p == sigmas[-1]:
+            plt.plot(temp_Yrs[temp_Yrs >= hist_start],
+                np.percentile(hist_temp_Att_Results[:, i, :], (50), axis=1),
+                color=forc_Group[forc_Group_names[i]]['Colour'],
+                label=forc_Group_names[i]
+                )
 
 hist_temp_TOT_Results = hist_temp_Att_Results.sum(axis=1)
-plt.plot(temp_Yrs[temp_Yrs >= hist_start],
-         np.percentile(hist_temp_TOT_Results, (50), axis=1),
-         color='pink')
-plt.fill_between(temp_Yrs[temp_Yrs >= hist_start],
-                 np.percentile(hist_temp_TOT_Results, (5), axis=1),
-                 np.percentile(hist_temp_TOT_Results, (95), axis=1),
-                 color='pink', label='hist_TOT', alpha=0.5)
-
-
+for p in sigmas:
+    plt.fill_between(temp_Yrs[temp_Yrs >= hist_start],
+                    np.percentile(hist_temp_TOT_Results, (p[0]), axis=1),
+                    np.percentile(hist_temp_TOT_Results, (p[1]), axis=1),
+                    color='burgundy',
+                    alpha=0.1)
+    if p == sigmas[-1]:
+        plt.plot(temp_Yrs[temp_Yrs >= hist_start],
+                np.percentile(hist_temp_TOT_Results, (50), axis=1),
+                color='burgundy',
+                label='TOT')
 
 plt.legend()
-plt.show()
+plt.title('Historical GWI')
+plt.savefig('Historical GWI.png')
