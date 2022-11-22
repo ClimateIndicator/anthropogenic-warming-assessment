@@ -195,8 +195,12 @@ def regress_single_gwi(forc_All, temp_Obs, params, offset=False):
 allowed_options = ['y', 'n']
 ao = '/'.join(allowed_options)
 
-inc_pi_offset = input(f'Subtract 1850-1900 PI baseline? {ao}: ')
-inc_reg_const = input(f'Include a constant term in regression? {ao}: ')
+# inc_pi_offset = input(f'Subtract 1850-1900 PI baseline? {ao}: ')
+# inc_reg_const = input(f'Include a constant term in regression? {ao}: ')
+
+# Following discussion with Myles, we fix the options as the following:
+inc_pi_offset = 'y'
+inc_reg_const = 'y'
 
 if inc_pi_offset not in allowed_options:
     print(f'{inc_pi_offset} not one of {ao}')
@@ -212,7 +216,7 @@ inc_reg_const = True if inc_reg_const == 'y' else False
 #                    header=5, skiprows=[6])
 
 start_yr, end_yr = 1850, 2022
-start_pi, end_pi = 1850, 1900
+start_pi, end_pi = 1850, 1900  # As in IPCC AR6 Ch-3 Fig-3.4
 
 # Read Observed Temperatures
 # year_Ind = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr), 'Year']
@@ -390,7 +394,7 @@ print(f'Total calculation took {t2-t1}')
 
 # Plot the data
 
-fig = plt.figure(figsize=(15,10))
+fig = plt.figure(figsize=(15, 10))
 ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
 ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
 ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
@@ -406,7 +410,9 @@ ax1.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
              label='HadCRUT5')
 
 temp_Ant_Results = (temp_Att_Results.sum(axis=1) -
-                    temp_Att_Results[:, forc_Group_names.index('Nat'), :])
+                    temp_Att_Results[:, forc_Group_names.index('Nat'), :] - 
+                    int(inc_reg_const) * temp_Att_Results[:, len(forc_Group_names), :]  # Remove constant term in regression
+                    )
 temp_TOT_Results = temp_Att_Results.sum(axis=1)
 
 sigmas = [[32, 68], [5, 95], [0.3, 99.7]]
@@ -521,8 +527,7 @@ fig.text(s=(f'Warming in {end_yr}: ' +
 fig.suptitle('Global Warming Index')
 ax1.legend()
 
-
-plt.savefig('GWI.png')
+plt.savefig(f'GWI PI_Offset-{inc_pi_offset} Reg_Const-{inc_reg_const}.png')
 plt.close()
 # plt.show()
 
@@ -558,9 +563,12 @@ for y in temp_Yrs[temp_Yrs >= hist_start]:
         params = a_params('Carbon Dioxide')
         temp_All = FTmod(forc_All.shape[0], params) @ forc_All
 
-
-        _ofst = temp_All[(forc_Yrs_y >= start_pi) & (forc_Yrs_y <= min(end_pi, y)), :].mean(axis=0)
-
+        if inc_pi_offset:
+            _ofst = temp_All[(forc_Yrs_y >= start_pi) &
+                             (forc_Yrs_y <= min(end_pi, y)), :
+                             ].mean(axis=0)
+        else:
+            _ofst = 0
         temp_Mod = temp_All[(forc_Yrs_y >= start_yr) & (forc_Yrs_y <= y)] - _ofst
 
         # Decide whether to include a inc_Constant offset term in regression
@@ -607,20 +615,23 @@ for p in sigmas:
                 color=forc_Group[forc_Group_names[i]]['Colour'],
                 label=forc_Group_names[i]
                 )
-
+hist_temp_Ant_Results = (temp_Att_Results.sum(axis=1) -
+                    temp_Att_Results[:, forc_Group_names.index('Nat'), :] - 
+                    int(inc_reg_const) * temp_Att_Results[:, len(forc_Group_names), :]  # Remove constant term in regression
+                    )
 hist_temp_TOT_Results = hist_temp_Att_Results.sum(axis=1)
 for p in sigmas:
     plt.fill_between(temp_Yrs[temp_Yrs >= hist_start],
                     np.percentile(hist_temp_TOT_Results, (p[0]), axis=1),
                     np.percentile(hist_temp_TOT_Results, (p[1]), axis=1),
-                    color='burgundy',
+                    color='gray',
                     alpha=0.1)
     if p == sigmas[-1]:
         plt.plot(temp_Yrs[temp_Yrs >= hist_start],
                 np.percentile(hist_temp_TOT_Results, (50), axis=1),
-                color='burgundy',
+                color='gray',
                 label='TOT')
 
 plt.legend()
 plt.title('Historical GWI')
-plt.savefig('Historical GWI.png')
+plt.savefig(f'Historical GWI PI_offset-{inc_pi_offset} Reg_Const-{inc_reg_const}.png')
