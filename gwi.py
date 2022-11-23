@@ -189,6 +189,21 @@ def regress_single_gwi(forc_All, temp_Obs, params, offset=False):
     return temp_Mod_arr, temp_Mod_df
 
 
+def moving_average(data, w):
+    # data_padded = np.pad(data, (w//2, w-1-w//2),
+    #                      mode='constant', constant_values=(0, 1.5))
+    return np.convolve(data, np.ones(w), 'valid') / w
+
+def temp_signal(data, w):
+    # Sensibly extend data (to avoid shortening the length of moving average)
+    # Choices are:
+    # - 0 before 1850 (we are defining this as preindustrial)
+    # - 1.5 between 2022 and 2050 (the line through the middle)
+    data_padded = np.pad(data, (w//2, w-1-w//2),
+                         mode='constant', constant_values=(0, 1.5))
+    return np.convolve(data_padded, np.ones(w), 'valid') / w
+
+
 # Request whether to include pre-industrial offset and constant term in
 # regression
 
@@ -218,6 +233,9 @@ inc_reg_const = True if inc_reg_const == 'y' else False
 start_yr, end_yr = 1850, 2022
 start_pi, end_pi = 1850, 1900  # As in IPCC AR6 Ch-3 Fig-3.4
 
+sigmas = [[32, 68], [5, 95], [0.3, 99.7]]
+
+
 # Read Observed Temperatures
 # year_Ind = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr), 'Year']
 
@@ -226,6 +244,12 @@ start_pi, end_pi = 1850, 1900  # As in IPCC AR6 Ch-3 Fig-3.4
 # temp_Obs = df.loc[(df['Year'] >= start_yr) & (df['Year'] <= end_yr),
 #                   'Obs warm'] - ofst_Obs#
 
+##############################################################################
+# LOAD DATA
+##############################################################################
+
+### TEMPERATURE
+## OBS
 temp_Path = './data/HadCRUT/HadCRUT.5.0.1.0.analysis.ensemble_series.global.annual.csv'
 df_temp_Obs = pd.read_csv(temp_Path,
                           ).rename(columns={'Time': 'Year'}
@@ -238,7 +262,103 @@ ofst_Obs = df_temp_Obs.loc[(df_temp_Obs.index >= start_pi) &
 df_temp_Obs = df_temp_Obs.loc[(df_temp_Obs.index >= start_yr) &
                               (df_temp_Obs.index <= end_yr),
                               temp_Obs_ensemble_names] - ofst_Obs
-# Read ERF
+
+## CMIP5 PI-CONTROL
+obs_yrs = df_temp_Obs.shape[0]
+# n_yrs = obs_yrs + ma - 1
+n_yrs = obs_yrs
+
+df_temp_PiC = pd.read_csv('./data/piControl/piControl.csv')
+
+model_names = list(set(['_'.join(ens.split('_')[:1])
+                        for ens in list(df_temp_PiC)]))
+
+temp_IV_Group = {}
+
+for ens in list(df_temp_PiC):
+    if 'year' not in ens:
+        # print(ens)
+        # pi Control data located all over the place in csv; the following
+        # lines strip the NaN values, and limits slices to the same length as
+        # observed temperatures
+        temp = np.array(df_temp_PiC[ens].dropna())[:obs_yrs]
+        # Remove pre-industrial mean period
+        temp -= temp[:start_pi-end_pi+1].mean()
+    
+        # Establish inclusion condition, which is that the smoothed internal
+        # variability of a CMIP5 ensemble must operate within certain bounds:
+        # 1. there must be a minimum level of variation (to remove those models
+        # that are clearly wrong, eg oscillating between 0.01 and 0 warming)
+        # 2. they must not exceed a certain min or max temperature bound; the
+        # 0.3 value is roughyl similar to a 0.15 drift per century limit. I may
+        # need to check this...
+        # The final ensemble distribution are plotted against HadCRUT5 median
+        # below, to check that the percentiles of this median run are similar
+        # to the percentiles on the entire CMIP5 ensemble. ie, if the observed
+        # internal variability is essentially a sampling of the climate each
+        # year, you would expect the percentiles over history to be similar
+        # to the percentiles of the ensemble in any given year. I allow the
+        # ensemble to be slightly broader, to allow reasonably allow for a
+        # wider range of behaviours than we have seen in the real world.
+        temp_ma = moving_average(temp, 3)
+        _cond = (
+                 (max(temp_ma) < 0.3 and min(temp_ma) > -0.3) and
+                 ((max(temp_ma) - min(temp_ma)) > 0.06)
+                 )
+
+        # Approve actual (ie not unsmoothed) data if smoothed data approved.
+        # The second condition ensures that we aren't including timeseries that
+        # are too short (not all pic control runs last the required 173 years).
+        if _cond and len(temp) == obs_yrs:
+            temp_IV_Group[ens] = temp
+
+print(temp_IV_Group)
+
+print(f'Number of CMIP5 ensembles remaining: {len(temp_IV_Group.keys())}')
+
+# Include the internval variability (IV) from HadCRUT to the overall
+# dictionary of internal variabilities.
+temp_Obs_signal = temp_signal(df_temp_Obs.quantile(q=0.5, axis=1), 30)
+temp_Obs_IV = df_temp_Obs.quantile(q=0.5, axis=1) - temp_Obs_signal
+temp_IV_Group['HadCRUT5 median'] = np.array(temp_Obs_IV)
+
+#### PLOT THE ENSEMBLE ####
+_t = np.array([temp_IV_Group[ens] for ens in temp_IV_Group.keys()])
+print(_t.shape)
+
+
+for p in sigmas:
+    plt.fill_between(df_temp_Obs.index,
+                     np.percentile(_t, p[0], axis=0),
+                     np.percentile(_t, p[1], axis=0),
+                     alpha=0.2, color='gray')
+    if p == sigmas[-1]:
+        plt.plot(df_temp_Obs.index,
+                 np.percentile(_t, 50, axis=0),
+                 color='gray',
+                 label='CMIP5 piControl')
+
+
+plt.plot(df_temp_Obs.index, temp_Obs_IV,
+         label='HadCRUT5 median')
+
+for p in sigmas:
+    plt.plot(df_temp_Obs.index,
+             np.percentile(temp_Obs_IV, p[0]) * np.ones(len(df_temp_Obs.index)),
+             color='pink')
+    plt.plot(df_temp_Obs.index,
+             np.percentile(temp_Obs_IV, p[1]) * np.ones(len(df_temp_Obs.index)),
+             color='pink')
+plt.plot(df_temp_Obs.index,
+         np.percentile(temp_Obs_IV, 50) * np.ones(len(df_temp_Obs.index)),
+         color='pink', label='HadCRUT5 percentiles')
+plt.title('Ensemble of pruned CMIP5 piControl runs')
+plt.legend()
+plt.show()
+plt.close()
+
+
+### ERF
 forc_Path = './data/ERF Samples/'
 list_ERF = ['_'.join(file.split('_')[1:-1])
             for file in os.listdir(forc_Path)
@@ -415,7 +535,6 @@ temp_Ant_Results = (temp_Att_Results.sum(axis=1) -
                     )
 temp_TOT_Results = temp_Att_Results.sum(axis=1)
 
-sigmas = [[32, 68], [5, 95], [0.3, 99.7]]
 
 for p in sigmas:
     for i in range(len(forc_Group_names)):
