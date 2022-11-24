@@ -17,7 +17,7 @@ matplotlib.rcParams.update(
      'axes.linewidth': 0.5, 'axes.titleweight': 'regular',
      'axes.grid': True, 'grid.linewidth': 0.5,
      'grid.color': 'gainsboro',
-     'figure.dpi': 200, 'figure.figsize': (15, 10),
+     'figure.dpi': 100, 'figure.figsize': (15, 10),
      'figure.titlesize': 17,
      'figure.titleweight': 'light',
      'legend.frameon': False}
@@ -277,12 +277,18 @@ temp_IV_Group = {}
 
 for ens in list(df_temp_PiC):
     if 'year' not in ens:
-        # print(ens)
         # pi Control data located all over the place in csv; the following
         # lines strip the NaN values, and limits slices to the same length as
         # observed temperatures
         temp = np.array(df_temp_PiC[ens].dropna())[:obs_yrs]
-        # Remove pre-industrial mean period
+        
+        # Remove pre-industrial mean period; this is done because the models
+        # use different "zero" temperatures (eg 0, 100, 287, etc).
+        # An alternative approach would be to simply subtract the first value
+        # to start all models on 0; the removal of the first 50 years
+        # is used here in case the models don't start in equilibrium (and jump
+        # up by x degrees at the start, for example), and the baseline period
+        # is just defined as the same as for the observation PI period.
         temp -= temp[:start_pi-end_pi+1].mean()
     
         # Establish inclusion condition, which is that the smoothed internal
@@ -306,13 +312,12 @@ for ens in list(df_temp_PiC):
                  ((max(temp_ma) - min(temp_ma)) > 0.06)
                  )
 
-        # Approve actual (ie not unsmoothed) data if smoothed data approved.
+        # Approve actual (ie not smoothed) data if the corresponding smoothed
+        # data is approved.
         # The second condition ensures that we aren't including timeseries that
         # are too short (not all pic control runs last the required 173 years).
         if _cond and len(temp) == obs_yrs:
             temp_IV_Group[ens] = temp
-
-print(temp_IV_Group)
 
 print(f'Number of CMIP5 ensembles remaining: {len(temp_IV_Group.keys())}')
 
@@ -324,8 +329,6 @@ temp_IV_Group['HadCRUT5 median'] = np.array(temp_Obs_IV)
 
 #### PLOT THE ENSEMBLE ####
 _t = np.array([temp_IV_Group[ens] for ens in temp_IV_Group.keys()])
-print(_t.shape)
-
 
 for p in sigmas:
     plt.fill_between(df_temp_Obs.index,
@@ -355,7 +358,7 @@ plt.plot(df_temp_Obs.index,
 plt.title('Ensemble of pruned CMIP5 piControl runs')
 plt.legend()
 plt.show()
-plt.close()
+# plt.close()
 
 
 ### ERF
@@ -364,7 +367,7 @@ list_ERF = ['_'.join(file.split('_')[1:-1])
             for file in os.listdir(forc_Path)
             if '.csv' in file]
 forc_Group = {
-            #   'Ant': {'Consists': ['ant']},
+            #   'Ant': {'Consists': ['ant'], 'Colour': 'green'},
               'Nat': {'Consists': ['nat'], 'Colour': 'blue'},
               'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'h2o_stratospheric',
                                    'o3_tropospheric', 'o3_stratospheric',
@@ -431,8 +434,8 @@ forc_All_ensemble_names = list(forc_Group[forc_Group_names[0]]['df'])
 #                        ['Year', 'Nat', 'Ant']]
 
 # Regress
-samples = int(input('numer of samples (0-200): '))
-n = samples ** 2
+samples = int(input('numer of samples (0-200): '))  # for temperature, and ERF
+n = samples * samples * len(temp_IV_Group.keys())
 
 ###############################
 # t1 = dt.datetime.now()
@@ -465,48 +468,97 @@ temp_Yrs = np.array(df_temp_Obs.index)
 
 temp_Att_Results = np.empty(
     (173, len(forc_Group_names) + int(inc_reg_const), n))
+temp_Ens_Results = np.empty((173, samples * len(temp_IV_Group.keys())))
 temp_TOT_Residuals = np.empty((173, n))
 
 i = 0
+j = 0
 t1 = dt.datetime.now()
+
+###############################################################################
+
 for forc_Ens in forc_All_ensemble_names[:samples]:
-    # Calculate forcing -> temperature response. The below steps calculate
-    # temperature for all sources simultaneously (eg Nat, GHG, and Aer)
-    # forc_All = np.array([df_forc_Nat[forc_Ens], df_forc_Ant[forc_Ens]]).T
     forc_All = np.array([forc_Group[group]['df'][forc_Ens]
-                         for group in forc_Group_names]).T
+                    for group in forc_Group_names]).T
     params = a_params('Carbon Dioxide')
     temp_All = FTmod(forc_All.shape[0], params) @ forc_All
     if inc_pi_offset:
         _ofst = temp_All[(forc_Yrs >= start_pi) & (forc_Yrs <= end_pi), :
-                         ].mean(axis=0)
+                        ].mean(axis=0)
     else:
         _ofst = 0
     temp_Mod = temp_All[(forc_Yrs >= start_yr) & (forc_Yrs <= end_yr)] - _ofst
-    # temp_Mod = temp_All[(forc_Yrs >= start_yr) & (forc_Yrs <= end_yr)]
 
-    # Decide whether to include a Constant offset term in regression
+     # Decide whether to include a Constant offset term in regression
     if inc_reg_const:
         temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)), axis=1)
 
-    for temp_Ens in temp_Obs_ensemble_names[:samples]:
-        # Select the relevant observational data
-        temp_Obs = np.array(df_temp_Obs[temp_Ens])
+    for temp_sig_Ens in temp_Obs_ensemble_names[:samples]:
+        temp_Obs = np.array(df_temp_Obs[temp_sig_Ens])
+        temp_Obs_signal = temp_signal(temp_Obs, 30)
+        temp_Obs_signal -= temp_Obs_signal[:(end_pi - start_pi + 1)].mean()
 
-        # Carry out regression calculation
-        coef_Reg = np.linalg.lstsq(temp_Mod, temp_Obs, rcond=None)[0]
-        temp_Att = temp_Mod * coef_Reg
-        temp_Att_Results[:, :, i] = temp_Att
-        temp_TOT_Residuals[:, i] = temp_Att.sum(axis=1) - temp_Obs
+        for temp_IV_Ens in temp_IV_Group.keys():
+            temp_Ens = temp_Obs_signal + temp_IV_Group[temp_IV_Ens]
+            if i <= temp_Ens_Results.shape[1] - 1:
+                temp_Ens_Results[:, i] = temp_Ens
+            
+            # Carry out regression calculation
+            coef_Reg = np.linalg.lstsq(temp_Mod, temp_Ens, rcond=None)[0]
+            temp_Att = temp_Mod * coef_Reg
+            temp_Att_Results[:, :, i] = temp_Att
+            temp_TOT_Residuals[:, i] = temp_Att.sum(axis=1) - temp_Ens
 
-        # Visual display of pregress through calculation
-        percentage = int((i+1)/n*100)
-        loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
-        print(f'calculating {loading_bar} {percentage}%', end='\r')
-        i += 1
+            # Visual display of pregress through calculation
+            percentage = int((i+1)/n*100)
+            loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
+            print(f'calculating {loading_bar} {percentage}%', end='\r')
+            i += 1
+
 
 t2 = dt.datetime.now()
 print(f'Total calculation took {t2-t1}')
+
+###############################################################################
+
+# for forc_Ens in forc_All_ensemble_names[:samples]:
+#     # Calculate forcing -> temperature response. The below steps calculate
+#     # temperature for all sources simultaneously (eg Nat, GHG, and Aer)
+#     # forc_All = np.array([df_forc_Nat[forc_Ens], df_forc_Ant[forc_Ens]]).T
+#     forc_All = np.array([forc_Group[group]['df'][forc_Ens]
+#                          for group in forc_Group_names]).T
+#     params = a_params('Carbon Dioxide')
+#     temp_All = FTmod(forc_All.shape[0], params) @ forc_All
+#     if inc_pi_offset:
+#         _ofst = temp_All[(forc_Yrs >= start_pi) & (forc_Yrs <= end_pi), :
+#                          ].mean(axis=0)
+#     else:
+#         _ofst = 0
+#     temp_Mod = temp_All[(forc_Yrs >= start_yr) & (forc_Yrs <= end_yr)] - _ofst
+#     # temp_Mod = temp_All[(forc_Yrs >= start_yr) & (forc_Yrs <= end_yr)]
+
+#     # Decide whether to include a Constant offset term in regression
+#     if inc_reg_const:
+#         temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)), axis=1)
+
+#     for temp_Ens in temp_Obs_ensemble_names[:samples]:
+#         # Select the relevant observational data
+#         temp_Obs = np.array(df_temp_Obs[temp_Ens])
+
+#         # Carry out regression calculation
+#         coef_Reg = np.linalg.lstsq(temp_Mod, temp_Obs, rcond=None)[0]
+#         temp_Att = temp_Mod * coef_Reg
+#         temp_Att_Results[:, :, i] = temp_Att
+#         temp_TOT_Residuals[:, i] = temp_Att.sum(axis=1) - temp_Obs
+
+#         # Visual display of pregress through calculation
+#         percentage = int((i+1)/n*100)
+#         loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
+#         print(f'calculating {loading_bar} {percentage}%', end='\r')
+#         i += 1
+
+# t2 = dt.datetime.now()
+# print(f'Total calculation took {t2-t1}')
 
 
 
@@ -519,6 +571,7 @@ ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
 ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
 ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
 
+# THIS IS WHERE I NEED TO PLOT THE FULL VARIABILITY OF THE RESULTS...
 
 err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
            df_temp_Obs.quantile(q=0.5, axis=1))
@@ -645,10 +698,12 @@ fig.text(s=(f'Warming in {end_yr}: ' +
 
 fig.suptitle('Global Warming Index')
 ax1.legend()
-
-plt.savefig(f'GWI PI_Offset-{inc_pi_offset} Reg_Const-{inc_reg_const}.png')
+plt.show()
+# plt.savefig(f'GWI PI_Offset-{inc_pi_offset} Reg_Const-{inc_reg_const}.png')
 plt.close()
 # plt.show()
+
+sys.exit()
 
 
 
