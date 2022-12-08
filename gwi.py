@@ -9,6 +9,7 @@ import os
 import sys
 import functools
 import scipy as sp
+import seaborn as sns
 
 matplotlib.rcParams.update(
     {'font.size': 11,
@@ -17,7 +18,7 @@ matplotlib.rcParams.update(
      'axes.linewidth': 0.5, 'axes.titleweight': 'regular',
      'axes.grid': True, 'grid.linewidth': 0.5,
      'grid.color': 'gainsboro',
-     'figure.dpi': 100, 'figure.figsize': (15, 10),
+     'figure.dpi': 200, 'figure.figsize': (15, 10),
      'figure.titlesize': 17,
      'figure.titleweight': 'light',
      'legend.frameon': False}
@@ -306,10 +307,12 @@ for ens in list(df_temp_PiC):
         # to the percentiles of the ensemble in any given year. I allow the
         # ensemble to be slightly broader, to allow reasonably allow for a
         # wider range of behaviours than we have seen in the real world.
-        temp_ma = moving_average(temp, 3)
+        temp_ma_3 = moving_average(temp, 3)
+        temp_ma_30 = moving_average(temp, 30)
         _cond = (
-                 (max(temp_ma) < 0.3 and min(temp_ma) > -0.3) and
-                 ((max(temp_ma) - min(temp_ma)) > 0.06)
+                 (max(temp_ma_3) < 0.3 and min(temp_ma_3) > -0.3)
+                 and ((max(temp_ma_3) - min(temp_ma_3)) > 0.06)
+                 and (max(temp_ma_30) < 0.1 and min(temp_ma_30) > -0.1)
                  )
 
         # Approve actual (ie not smoothed) data if the corresponding smoothed
@@ -318,14 +321,28 @@ for ens in list(df_temp_PiC):
         # are too short (not all pic control runs last the required 173 years).
         if _cond and len(temp) == obs_yrs:
             temp_IV_Group[ens] = temp
+for ens in temp_IV_Group:
+    plt.plot(moving_average(temp_IV_Group[ens], 30))
+plt.savefig('0_Selected_CMIP5_Ensembles.png')
+plt.close()
 
-print(f'Number of CMIP5 ensembles remaining: {len(temp_IV_Group.keys())}')
+
+print('Number of CMIP5 internal variability samples remaining:' +
+      f'{len(temp_IV_Group.keys())}')
 
 # Include the internval variability (IV) from HadCRUT to the overall
 # dictionary of internal variabilities.
+# for _temp_Ens in df_temp_Obs:
+#     # Pick every 10th realisation
+#     if int(_temp_Ens.split(' ')[1]) % 10 == 0:
+#         _temp_Obs_signal = temp_signal(df_temp_Obs[_temp_Ens], 30)
+#         _temp_Obs_IV = df_temp_Obs[_temp_Ens] - _temp_Obs_signal
+#         temp_IV_Group[f'HadCRUT5 {_temp_Ens}'] = np.array(_temp_Obs_IV)
+
 temp_Obs_signal = temp_signal(df_temp_Obs.quantile(q=0.5, axis=1), 30)
 temp_Obs_IV = df_temp_Obs.quantile(q=0.5, axis=1) - temp_Obs_signal
 temp_IV_Group['HadCRUT5 median'] = np.array(temp_Obs_IV)
+
 
 #### PLOT THE ENSEMBLE ####
 _t = np.array([temp_IV_Group[ens] for ens in temp_IV_Group.keys()])
@@ -343,7 +360,7 @@ for p in sigmas:
 
 
 plt.plot(df_temp_Obs.index, temp_Obs_IV,
-         label='HadCRUT5 median')
+         label='HadCRUT_5_median')
 
 for p in sigmas:
     plt.plot(df_temp_Obs.index,
@@ -357,8 +374,8 @@ plt.plot(df_temp_Obs.index,
          color='pink', label='HadCRUT5 percentiles')
 plt.title('Ensemble of pruned CMIP5 piControl runs')
 plt.legend()
-plt.show()
-# plt.close()
+plt.savefig('1_Distribution_Internal_Variability.png')
+plt.close()
 
 
 ### ERF
@@ -433,9 +450,29 @@ forc_All_ensemble_names = list(forc_Group[forc_Group_names[0]]['df'])
 #                        (df_forc['Year'] <= end_yr),
 #                        ['Year', 'Nat', 'Ant']]
 
+
+############ Set model parameters #############################################
+# We only use a[10], a[11], a[15], a[16]
+# Defaults:
+# a_ar5[10:12] = [0.631, 0.429]  # AR5 thermal sensitivity coeffs
+# a_ar5[15:17] = [8.400, 409.5]  # AR5 thermal time-inc_Constants -- could use Geoffroy et al [4.1,249.]
+
+# a_ar5 = np.zeros(20, 16)
+# a_ar5[10:12] = [0.631, 0.429]
+# a_ar5[15:17] = [8.400, 409.5]
+# # Geoffrey 2013 paramters for a_ar5[15:17]
+Geoff = np.array([[4.0, 5.0, 4.5, 2.8, 5.2, 3.9, 4.2, 3.6,
+                   1.6, 5.3, 4.0, 5.5, 3.5, 3.9, 4.3, 4.0],
+                  [126, 267, 193, 132, 289, 200, 317, 197,
+                   184, 280, 698, 286, 285, 164, 150, 218]])
+
+
 # Regress
 samples = int(input('numer of samples (0-200): '))  # for temperature, and ERF
-n = samples * samples * len(temp_IV_Group.keys())
+n = samples * samples * len(temp_IV_Group.keys()) * Geoff.shape[1]
+print('Total number of combinations to sample: ' +
+      f'{samples} forcings X {samples} HadCRUT X {len(temp_IV_Group.keys())}' +
+      f' Internal Variability X {Geoff.shape[1]} Parameters = {n}')
 
 ###############################
 # t1 = dt.datetime.now()
@@ -466,59 +503,82 @@ n = samples * samples * len(temp_IV_Group.keys())
 forc_Yrs = np.array(forc_Group[forc_Group_names[0]]['df'].index)
 temp_Yrs = np.array(df_temp_Obs.index)
 
-temp_Att_Results = np.empty(
+temp_Att_Results = np.zeros(
     (173, len(forc_Group_names) + int(inc_reg_const), n))
-temp_Ens_Results = np.empty((173, samples * len(temp_IV_Group.keys())))
-temp_TOT_Residuals = np.empty((173, n))
+# temp_Ens_unique = np.zeros((173, samples * len(temp_IV_Group.keys())))
+temp_TOT_Residuals = np.zeros((173, n))
+
+temp_TEST_Ens_Results = np.zeros((173, n))
+temp_TEST_Sig_Results = np.zeros((173, n))
+
+coef_Reg_Results = np.zeros((len(forc_Group_names) + int(inc_reg_const), n))
+IV_names = []
 
 i = 0
-j = 0
 t1 = dt.datetime.now()
 
 ###############################################################################
 
-for forc_Ens in forc_All_ensemble_names[:samples]:
-    forc_All = np.array([forc_Group[group]['df'][forc_Ens]
-                    for group in forc_Group_names]).T
-    params = a_params('Carbon Dioxide')
-    temp_All = FTmod(forc_All.shape[0], params) @ forc_All
-    if inc_pi_offset:
-        _ofst = temp_All[(forc_Yrs >= start_pi) & (forc_Yrs <= end_pi), :
-                        ].mean(axis=0)
-    else:
-        _ofst = 0
-    temp_Mod = temp_All[(forc_Yrs >= start_yr) & (forc_Yrs <= end_yr)] - _ofst
+for j in range(Geoff.shape[1]):
+    params = np.zeros(20)
+    params[10:12] = [0.631, 0.429]
+    params[15:17] = Geoff[:, j]
+    params[15:17] = [8.400, 409.5]
+    
+# for j in range(1):
+#     params = np.zeros(20)
+#     params[10:12] = [0.631, 0.429]
+#     params[15:17] = Geoff[:, j]
+#     params[15:17] = [8.400, 409.5]
 
-     # Decide whether to include a Constant offset term in regression
-    if inc_reg_const:
-        temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)), axis=1)
+    for forc_Ens in forc_All_ensemble_names[:samples]:
+        forc_All = np.array([forc_Group[group]['df'][forc_Ens]
+                        for group in forc_Group_names]).T
+        # params = a_params('Carbon Dioxide')
 
-    for temp_sig_Ens in temp_Obs_ensemble_names[:samples]:
-        temp_Obs = np.array(df_temp_Obs[temp_sig_Ens])
-        temp_Obs_signal = temp_signal(temp_Obs, 30)
-        temp_Obs_signal -= temp_Obs_signal[:(end_pi - start_pi + 1)].mean()
+        temp_All = FTmod(forc_All.shape[0], params) @ forc_All
+        if inc_pi_offset:
+            _ofst = temp_All[(forc_Yrs >= start_pi) & (forc_Yrs <= end_pi), :
+                            ].mean(axis=0)
+        else:
+            _ofst = 0
+        temp_Mod = temp_All[(forc_Yrs >= start_yr) & (forc_Yrs <= end_yr)] - _ofst
 
-        for temp_IV_Ens in temp_IV_Group.keys():
-            temp_Ens = temp_Obs_signal + temp_IV_Group[temp_IV_Ens]
-            if i <= temp_Ens_Results.shape[1] - 1:
-                temp_Ens_Results[:, i] = temp_Ens
-            
-            # Carry out regression calculation
-            coef_Reg = np.linalg.lstsq(temp_Mod, temp_Ens, rcond=None)[0]
-            temp_Att = temp_Mod * coef_Reg
-            temp_Att_Results[:, :, i] = temp_Att
-            temp_TOT_Residuals[:, i] = temp_Att.sum(axis=1) - temp_Ens
+        # Decide whether to include a Constant offset term in regression
+        if inc_reg_const:
+            temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)), axis=1)
 
-            # Visual display of pregress through calculation
-            percentage = int((i+1)/n*100)
-            loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
-            print(f'calculating {loading_bar} {percentage}%', end='\r')
-            i += 1
+        for temp_sig_Ens in temp_Obs_ensemble_names[:samples]:
+            temp_Obs = np.array(df_temp_Obs[temp_sig_Ens])
+            temp_Obs_signal = temp_signal(temp_Obs, 30)
+            temp_Obs_signal -= temp_Obs_signal[:(end_pi - start_pi + 1)].mean()
 
+            for temp_IV_Ens in temp_IV_Group.keys():
+                temp_Ens = temp_Obs_signal + temp_IV_Group[temp_IV_Ens]
+                temp_Ens -= temp_Ens[:(end_pi - start_pi + 1)].mean()
+                
+                # Carry out regression calculation
+                coef_Reg = np.linalg.lstsq(temp_Mod, temp_Ens, rcond=None)[0]
+                temp_Att = temp_Mod * coef_Reg
+
+                # Save the outputs from the calculation
+                temp_TEST_Ens_Results[:, i] = temp_Ens
+                temp_TEST_Sig_Results[:, i] = temp_Obs_signal
+                coef_Reg_Results[:, i] = coef_Reg
+                temp_Att_Results[:, :, i] = temp_Att
+                temp_TOT_Residuals[:, i] = temp_Ens - temp_Att.sum(axis=1)
+                IV_names.append('_'.join(temp_IV_Ens.split('_')[:1]))
+
+
+                # Visual display of pregress through calculation
+                percentage = int((i+1)/n*100)
+                loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
+                print(f'calculating {loading_bar} {percentage}%', end='\r')
+                i += 1
 
 t2 = dt.datetime.now()
 print(f'Total calculation took {t2-t1}')
-
+print(len(set(IV_names)))
 ###############################################################################
 
 # for forc_Ens in forc_All_ensemble_names[:samples]:
@@ -561,9 +621,6 @@ print(f'Total calculation took {t2-t1}')
 # print(f'Total calculation took {t2-t1}')
 
 
-
-
-
 # Plot the data
 
 fig = plt.figure(figsize=(15, 10))
@@ -571,8 +628,21 @@ ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
 ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
 ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
 
-# THIS IS WHERE I NEED TO PLOT THE FULL VARIABILITY OF THE RESULTS...
+# Plot the internal variability range:
 
+temp_Ens_unique = np.unique(temp_TEST_Ens_Results, axis=1)
+for p in sigmas:
+    ax1.fill_between(df_temp_Obs.index,
+                     np.percentile(temp_Ens_unique, p[0], axis=1),
+                     np.percentile(temp_Ens_unique, p[1], axis=1),
+                     alpha=0.05, color='black')
+    if p == sigmas[-1]:
+        ax1.plot(df_temp_Obs.index,
+                 np.percentile(temp_Ens_unique, 50, axis=1),
+                 color='black',
+                 label='CMIP5 piControl')
+
+# Plot the observed temperatures on top as a scatter
 err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
            df_temp_Obs.quantile(q=0.5, axis=1))
 err_neg = (df_temp_Obs.quantile(q=0.5, axis=1) -
@@ -581,6 +651,33 @@ ax1.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
              yerr=(err_neg, err_pos),
              fmt='o', color='black', ms=2.5, lw=1,
              label='HadCRUT5')
+
+
+
+# For diagnosing: filter out results with particular regression coefficients.
+
+# Note to self about masking: coef_Reg_Results is the array of all regression
+# coefficients, with shape (4, n), where n is total number of samplings.
+# We select slice indices (forcing coefficients) we're interested in basing the
+# condition on:
+# AER is index 0, GHGs index 1, NAT index 2, Const index 3
+# Then choose whether you want any or all or the coefficients to meet the   
+# condition (in this case being less than zero)
+
+
+print(f'shape of coef_Reg_Results: {coef_Reg_Results.shape}')
+mask_switch = False
+if mask_switch:
+    mask = np.all(coef_Reg_Results[[0, 2], :] <= 0, axis=0)
+    mask = np.any(coef_Reg_Results[[0], :] <= 0.0, axis=0)
+
+    temp_Att_Results = temp_Att_Results[:, :, mask]
+    temp_TOT_Residuals = temp_TOT_Residuals[:, mask]
+    temp_TEST_Ens_Results = temp_TEST_Ens_Results[:, mask]
+    temp_TEST_Sig_Results = temp_TEST_Sig_Results[:, mask]
+    coef_Reg_Results = coef_Reg_Results[:, mask]
+    print(f'Shape of masked attribution results: {temp_Att_Results.shape}')
+
 
 temp_Ant_Results = (temp_Att_Results.sum(axis=1) -
                     temp_Att_Results[:, forc_Group_names.index('Nat'), :] - 
@@ -604,10 +701,10 @@ for p in sigmas:
                 label=(forc_Group_names[i]),
                 )
 
-    ax1.fill_between(temp_Yrs,  
+    ax1.fill_between(temp_Yrs,
                      np.percentile(temp_TOT_Results[:, :], (p[0]), axis=1),
                      np.percentile(temp_TOT_Results[:, :], (p[1]), axis=1),
-                     color='gray',
+                     color='purple',
                      alpha=0.1)
     ax1.fill_between(temp_Yrs,
                      np.percentile(temp_Ant_Results[:, :], (p[0]), axis=1),
@@ -617,7 +714,7 @@ for p in sigmas:
 
     if p == sigmas[-1]:
         ax1.plot(temp_Yrs, np.percentile(temp_TOT_Results[:, :], (50), axis=1),
-                 color='gray', label='TOTAL')
+                 color='purple', label='TOTAL')
         ax1.plot(temp_Yrs, np.percentile(temp_Ant_Results[:, :], (50), axis=1),
                  color='red', label='Ant')
 
@@ -636,6 +733,9 @@ for p in sigmas:
             color='gray',
             label=(forc_Group_names[i]),
             )
+ax3.plot(temp_Yrs, np.zeros(len(temp_Yrs)),
+         color='purple', alpha=0.5,
+         label='Attributed')
 ax3.set_ylabel('Regression Residuals (⁰C)')
 
 
@@ -696,12 +796,59 @@ fig.text(s=(f'Warming in {end_yr}: ' +
             # f'observed warming = {str_temp_Obs}'),
          y=0.9, x=0.5, horizontalalignment='center')
 
-fig.suptitle('Global Warming Index')
+fig.suptitle(f'Global Warming Index ({n} samplings)')
 ax1.legend()
-plt.show()
+plt.savefig('2_GWI.png')
 # plt.savefig(f'GWI PI_Offset-{inc_pi_offset} Reg_Const-{inc_reg_const}.png')
 plt.close()
-# plt.show()
+
+
+
+unique_IV_names = sorted(list(set(IV_names)))
+cm = 'Set3'
+cols = np.array(sns.color_palette(cm, len(unique_IV_names)))
+cols_hex = [matplotlib.colors.rgb2hex(cols[i, :])
+            for i in range(cols.shape[0])]
+
+IV_col_dic = dict(zip(unique_IV_names, cols_hex))
+use_colours = [IV_col_dic[_IV] for _IV in IV_names]
+plt.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :], color=use_colours,
+            alpha=0.02, edgecolors='none', s=20)
+plt.xlabel('AER')
+plt.ylabel('GHG')
+# plt.ylim(bottom=0)
+plt.title(f'Coefficients from {n} Samplings')
+plt.savefig('3_Coefficients.png')
+plt.close()
+sys.exit()
+############### WHAT IS UP WITH THE NEGATIVE COEFFICIENT FITS...
+
+for example in range(temp_Att_Results.shape[2]):
+    plt.plot(temp_Yrs, temp_TEST_Sig_Results[:, example],
+        color='black',
+        label='Temp Observation Signal')
+    plt.plot(temp_Yrs, temp_TEST_Ens_Results[:, example],
+        color='black',
+        label='Temp Observation Signal + Internal Variability')
+    
+    for i in range(len(forc_Group_names)):
+        plt.plot(temp_Yrs, temp_Att_Results[:, i, example],
+            color=forc_Group[forc_Group_names[i]]['Colour'],
+            label=str(forc_Group_names[i])
+            )
+    plt.plot(temp_Yrs, temp_TOT_Results[:, example],
+                color='purple',
+                label='TOT')
+    plt.title(coef_Reg_Results[:, i])
+
+    plt.legend()
+    plt.show()
+
+
+
+
+
+
 
 sys.exit()
 
