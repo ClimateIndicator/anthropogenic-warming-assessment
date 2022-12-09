@@ -841,6 +841,60 @@ plt.ylabel('GHG')
 plt.title(f'Coefficients from {n} Samplings')
 plt.savefig('3_Coefficients.png')
 plt.close()
+
+
+
+
+# Recreate IPCC AR6 SPM.2 Plot
+# https://www.ipcc.ch/report/ar6/wg1/downloads/report/IPCC_AR6_WGI_SPM.pdf
+
+SPM2_list = ['TOT', 'Ant', 'Aer', 'GHG', 'Nat']
+# Note that the central estimate for aerosols isn't given; only the range is
+# specified; as such I have used a pixel ruler on the plot to get the rough
+# value...
+SPM2_med = [1.09, 1.07, (-250/310)*0.5, 1.50, 0.00]
+SPM2_neg = [1.09-0.95, 1.07-0.80, ((-250/310)*0.5)- (-0.80), 1.50-1.00, 0.00-(-0.10)]
+SPM2_pos = [1.20-1.09, 1.30-1.07, 0.00-((-250/310)*0.5), 2.00-1.50, 0.10-0.00]
+
+recent_mask = ((2010 <= temp_Yrs) * (temp_Yrs < 2020))
+temp_Att_Results_recent = temp_Att_Results[recent_mask, :, :].mean(axis=0)
+temp_Ant_Results_recent = temp_Ant_Results[recent_mask, :].mean(axis=0)
+temp_TOT_Results_recent = temp_TOT_Results[recent_mask, :].mean(axis=0)
+recent_TOT_med = np.percentile(temp_TOT_Results_recent[:], (50))
+recent_TOT_neg = recent_TOT_med - np.percentile(temp_TOT_Results_recent[:], (5))
+recent_TOT_pos = np.percentile(temp_TOT_Results_recent[:], (95)) - recent_TOT_med 
+recent_Ant_med = np.percentile(temp_Ant_Results_recent[:], (50))
+recent_Ant_neg = recent_Ant_med - np.percentile(temp_Ant_Results_recent[:], (5))
+recent_Ant_pos = np.percentile(temp_Ant_Results_recent[:], (95)) - recent_Ant_med 
+recent_Att_med = np.percentile(temp_Att_Results_recent[:-1, :], (50), axis=1)
+recent_Att_neg = recent_Att_med - np.percentile(temp_Att_Results_recent[:-1, :], (5), axis=1)
+recent_Att_pos = np.percentile(temp_Att_Results_recent[:-1, :], (95), axis=1) - recent_Att_med
+recent_med = np.concatenate(([recent_TOT_med], [recent_Ant_med], recent_Att_med),
+                            axis=0)
+recent_neg = np.concatenate(([recent_TOT_neg], [recent_Ant_neg], recent_Att_neg),
+                            axis=0)
+recent_pos = np.concatenate(([recent_TOT_pos], [recent_Ant_pos], recent_Att_pos),
+                            axis=0)
+
+recent_x_axis = np.arange(len(SPM2_list))
+bar_width = 0.3
+plt.bar(recent_x_axis-bar_width/2, SPM2_med,
+        width=bar_width, color='cornflowerblue', label='SPM.2')
+plt.errorbar(recent_x_axis-bar_width/2, SPM2_med, yerr=(SPM2_neg, SPM2_pos),
+             fmt='none', color='black')
+plt.bar(recent_x_axis+bar_width/2, recent_med,
+        width=bar_width, color='lightcoral', label='GWI')
+plt.errorbar(recent_x_axis+bar_width/2, recent_med, yerr=(recent_neg, recent_pos),
+             fmt='none', color='black')
+plt.xticks(recent_x_axis, SPM2_list)
+plt.legend()
+plt.title('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
+plt.ylabel('Contributions to 2010-2019 warming relative to 1850-1900')
+plt.savefig('4_SPM2_Comparison.png')
+
+
+
+
 sys.exit()
 ############### WHAT IS UP WITH THE NEGATIVE COEFFICIENT FITS...
 
