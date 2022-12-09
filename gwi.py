@@ -8,11 +8,13 @@ import datetime as dt
 import os
 import sys
 import functools
+import scipy.stats as ss
 import seaborn as sns
+import graphing as gr
 
 matplotlib.rcParams.update(
     {'font.size': 11,
-    #  'font.family': 'Roboto',
+     'font.family': 'Roboto',
      'font.weight': 'light',
      'axes.linewidth': 0.5, 'axes.titleweight': 'regular',
      'axes.grid': True, 'grid.linewidth': 0.5,
@@ -227,6 +229,28 @@ def temp_signal(data, w, method):
     return moving_average(data_padded, w)
     return np.convolve(data_padded, np.ones(w), 'valid') / w
 
+
+def overall_legend(fig, loc, ncol, nrow=False):
+    
+    handles, labels = [], []
+    
+    for ax in fig.axes:
+        hs, ls = ax.get_legend_handles_labels()
+        handles.extend(hs)
+        labels.extend(ls)
+    
+    by_label = dict(zip(labels, handles))
+
+    fig.legend(by_label.values(), by_label.keys(),
+               loc=loc, ncol=ncol)
+    
+    ## rect = (left, bottom, right, top)
+    # if loc == 'right':
+    #     fig.tight_layout(rect=(0.0, 0.0, 0.82, 0.94))
+    # elif loc == 'lower center':
+    #     # fig.tight_layout(rect=(0.02, 0.12, 0.98, 0.94))
+    #     fig.tight_layout(rect=(0.0, 0.12, 1.0, 0.94))
+
 ###############################################################################
 # MAIN CODE BODY ##############################################################
 ###############################################################################
@@ -333,14 +357,6 @@ for ens in list(df_temp_PiC):
         # are too short (not all pic control runs last the required 173 years).
         if _cond and len(temp) == obs_yrs:
             temp_IV_Group[ens] = temp
-for ens in temp_IV_Group:
-    plt.plot(moving_average(temp_IV_Group[ens], 30))
-plt.savefig('PLOTS/0_Selected_CMIP5_Ensembles.png')
-plt.close()
-
-
-print('Number of CMIP5 internal variability samples remaining:' +
-      f'{len(temp_IV_Group.keys())}')
 
 # Include the internval variability (IV) from HadCRUT to the overall
 # dictionary of internal variabilities.
@@ -356,6 +372,51 @@ temp_Obs_signal = temp_signal(df_temp_Obs.quantile(q=0.5, axis=1),
 temp_Obs_IV = df_temp_Obs.quantile(q=0.5, axis=1) - temp_Obs_signal
 temp_IV_Group['HadCRUT5 median'] = np.array(temp_Obs_IV)
 
+timeframes = [1, 3, 30]
+lims = [0.6, 0.4, 0.15]
+
+fig = plt.figure(figsize=(15, 10))
+
+for t in range(len(timeframes)):
+    axA = plt.subplot2grid(shape=(len(timeframes), 4), loc=(t, 0),
+                           rowspan=1, colspan=3)
+    axB = plt.subplot2grid(shape=(len(timeframes), 4), loc=(t, 3),
+                           rowspan=1, colspan=1)
+    
+    axA.set_ylim(-lims[t], lims[t])
+    cut_beg = timeframes[t]//2
+    cut_end = timeframes[t]-1-timeframes[t]//2
+    _time = np.arange(obs_yrs) + 1850
+    
+    if timeframes[t] == 1:
+        _time_sliced = _time[:]
+    else:
+        _time_sliced = _time[cut_beg: -cut_end]
+
+    for ens in temp_IV_Group:
+        colour = 'royalblue' if ens == 'HadCRUT5 median' else 'gray'
+        alpha = 1 if ens == 'HadCRUT5 median' else 0.3
+        _data = moving_average(temp_IV_Group[ens], timeframes[t])
+
+        axA.plot(_time_sliced, _data, color=colour, alpha=alpha)
+        density = ss.gaussian_kde(_data)
+        x = np.linspace(axA.get_ylim()[0], axA.get_ylim()[1], 50)
+        y = density(x)
+        axB.plot(y, x, color=colour, alpha=alpha)
+
+    # axes[i].set_ylim([-0.6, +0.6])
+    axA.set_xlim(1845, 2030)
+    axB.set_ylim(axA.get_ylim())
+    # axB.get_yaxis().set_visible(False)
+    axB.get_xaxis().set_visible(False)
+    axA.set_ylabel(f'Internal Variability (°C) \n ({timeframes[t]}-year moving mean)')
+fig.suptitle('Selected Sample of Internal Variability from CMIP5 pi-control')
+fig.savefig('PLOTS/0_Selected_CMIP5_Ensembles.png')
+
+
+print('Number of CMIP5 internal variability samples remaining:' +
+      f'{len(temp_IV_Group.keys())}')
+
 
 #### PLOT THE ENSEMBLE ####
 _t = np.array([temp_IV_Group[ens] for ens in temp_IV_Group.keys()])
@@ -369,6 +430,10 @@ for p in sigmas:
                      np.percentile(_t, p[0], axis=0),
                      np.percentile(_t, p[1], axis=0),
                      alpha=0.2, color='gray')
+    ax2.fill_between(x=[3, 4],
+                     y1=np.percentile(_t, p[0], axis=0).mean()*np.ones(2),
+                     y2=np.percentile(_t, p[1], axis=0).mean()*np.ones(2),
+                     color='gray', alpha=0.2)
     if p == sigmas[-1]:
         ax1.plot(df_temp_Obs.index,
                  np.percentile(_t, 50, axis=0),
@@ -378,20 +443,40 @@ for p in sigmas:
 
 ax1.plot(df_temp_Obs.index, temp_Obs_IV,
          label='HadCRUT_5_median', color='cornflowerblue')
-
+ax2.plot([3, 4], np.percentile(_t, 50, axis=0).mean()*np.ones(2),
+         color='gray', alpha=0.7)
 for p in sigmas:
     ax1.plot(df_temp_Obs.index,
              np.percentile(temp_Obs_IV, p[0]) * np.ones(len(df_temp_Obs.index)),
-             color='cornflowerblue', alpha=0.7)
+             color='royalblue', alpha=0.7)
     ax1.plot(df_temp_Obs.index,
              np.percentile(temp_Obs_IV, p[1]) * np.ones(len(df_temp_Obs.index)),
-             color='cornflowerblue', alpha=0.7)
+             color='royalblue', alpha=0.7)
+    
+    ax2.fill_between(x=[1, 2],
+                     y1=np.percentile(temp_Obs_IV, p[0])*np.ones(2),
+                     y2=np.percentile(temp_Obs_IV, p[1])*np.ones(2),
+                     color='royalblue', alpha=0.2)
+
 ax1.plot(df_temp_Obs.index,
          np.percentile(temp_Obs_IV, 50) * np.ones(len(df_temp_Obs.index)),
-         color='cornflowerblue', alpha=0.7,
+         color='royalblue', alpha=0.7,
          label='HadCRUT5 median percentiles')
-ax1.legend()
-fig.suptitle('Ensemble of pruned CMIP5 piControl runs')
+ax2.plot([1, 2], np.percentile(temp_Obs_IV, 50)*np.ones(2),
+         color='royalblue', alpha=0.7)
+
+
+overall_legend(fig, loc='lower center', ncol=3, nrow=False)
+
+ax1.set_ylabel('Internal Variability (°C)')
+ax1.set_ylim(-0.6, 0.6)
+ax2.set_ylim(ax1.get_ylim())
+ax2.set_xlim(0, 5)
+ax2.get_xaxis().set_visible(False)
+# Do the HadCRUT5...
+
+
+fig.suptitle('Selected Sample of Internal Variability from CMIP5 pi-control')
 fig.savefig('PLOTS/1_Distribution_Internal_Variability.png')
 
 
@@ -580,13 +665,13 @@ if mask_switch:
 # PLOT RESULTS ################################################################
 ###############################################################################
 
-# GWI PLOT ###################################################################'
+# GWI PLOT ####################################################################
 fig = plt.figure(figsize=(15, 10))
 ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
 ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
 ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
 
-# Plot the internal variability range
+# Plot the internal variability range #########################################
 temp_Ens_unique = np.unique(temp_Att_Results[:, -2, :], axis=1)
 for p in sigmas:
     ax1.fill_between(temp_Yrs,
@@ -599,7 +684,7 @@ for p in sigmas:
                  color='black',
                  label='CMIP5 piControl')
 
-# Plot the observed temperatures on top as a scatter
+# Plot the observed temperatures on top as a scatter ##########################
 err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
            df_temp_Obs.quantile(q=0.5, axis=1))
 err_neg = (df_temp_Obs.quantile(q=0.5, axis=1) -
@@ -608,6 +693,12 @@ ax1.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
              yerr=(err_neg, err_pos),
              fmt='o', color='black', ms=2.5, lw=1,
              label='HadCRUT5')
+
+# Plot the attribution results ################################################
+
+# Select which components we want:
+# gwi_component_name = ['Aer', 'GHG', 'Nat', 'Ant']
+# gwi_component_list = [0, 1, 2, -5]
 
 for p in sigmas:
     for i in range(len(forc_Group_names)):
@@ -645,7 +736,7 @@ for p in sigmas:
         ax1.plot(temp_Yrs, np.percentile(temp_Att_Results[:, -5, :], (50), axis=1),
                  color='red', label='Ant')
 
-ax1.set_ylabel('Warming Anomaly (⁰C)')
+ax1.set_ylabel('Warming Anomaly (°C)')
 
 # Residuals
 for p in sigmas:
@@ -664,7 +755,7 @@ for p in sigmas:
 ax3.plot(temp_Yrs, np.zeros(len(temp_Yrs)),
          color='purple', alpha=0.5,
          label='Attributed')
-ax3.set_ylabel('Regression Residuals (⁰C)')
+ax3.set_ylabel('Regression Residuals (°C)')
 
 
 for i in range(len(forc_Group_names)):
@@ -709,15 +800,20 @@ gwi_min = np.around(np.percentile(temp_Att_Results[-1, -4, :], (50)) -
 str_GWI = r'${%s}^{+{%s}}_{-{%s}}$' % (gwi, gwi_pls, gwi_min)
 # str_temp_Obs = r'${%s}^{+{%s}}_{-{%s}}$' % (tmp, tmp_pls, tmp_min)
 fig.text(s=(f'Warming in {end_yr}: ' +
-            f'human-induced-warming = {str_GWI} (⁰C)'),
+            f'human-induced-warming = {str_GWI} (°C)'),
             # f'observed warming = {str_temp_Obs}'),
          y=0.9, x=0.5, horizontalalignment='center')
 
 fig.suptitle(f'Global Warming Index ({n} samplings)')
 ax1.legend()
-plt.savefig('PLOTS/2_GWI.png')
-plt.close()
+fig.savefig('PLOTS/2_GWI.png')
 
+# Plot coefficients ###########################################################
+fig = plt.figure(figsize=(15, 10))
+ax = plt.subplot2grid(
+    shape=(1, 1), loc=(0, 0),
+    # rowspan=1, colspan=3
+    )
 unique_IV_names = sorted(list(set(IV_names)))
 cm = 'Set3'
 cols = np.array(sns.color_palette(cm, len(unique_IV_names)))
@@ -726,14 +822,13 @@ cols_hex = [matplotlib.colors.rgb2hex(cols[i, :])
 
 IV_col_dic = dict(zip(unique_IV_names, cols_hex))
 use_colours = [IV_col_dic[_IV] for _IV in IV_names]
-plt.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :], color=use_colours,
+ax.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :], color=use_colours,
             alpha=0.02, edgecolors='none', s=20)
-plt.xlabel('AER')
-plt.ylabel('GHG')
+ax.set_xlabel('AER')
+ax.set_ylabel('GHG')
 # plt.ylim(bottom=0)
-plt.title(f'Coefficients from {n} Samplings')
-plt.savefig('PLOTS/3_Coefficients.png')
-plt.close()
+fig.suptitle(f'Coefficients from {n} Samplings')
+fig.savefig('PLOTS/3_Coefficients.png')
 
 
 ###############################################################################
@@ -762,27 +857,36 @@ SPM2_pos = [1.20-1.09,
 
 recent_years = ((2010 <= temp_Yrs) * (temp_Yrs < 2020))
 recent_components = [-4, -5, 0, 1, 2]
+# Simultaneously index two dimensions using lists (one indices, one booleans)
 idx = np.ix_(recent_years, recent_components)
 temp_Att_Results_recent = temp_Att_Results[idx].mean(axis=0)
+# Obtain statistics
 recent_med = np.percentile(temp_Att_Results_recent[:], (50), axis=1)
 recent_neg = recent_med - np.percentile(temp_Att_Results_recent[:], (5), axis=1)
 recent_pos = np.percentile(temp_Att_Results_recent[:], (95), axis=1) - recent_med
 
 recent_x_axis = np.arange(len(SPM2_list))
 bar_width = 0.3
-plt.bar(recent_x_axis-bar_width/2, SPM2_med,
-        width=bar_width, color='cornflowerblue', label='SPM.2')
-plt.errorbar(recent_x_axis-bar_width/2, SPM2_med, yerr=(SPM2_neg, SPM2_pos),
+
+# Plot SPM2 data
+fig = plt.figure(figsize=(15, 10))
+ax = plt.subplot2grid(
+    shape=(1, 1), loc=(0, 0),
+    # rowspan=1, colspan=3
+    )
+ax.bar(recent_x_axis-bar_width/2, SPM2_med,
+        width=bar_width, color='royalblue', label='SPM.2')
+ax.errorbar(recent_x_axis-bar_width/2, SPM2_med, yerr=(SPM2_neg, SPM2_pos),
              fmt='none', color='black')
-plt.bar(recent_x_axis+bar_width/2, recent_med,
+# Plot GWI data
+ax.bar(recent_x_axis+bar_width/2, recent_med,
         width=bar_width, color='lightcoral', label='GWI')
-plt.errorbar(recent_x_axis+bar_width/2, recent_med, yerr=(recent_neg, recent_pos),
+ax.errorbar(recent_x_axis+bar_width/2, recent_med, yerr=(recent_neg, recent_pos),
              fmt='none', color='black')
-plt.xticks(recent_x_axis, SPM2_list)
-plt.legend()
-plt.title('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
-plt.ylabel('Contributions to 2010-2019 warming relative to 1850-1900')
-plt.savefig('PLOTS/4_SPM2_Comparison.png')
+ax.set_xticks(recent_x_axis, SPM2_list)
+ax.set_ylabel('Contributions to 2010-2019 warming relative to 1850-1900')
+fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
+fig.savefig('PLOTS/4_SPM2_Comparison.png')
 
 
 
