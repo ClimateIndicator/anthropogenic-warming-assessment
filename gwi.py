@@ -525,21 +525,23 @@ forc_Yrs = np.array(forc_Group[forc_Group_names[0]]['df'].index)
 temp_Yrs = np.array(df_temp_Obs.index)
 
 temp_Att_Results = np.zeros(
-    # (173, len(forc_Group_names) + int(inc_reg_const) + 1 + 1 + 1, n))
-    (173, len(forc_Group_names) + int(inc_reg_const), n))
-temp_TOT_Residuals = np.zeros((173, n))
+    (173, len(forc_Group_names) + int(inc_reg_const) + 1 + 1 + 1 + 1 + 1, n))
+
 # Instead of using a separate array for the residuals and totals for sum total
 # and anthropogenic warming, now just include these in teh attributed results.
-# This is why we have the + 1 +1 +1 above. +1 each for Ant, TOT, Res.
-
-# NOTE: the order in dimension is 'AER, GHG, NAT, CONST, ANT, TOTAL, RESIDUAL'
-
+# This is why we have the +1 +1 +1 +1 +1 above:
+#  +1 each for Ant, TOT, Res, Ens, Sig
+# NOTE: the order in dimension is:
+# 'AER, GHG, NAT, CONST, ANT, TOTAL, RESIDUAL, Temp_Ens, Temp_Sig'
+Result_Components = forc_Group_names + ['Ant', 'TOT', 'Res', 'T_Ens', 'T_Sig']
+print(Result_Components)
 coef_Reg_Results = np.zeros((len(forc_Group_names) + int(inc_reg_const), n))
 
 IV_names = []
-
-temp_TEST_Ens_Results = np.zeros((173, n))
-temp_TEST_Sig_Results = np.zeros((173, n))
+# Old things I don't need any more...
+# temp_TOT_Residuals = np.zeros((173, n))
+# temp_TEST_Ens_Results = np.zeros((173, n))
+# temp_TEST_Sig_Results = np.zeros((173, n))
 
 i = 0
 t1 = dt.datetime.now()
@@ -574,6 +576,7 @@ for j in range(Geoff.shape[1]):
         # Decide whether to include a Constant offset term in regression
         if inc_reg_const:
             temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)), axis=1)
+        num_vars = temp_Mod.shape[1]
 
         for temp_sig_Ens in temp_Obs_ensemble_names[:samples]:
             temp_Obs = np.array(df_temp_Obs[temp_sig_Ens])
@@ -587,14 +590,23 @@ for j in range(Geoff.shape[1]):
                 # Carry out regression calculation
                 coef_Reg = np.linalg.lstsq(temp_Mod, temp_Ens, rcond=None)[0]
                 temp_Att = temp_Mod * coef_Reg
-
-                # Save the outputs from the calculation
-                temp_TEST_Ens_Results[:, i] = temp_Ens
-                temp_TEST_Sig_Results[:, i] = temp_Obs_signal
+                # Save outputs from the calculation:
+                # Attributed warming for each component
+                temp_Att_Results[:, :num_vars, i] = temp_Att
+                temp_Att_Results[:, -2, i] = temp_Ens
+                temp_Att_Results[:, -1, i] = temp_Obs_signal
                 coef_Reg_Results[:, i] = coef_Reg
-                temp_Att_Results[:, :, i] = temp_Att
-                temp_TOT_Residuals[:, i] = temp_Ens - temp_Att.sum(axis=1)
                 IV_names.append('_'.join(temp_IV_Ens.split('_')[:1]))
+                
+                # Residual 
+                # temp_Att_Results[:, -5, i] = temp_Ens - temp_Att.sum(axis=1)
+                
+                # Note that it is more efficient to calculate the total and
+                # anthropogenic afterwards for the entire matrix at once.
+                
+                # These are the actual 
+                # temp_TEST_Ens_Results[:, i] = temp_Ens
+                # temp_TEST_Sig_Results[:, i] = temp_Obs_signal
 
 
                 # Visual display of pregress through calculation
@@ -606,6 +618,24 @@ for j in range(Geoff.shape[1]):
 t2 = dt.datetime.now()
 print(f'Total calculation took {t2-t1}')
 print(len(set(IV_names)))
+
+# TOTAL
+temp_Att_Results[:, -4, :] = (
+    temp_Att_Results[:, :num_vars, :].sum(axis=1))
+# Residual
+temp_Att_Results[:, -3, :] = (
+    temp_Att_Results[:, -2, :] - temp_Att_Results[:, -4, :])
+# Anthropogenic
+_temp_Ant_Results = (
+    temp_Att_Results[:, -4, :] -
+    # Remove the Natural forcing component in next line:
+    temp_Att_Results[:, forc_Group_names.index('Nat'), :] -
+    # Remove constant term in regression in next line:
+    int(inc_reg_const) * temp_Att_Results[:, num_vars-1, :]
+                     )
+temp_Att_Results[:, -5, :] = _temp_Ant_Results
+
+
 ###############################################################################
 
 # for forc_Ens in forc_All_ensemble_names[:samples]:
@@ -657,14 +687,14 @@ ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
 
 # Plot the internal variability range:
 
-temp_Ens_unique = np.unique(temp_TEST_Ens_Results, axis=1)
+temp_Ens_unique = np.unique(temp_Att_Results[:, -2, :], axis=1)
 for p in sigmas:
-    ax1.fill_between(df_temp_Obs.index,
+    ax1.fill_between(temp_Yrs,
                      np.percentile(temp_Ens_unique, p[0], axis=1),
                      np.percentile(temp_Ens_unique, p[1], axis=1),
                      alpha=0.05, color='black')
     if p == sigmas[-1]:
-        ax1.plot(df_temp_Obs.index,
+        ax1.plot(temp_Yrs,
                  np.percentile(temp_Ens_unique, 50, axis=1),
                  color='black',
                  label='CMIP5 piControl')
@@ -691,26 +721,17 @@ ax1.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
 # Then choose whether you want any or all or the coefficients to meet the   
 # condition (in this case being less than zero)
 
-
-print(f'shape of coef_Reg_Results: {coef_Reg_Results.shape}')
 mask_switch = False
 if mask_switch:
     mask = np.all(coef_Reg_Results[[0, 2], :] <= 0, axis=0)
-    mask = np.any(coef_Reg_Results[[0], :] <= 0.0, axis=0)
+    # mask = np.any(coef_Reg_Results[[0], :] <= 0.0, axis=0)
 
     temp_Att_Results = temp_Att_Results[:, :, mask]
-    temp_TOT_Residuals = temp_TOT_Residuals[:, mask]
-    temp_TEST_Ens_Results = temp_TEST_Ens_Results[:, mask]
-    temp_TEST_Sig_Results = temp_TEST_Sig_Results[:, mask]
     coef_Reg_Results = coef_Reg_Results[:, mask]
+    # temp_TOT_Residuals = temp_TOT_Residuals[:, mask]
+    # temp_TEST_Ens_Results = temp_TEST_Ens_Results[:, mask]
+    # temp_TEST_Sig_Results = temp_TEST_Sig_Results[:, mask]
     print(f'Shape of masked attribution results: {temp_Att_Results.shape}')
-
-
-temp_Ant_Results = (temp_Att_Results.sum(axis=1) -
-                    temp_Att_Results[:, forc_Group_names.index('Nat'), :] - 
-                    int(inc_reg_const) * temp_Att_Results[:, len(forc_Group_names), :]  # Remove constant term in regression
-                    )
-temp_TOT_Results = temp_Att_Results.sum(axis=1)
 
 
 for p in sigmas:
@@ -728,35 +749,40 @@ for p in sigmas:
                 label=(forc_Group_names[i]),
                 )
 
+    # Total
     ax1.fill_between(temp_Yrs,
-                     np.percentile(temp_TOT_Results[:, :], (p[0]), axis=1),
-                     np.percentile(temp_TOT_Results[:, :], (p[1]), axis=1),
+                     np.percentile(temp_Att_Results[:, -4, :], (p[0]), axis=1),
+                     np.percentile(temp_Att_Results[:, -4, :], (p[1]), axis=1),
                      color='purple',
                      alpha=0.1)
+    # Anthropogenic
     ax1.fill_between(temp_Yrs,
-                     np.percentile(temp_Ant_Results[:, :], (p[0]), axis=1),
-                     np.percentile(temp_Ant_Results[:, :], (p[1]), axis=1),
+                     np.percentile(temp_Att_Results[:, -5, :], (p[0]), axis=1),
+                     np.percentile(temp_Att_Results[:, -5, :], (p[1]), axis=1),
                      color='red',
                      alpha=0.1)
 
     if p == sigmas[-1]:
-        ax1.plot(temp_Yrs, np.percentile(temp_TOT_Results[:, :], (50), axis=1),
+        # Total
+        ax1.plot(temp_Yrs, np.percentile(temp_Att_Results[:, -4, :], (50), axis=1),
                  color='purple', label='TOTAL')
-        ax1.plot(temp_Yrs, np.percentile(temp_Ant_Results[:, :], (50), axis=1),
+        # Anthropogenic
+        ax1.plot(temp_Yrs, np.percentile(temp_Att_Results[:, -5, :], (50), axis=1),
                  color='red', label='Ant')
 
 ax1.set_ylabel('Warming Anomaly (⁰C)')
 
+# Residuals
 for p in sigmas:
     ax3.fill_between(temp_Yrs,
-        np.percentile(temp_TOT_Residuals[:, :], (p[0]), axis=1),
-        np.percentile(temp_TOT_Residuals[:, :], (p[1]), axis=1),
+        np.percentile(temp_Att_Results[:, -3, :], (p[0]), axis=1),
+        np.percentile(temp_Att_Results[:, -3, :], (p[1]), axis=1),
         color='gray',
         alpha=0.1
         )
     if p == sigmas[-1]:
         ax3.plot(temp_Yrs,
-            np.percentile(temp_TOT_Residuals[:, :], (50), axis=1),
+            np.percentile(temp_Att_Results[:, -3, :], (50), axis=1),
             color='gray',
             label=(forc_Group_names[i]),
             )
@@ -777,18 +803,18 @@ for i in range(len(forc_Group_names)):
              alpha=0.3
              )
 
-bins = np.arange(np.min(temp_Ant_Results[-1, :]),
-                 np.max(temp_Ant_Results[-1, :]) + binwidth,
+bins = np.arange(np.min(temp_Att_Results[-1, -5, :]),
+                 np.max(temp_Att_Results[-1, -5, :]) + binwidth,
                  binwidth)
-ax2.hist(temp_Ant_Results[-1, :], bins=bins,
+ax2.hist(temp_Att_Results[-1, -5, :], bins=bins,
          density=True, orientation='horizontal',
          color='pink', alpha=0.3
          )
 
-bins = np.arange(np.min(temp_TOT_Results[-1, :]),
-                 np.max(temp_TOT_Results[-1, :]) + binwidth,
+bins = np.arange(np.min(temp_Att_Results[-1, -4, :]),
+                 np.max(temp_Att_Results[-1, -4, :]) + binwidth,
                  binwidth)
-ax2.hist(temp_TOT_Results[-1, :], bins=bins,
+ax2.hist(temp_Att_Results[-1, -4, :], bins=bins,
          density=True, orientation='horizontal',
          color='gray', alpha=0.3
          )
@@ -802,12 +828,12 @@ ax2.set_ylim(ax1.get_ylim())
 # ax2.set_yticks([])
 # ax2.text()
 
-gwi = np.around(np.percentile(temp_TOT_Results[-1, :], (50)), decimals=3)
-gwi_pls = np.around(np.percentile(temp_TOT_Results[-1, :], (95)) -
-                    np.percentile(temp_TOT_Results[-1, :], (50)),
+gwi = np.around(np.percentile(temp_Att_Results[-1, -4, :], (50)), decimals=3)
+gwi_pls = np.around(np.percentile(temp_Att_Results[-1, -4, :], (95)) -
+                    np.percentile(temp_Att_Results[-1, -4, :], (50)),
                     decimals=3)
-gwi_min = np.around(np.percentile(temp_TOT_Results[-1, :], (50)) -
-                    np.percentile(temp_TOT_Results[-1, :], (5)),
+gwi_min = np.around(np.percentile(temp_Att_Results[-1, -4, :], (50)) -
+                    np.percentile(temp_Att_Results[-1, -4, :], (5)),
                     decimals=3)
 # tmp = np.around(np.percentile(df_temp_Obs[-1, :], (50)), decimals=2)
 # tmp_pls = np.around(np.percentile(np.array(df_temp_Obs)[-1, :], (95)) -
@@ -850,7 +876,6 @@ plt.close()
 
 
 
-
 # Recreate IPCC AR6 SPM.2 Plot
 # https://www.ipcc.ch/report/ar6/wg1/downloads/report/IPCC_AR6_WGI_SPM.pdf
 
@@ -862,25 +887,27 @@ SPM2_med = [1.09, 1.07, (-250/310)*0.5, 1.50, 0.00]
 SPM2_neg = [1.09-0.95, 1.07-0.80, ((-250/310)*0.5)- (-0.80), 1.50-1.00, 0.00-(-0.10)]
 SPM2_pos = [1.20-1.09, 1.30-1.07, 0.00-((-250/310)*0.5), 2.00-1.50, 0.10-0.00]
 
-recent_mask = ((2010 <= temp_Yrs) * (temp_Yrs < 2020))
-temp_Att_Results_recent = temp_Att_Results[recent_mask, :, :].mean(axis=0)
-temp_Ant_Results_recent = temp_Ant_Results[recent_mask, :].mean(axis=0)
-temp_TOT_Results_recent = temp_TOT_Results[recent_mask, :].mean(axis=0)
-recent_TOT_med = np.percentile(temp_TOT_Results_recent[:], (50))
-recent_TOT_neg = recent_TOT_med - np.percentile(temp_TOT_Results_recent[:], (5))
-recent_TOT_pos = np.percentile(temp_TOT_Results_recent[:], (95)) - recent_TOT_med 
-recent_Ant_med = np.percentile(temp_Ant_Results_recent[:], (50))
-recent_Ant_neg = recent_Ant_med - np.percentile(temp_Ant_Results_recent[:], (5))
-recent_Ant_pos = np.percentile(temp_Ant_Results_recent[:], (95)) - recent_Ant_med 
-recent_Att_med = np.percentile(temp_Att_Results_recent[:-1, :], (50), axis=1)
-recent_Att_neg = recent_Att_med - np.percentile(temp_Att_Results_recent[:-1, :], (5), axis=1)
-recent_Att_pos = np.percentile(temp_Att_Results_recent[:-1, :], (95), axis=1) - recent_Att_med
-recent_med = np.concatenate(([recent_TOT_med], [recent_Ant_med], recent_Att_med),
-                            axis=0)
-recent_neg = np.concatenate(([recent_TOT_neg], [recent_Ant_neg], recent_Att_neg),
-                            axis=0)
-recent_pos = np.concatenate(([recent_TOT_pos], [recent_Ant_pos], recent_Att_pos),
-                            axis=0)
+recent_years = ((2010 <= temp_Yrs) * (temp_Yrs < 2020))
+recent_components = [-4, -5, 0, 1, 2]
+idx = np.ix_(recent_years, recent_components)
+temp_Att_Results_recent = temp_Att_Results[idx].mean(axis=0)
+# temp_Ant_Results_recent = temp_Ant_Results[recent_years, :].mean(axis=0)
+# temp_TOT_Results_recent = temp_TOT_Results[recent_years, :].mean(axis=0)
+recent_med = np.percentile(temp_Att_Results_recent[:], (50), axis=1)
+recent_neg = recent_med - np.percentile(temp_Att_Results_recent[:], (5), axis=1)
+recent_pos = np.percentile(temp_Att_Results_recent[:], (95), axis=1) - recent_med
+# recent_Ant_med = np.percentile(temp_Att_Results_recent[:], (50))
+# recent_Ant_neg = recent_Ant_med - np.percentile(temp_Ant_Results_recent[:], (5))
+# recent_Ant_pos = np.percentile(temp_Ant_Results_recent[:], (95)) - recent_Ant_med 
+# recent_Att_med = np.percentile(temp_Att_Results_recent[:-1, :], (50), axis=1)
+# recent_Att_neg = recent_Att_med - np.percentile(temp_Att_Results_recent[:-1, :], (5), axis=1)
+# recent_Att_pos = np.percentile(temp_Att_Results_recent[:-1, :], (95), axis=1) - recent_Att_med
+# recent_med = np.concatenate(([recent_TOT_med], [recent_Ant_med], recent_Att_med),
+#                             axis=0)
+# recent_neg = np.concatenate(([recent_TOT_neg], [recent_Ant_neg], recent_Att_neg),
+#                             axis=0)
+# recent_pos = np.concatenate(([recent_TOT_pos], [recent_Ant_pos], recent_Att_pos),
+#                             axis=0)
 
 recent_x_axis = np.arange(len(SPM2_list))
 bar_width = 0.3
