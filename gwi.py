@@ -195,13 +195,33 @@ def moving_average(data, w):
     #                      mode='constant', constant_values=(0, 1.5))
     return np.convolve(data, np.ones(w), 'valid') / w
 
-def temp_signal(data, w):
+def temp_signal(data, w, method):
     # Sensibly extend data (to avoid shortening the length of moving average)
-    # Choices are:
-    # - 0 before 1850 (we are defining this as preindustrial)
-    # - 1.5 between 2022 and 2050 (the line through the middle)
-    data_padded = np.pad(data, (w//2, w-1-w//2),
-                         mode='constant', constant_values=(0, 1.5))
+ 
+    # These are the lengths of the pads to add before and after the data.
+    start_pad = w//2
+    end_pad = w-1-w//2
+    
+    if method == 'constant':
+        # Choices are:
+        # - 0 before 1850 (we are defining this as preindustrial)
+        # - 1.5 between 2022 and 2050 (the line through the middle)
+        data_padded = np.pad(data, (start_pad, end_pad),
+                             mode='constant',
+                             constant_values=(0, 1.5))
+    
+    elif method == 'extrapolate':
+        # Add zeros to the beginning (corresponding to pre-industrial state)
+        extrap_start = np.zeros(start_pad)
+        
+        # Extrapolate the final w years to the end of the data
+        A = np.vstack([np.arange(w), np.ones(w)]).T
+        coef = np.linalg.lstsq(A, data[-w:], rcond=None)[0]
+        B = np.vstack([np.arange(w + end_pad), np.ones(w + end_pad)]).T
+        extrap_end = np.sum(coef*B, axis=1)[-end_pad:]
+        data_padded = np.concatenate((extrap_start, data, extrap_end), axis=0)
+    
+    return moving_average(data_padded, w)
     return np.convolve(data_padded, np.ones(w), 'valid') / w
 
 
@@ -339,7 +359,8 @@ print('Number of CMIP5 internal variability samples remaining:' +
 #         _temp_Obs_IV = df_temp_Obs[_temp_Ens] - _temp_Obs_signal
 #         temp_IV_Group[f'HadCRUT5 {_temp_Ens}'] = np.array(_temp_Obs_IV)
 
-temp_Obs_signal = temp_signal(df_temp_Obs.quantile(q=0.5, axis=1), 30)
+temp_Obs_signal = temp_signal(df_temp_Obs.quantile(q=0.5, axis=1),
+                              30, 'extrapolate')
 temp_Obs_IV = df_temp_Obs.quantile(q=0.5, axis=1) - temp_Obs_signal
 temp_IV_Group['HadCRUT5 median'] = np.array(temp_Obs_IV)
 
@@ -550,7 +571,7 @@ for j in range(Geoff.shape[1]):
 
         for temp_sig_Ens in temp_Obs_ensemble_names[:samples]:
             temp_Obs = np.array(df_temp_Obs[temp_sig_Ens])
-            temp_Obs_signal = temp_signal(temp_Obs, 30)
+            temp_Obs_signal = temp_signal(temp_Obs, 30, 'extrapolate')
             temp_Obs_signal -= temp_Obs_signal[:(end_pi - start_pi + 1)].mean()
 
             for temp_IV_Ens in temp_IV_Group.keys():
