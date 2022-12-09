@@ -525,15 +525,21 @@ forc_Yrs = np.array(forc_Group[forc_Group_names[0]]['df'].index)
 temp_Yrs = np.array(df_temp_Obs.index)
 
 temp_Att_Results = np.zeros(
+    # (173, len(forc_Group_names) + int(inc_reg_const) + 1 + 1 + 1, n))
     (173, len(forc_Group_names) + int(inc_reg_const), n))
-# temp_Ens_unique = np.zeros((173, samples * len(temp_IV_Group.keys())))
 temp_TOT_Residuals = np.zeros((173, n))
+# Instead of using a separate array for the residuals and totals for sum total
+# and anthropogenic warming, now just include these in teh attributed results.
+# This is why we have the + 1 +1 +1 above. +1 each for Ant, TOT, Res.
+
+# NOTE: the order in dimension is 'AER, GHG, NAT, CONST, ANT, TOTAL, RESIDUAL'
+
+coef_Reg_Results = np.zeros((len(forc_Group_names) + int(inc_reg_const), n))
+
+IV_names = []
 
 temp_TEST_Ens_Results = np.zeros((173, n))
 temp_TEST_Sig_Results = np.zeros((173, n))
-
-coef_Reg_Results = np.zeros((len(forc_Group_names) + int(inc_reg_const), n))
-IV_names = []
 
 i = 0
 t1 = dt.datetime.now()
@@ -544,7 +550,7 @@ for j in range(Geoff.shape[1]):
     params = np.zeros(20)
     params[10:12] = [0.631, 0.429]
     params[15:17] = Geoff[:, j]
-    params[15:17] = [8.400, 409.5]
+    # params[15:17] = [8.400, 409.5]
     
 # for j in range(1):
 #     params = np.zeros(20)
