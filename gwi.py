@@ -12,20 +12,6 @@ import scipy.stats as ss
 import seaborn as sns
 import graphing as gr
 
-matplotlib.rcParams.update(
-    {'font.size': 11,
-     'font.family': 'Roboto',
-     'font.weight': 'light',
-     'axes.linewidth': 0.5, 'axes.titleweight': 'regular',
-     'axes.grid': True, 'grid.linewidth': 0.5,
-     'grid.color': 'gainsboro',
-     'figure.dpi': 200, 'figure.figsize': (15, 10),
-     'figure.titlesize': 17,
-     'figure.titleweight': 'light',
-     'legend.frameon': False}
-)
-# Fontweights~: light, regular, normal,
-
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
 ###############################################################################
@@ -230,26 +216,6 @@ def temp_signal(data, w, method):
     return np.convolve(data_padded, np.ones(w), 'valid') / w
 
 
-def overall_legend(fig, loc, ncol, nrow=False):
-    
-    handles, labels = [], []
-    
-    for ax in fig.axes:
-        hs, ls = ax.get_legend_handles_labels()
-        handles.extend(hs)
-        labels.extend(ls)
-    
-    by_label = dict(zip(labels, handles))
-
-    fig.legend(by_label.values(), by_label.keys(),
-               loc=loc, ncol=ncol)
-    
-    ## rect = (left, bottom, right, top)
-    # if loc == 'right':
-    #     fig.tight_layout(rect=(0.0, 0.0, 0.82, 0.94))
-    # elif loc == 'lower center':
-    #     # fig.tight_layout(rect=(0.02, 0.12, 0.98, 0.94))
-    #     fig.tight_layout(rect=(0.0, 0.12, 1.0, 0.94))
 
 ###############################################################################
 # MAIN CODE BODY ##############################################################
@@ -284,6 +250,7 @@ start_yr, end_yr = 1850, 2022
 start_pi, end_pi = 1850, 1900  # As in IPCC AR6 Ch-3 Fig-3.4
 
 sigmas = [[32, 68], [5, 95], [0.3, 99.7]]
+sigmas_all = list(np.concatenate((np.sort(np.ravel(sigmas)), [50]), axis=0))
 
 
 # TEMPERATURE #################################################################
@@ -367,7 +334,7 @@ for ens in list(df_temp_PiC):
 #         _temp_Obs_IV = df_temp_Obs[_temp_Ens] - _temp_Obs_signal
 #         temp_IV_Group[f'HadCRUT5 {_temp_Ens}'] = np.array(_temp_Obs_IV)
 
-temp_Obs_signal = temp_signal(df_temp_Obs.quantile(q=0.5, axis=1),
+temp_Obs_signal = temp_signal(np.array(df_temp_Obs.quantile(q=0.5, axis=1)),
                               30, 'extrapolate')
 temp_Obs_IV = df_temp_Obs.quantile(q=0.5, axis=1) - temp_Obs_signal
 temp_IV_Group['HadCRUT5 median'] = np.array(temp_Obs_IV)
@@ -394,11 +361,12 @@ for t in range(len(timeframes)):
         _time_sliced = _time[cut_beg: -cut_end]
 
     for ens in temp_IV_Group:
-        colour = 'royalblue' if ens == 'HadCRUT5 median' else 'gray'
+        colour = 'xkcd:teal' if ens == 'HadCRUT5 median' else 'gray'
+        label = 'HadCRUT5 median' if ens == 'HadCRUT5 median' else 'CMIP5 picontrol'
         alpha = 1 if ens == 'HadCRUT5 median' else 0.3
         _data = moving_average(temp_IV_Group[ens], timeframes[t])
+        axA.plot(_time_sliced, _data, color=colour, alpha=alpha, label=label)
 
-        axA.plot(_time_sliced, _data, color=colour, alpha=alpha)
         density = ss.gaussian_kde(_data)
         x = np.linspace(axA.get_ylim()[0], axA.get_ylim()[1], 50)
         y = density(x)
@@ -410,6 +378,7 @@ for t in range(len(timeframes)):
     # axB.get_yaxis().set_visible(False)
     axB.get_xaxis().set_visible(False)
     axA.set_ylabel(f'Internal Variability (°C) \n ({timeframes[t]}-year moving mean)')
+gr.overall_legend(fig, loc='lower center', ncol=2, nrow=False)
 fig.suptitle('Selected Sample of Internal Variability from CMIP5 pi-control')
 fig.savefig('PLOTS/0_Selected_CMIP5_Ensembles.png')
 
@@ -419,54 +388,45 @@ print('Number of CMIP5 internal variability samples remaining:' +
 
 
 #### PLOT THE ENSEMBLE ####
-_t = np.array([temp_IV_Group[ens] for ens in temp_IV_Group.keys()])
+_t_IV = np.array([temp_IV_Group[ens] for ens in temp_IV_Group.keys()])
 
 fig = plt.figure(figsize=(15, 10))
 ax1 = plt.subplot2grid(shape=(1, 4), loc=(0, 0), rowspan=1, colspan=3)
 ax2 = plt.subplot2grid(shape=(1, 4), loc=(0, 3), rowspan=1, colspan=1)
 
-for p in sigmas:
+_t_IV_prcntls = np.percentile(_t_IV, sigmas_all, axis=0)
+# Internal Variability Sample
+for p in range(len(sigmas)):
     ax1.fill_between(df_temp_Obs.index,
-                     np.percentile(_t, p[0], axis=0),
-                     np.percentile(_t, p[1], axis=0),
-                     alpha=0.2, color='gray')
-    ax2.fill_between(x=[3, 4],
-                     y1=np.percentile(_t, p[0], axis=0).mean()*np.ones(2),
-                     y2=np.percentile(_t, p[1], axis=0).mean()*np.ones(2),
+                     _t_IV_prcntls[p, :], _t_IV_prcntls[-(p+2), :],
                      color='gray', alpha=0.2)
-    if p == sigmas[-1]:
-        ax1.plot(df_temp_Obs.index,
-                 np.percentile(_t, 50, axis=0),
-                 color='gray',
-                 label='CMIP5 piControl')
-
-
-ax1.plot(df_temp_Obs.index, temp_Obs_IV,
-         label='HadCRUT_5_median', color='cornflowerblue')
-ax2.plot([3, 4], np.percentile(_t, 50, axis=0).mean()*np.ones(2),
+    ax2.fill_between(x=[3, 4],
+                     y1=_t_IV_prcntls[p, :].mean()*np.ones(2),
+                     y2=_t_IV_prcntls[-(p+2), :].mean()*np.ones(2),
+                     color='gray', alpha=0.2)
+               
+ax1.plot(df_temp_Obs.index, _t_IV_prcntls[-1, :],
+         color='gray', alpha=0.7, label='CMIP5 piControl')
+ax2.plot([3, 4], _t_IV_prcntls[-1, :].mean()*np.ones(2),
          color='gray', alpha=0.7)
-for p in sigmas:
-    ax1.plot(df_temp_Obs.index,
-             np.percentile(temp_Obs_IV, p[0]) * np.ones(len(df_temp_Obs.index)),
-             color='royalblue', alpha=0.7)
-    ax1.plot(df_temp_Obs.index,
-             np.percentile(temp_Obs_IV, p[1]) * np.ones(len(df_temp_Obs.index)),
-             color='royalblue', alpha=0.7)
-    
-    ax2.fill_between(x=[1, 2],
-                     y1=np.percentile(temp_Obs_IV, p[0])*np.ones(2),
-                     y2=np.percentile(temp_Obs_IV, p[1])*np.ones(2),
-                     color='royalblue', alpha=0.2)
 
+# HadCRUT5 median
 ax1.plot(df_temp_Obs.index,
-         np.percentile(temp_Obs_IV, 50) * np.ones(len(df_temp_Obs.index)),
-         color='royalblue', alpha=0.7,
-         label='HadCRUT5 median percentiles')
+         (np.percentile(temp_Obs_IV, sigmas_all) *
+          np.ones((len(df_temp_Obs.index), len(sigmas_all)))),
+         color='xkcd:teal', alpha=0.7, ls='--')
+ax1.plot(df_temp_Obs.index, temp_Obs_IV,
+            color='xkcd:teal', alpha=0.7, label='HadCRUT5 median')
+for p in sigmas:
+    ax2.fill_between(x=[1, 2],
+                    y1=np.percentile(temp_Obs_IV, p[0])*np.ones(2),
+                    y2=np.percentile(temp_Obs_IV, p[1])*np.ones(2),
+                    color='xkcd:teal', alpha=0.2)
 ax2.plot([1, 2], np.percentile(temp_Obs_IV, 50)*np.ones(2),
-         color='royalblue', alpha=0.7)
+         color='xkcd:teal', alpha=0.7)
 
 
-overall_legend(fig, loc='lower center', ncol=3, nrow=False)
+gr.overall_legend(fig, loc='lower center', ncol=3, nrow=False)
 
 ax1.set_ylabel('Internal Variability (°C)')
 ax1.set_ylim(-0.6, 0.6)
@@ -530,112 +490,123 @@ Geoff = np.array([[4.0, 5.0, 4.5, 2.8, 5.2, 3.9, 4.2, 3.6,
 # Calculate GWI ###############################################################
 ###############################################################################
 
-# Prepare results #############################################################
-samples = int(input('numer of samples (0-200): '))  # for temperature, and ERF
-n = samples * samples * len(temp_IV_Group.keys()) * Geoff.shape[1]
-print('Total number of combinations to sample: ' +
-      f'{samples} forcings X {samples} HadCRUT X {len(temp_IV_Group.keys())}' +
-      f' Internal Variability X {Geoff.shape[1]} Parameters = {n}')
-
-
 forc_Yrs = np.array(forc_Group[forc_Group_names[0]]['df'].index)
 temp_Yrs = np.array(df_temp_Obs.index)
-
-temp_Att_Results = np.zeros(
-    (173, len(forc_Group_names) + int(inc_reg_const) + 1 + 1 + 1 + 1 + 1, n))
-
-# Instead of using a separate array for the residuals and totals for sum total
-# and anthropogenic warming, now just include these in teh attributed results.
-# This is why we have the +1 +1 +1 +1 +1 above:
-#  +1 each for Ant, TOT, Res, Ens, Sig
-# NOTE: the order in dimension is:
-# 'AER, GHG, NAT, CONST, ANT, TOTAL, RESIDUAL, Temp_Ens, Temp_Sig'
-Result_Components = forc_Group_names + ['Ant', 'TOT', 'Res', 'T_Ens', 'T_Sig']
-coef_Reg_Results = np.zeros((len(forc_Group_names) + int(inc_reg_const), n))
-
-IV_names = []
 
 i = 0
 t1 = dt.datetime.now()
 
 # CARRY OUT REGRESSION CALCULATION ############################################
+calc_switch = input('Recalculate? y/n: ')
+if calc_switch == 'y':
+    # Prepare results #############################################################
 
-for j in range(Geoff.shape[1]):
-    params = np.zeros(20)
-    params[10:12] = [0.631, 0.429]
-    params[15:17] = Geoff[:, j]
-    # params[15:17] = [8.400, 409.5]
+    samples = int(input('numer of samples (0-200): '))  # for temperature, and ERF
+    n = samples * samples * len(temp_IV_Group.keys()) * Geoff.shape[1]
+    print('Total number of combinations to sample: ' +
+      f'{samples} forcings X {samples} HadCRUT X {len(temp_IV_Group.keys())}' +
+      f' Internal Variability X {Geoff.shape[1]} Parameters = {n}')
+    # Instead of using a separate array for the residuals and totals for sum total
+    # and anthropogenic warming, now just include these in teh attributed results.
+    # This is why we have the +1 +1 +1 +1 +1 above:
+    #  +1 each for Ant, TOT, Res, Ens, Sig
+    # NOTE: the order in dimension is:
+    # 'AER, GHG, NAT, CONST, ANT, TOTAL, RESIDUAL, Temp_Ens, Temp_Sig'
+    temp_Att_Results = np.zeros(
+      (173, len(forc_Group_names) + int(inc_reg_const) + 1 + 1 + 1 + 1 + 1, n))
+    Result_Components = forc_Group_names + ['Ant', 'TOT', 'Res', 'T_Ens', 'T_Sig']
+    coef_Reg_Results = np.zeros((len(forc_Group_names) + int(inc_reg_const), n))
+    IV_names = []
+    
+    for j in range(Geoff.shape[1]):
+        params = np.zeros(20)
+        params[10:12] = [0.631, 0.429]
+        params[15:17] = Geoff[:, j]
+        # params[15:17] = [8.400, 409.5]
+        FTmodel = FTmod(len(forc_Yrs), params)
 
-    for forc_Ens in forc_All_ensemble_names[:samples]:
-        forc_All = np.array([forc_Group[group]['df'][forc_Ens]
-                        for group in forc_Group_names]).T
-        # params = a_params('Carbon Dioxide')
+        for forc_Ens in forc_All_ensemble_names[:samples]:
+            forc_All = np.array([forc_Group[group]['df'][forc_Ens]
+                                 for group in forc_Group_names]
+                                 ).T
 
-        temp_All = FTmod(forc_All.shape[0], params) @ forc_All
-        if inc_pi_offset:
-            _ofst = temp_All[(forc_Yrs >= start_pi) & (forc_Yrs <= end_pi), :
-                            ].mean(axis=0)
-        else:
-            _ofst = 0
-        temp_Mod = temp_All[(forc_Yrs >= start_yr) & (forc_Yrs <= end_yr)] - _ofst
+            temp_All = FTmodel @ forc_All
+            if inc_pi_offset:
+                _ofst = temp_All[(forc_Yrs >= start_pi) & (forc_Yrs <= end_pi), :
+                                ].mean(axis=0)
+            else:
+                _ofst = 0
+            temp_Mod = temp_All[(forc_Yrs >= start_yr) & (forc_Yrs <= end_yr)] - _ofst
 
-        # Decide whether to include a Constant offset term in regression
-        if inc_reg_const:
-            temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)), axis=1)
-        num_vars = temp_Mod.shape[1]
+            # Decide whether to include a Constant offset term in regression
+            if inc_reg_const:
+                temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)), axis=1)
+            num_vars = temp_Mod.shape[1]
 
-        for temp_sig_Ens in temp_Obs_ensemble_names[:samples]:
-            temp_Obs = np.array(df_temp_Obs[temp_sig_Ens])
-            temp_Obs_signal = temp_signal(temp_Obs, 30, 'extrapolate')
-            temp_Obs_signal -= temp_Obs_signal[:(end_pi - start_pi + 1)].mean()
+            for temp_sig_Ens in temp_Obs_ensemble_names[:samples]:
+                temp_Obs = np.array(df_temp_Obs[temp_sig_Ens])
+                temp_Obs_signal = temp_signal(temp_Obs, 30, 'extrapolate')
+                temp_Obs_signal -= temp_Obs_signal[:(end_pi - start_pi + 1)].mean()
 
-            for temp_IV_Ens in temp_IV_Group.keys():
-                temp_Ens = temp_Obs_signal + temp_IV_Group[temp_IV_Ens]
-                temp_Ens -= temp_Ens[:(end_pi - start_pi + 1)].mean()
-                
-                # Carry out regression calculation
-                coef_Reg = np.linalg.lstsq(temp_Mod, temp_Ens, rcond=None)[0]
-                temp_Att = temp_Mod * coef_Reg
-                # Save outputs from the calculation:
-                # Regression coefficients
-                coef_Reg_Results[:, i] = coef_Reg
-                # Attributed warming for each component
-                temp_Att_Results[:, :num_vars, i] = temp_Att
-                # Actual temperature "ensemble" that was dependent variable
-                temp_Att_Results[:, -2, i] = temp_Ens
-                # The signal for this ensemble (ie minus internal variability)
-                temp_Att_Results[:, -1, i] = temp_Obs_signal
-                IV_names.append('_'.join(temp_IV_Ens.split('_')[:1]))
-                
-                # Note that it is more efficient to calculate the total and
-                # anthropogenic afterwards for the entire matrix at once.
-                
-                # Visual display of pregress through calculation
-                percentage = int((i+1)/n*100)
-                loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
-                print(f'calculating {loading_bar} {percentage}%', end='\r')
-                i += 1
+                for temp_IV_Ens in temp_IV_Group.keys():
+                    temp_Ens = temp_Obs_signal + temp_IV_Group[temp_IV_Ens]
+                    temp_Ens -= temp_Ens[:(end_pi - start_pi + 1)].mean()
+                    
+                    # Carry out regression calculation
+                    coef_Reg = np.linalg.lstsq(temp_Mod, temp_Ens, rcond=None)[0]
+                    temp_Att = temp_Mod * coef_Reg
+                    # Save outputs from the calculation:
+                    # Regression coefficients
+                    coef_Reg_Results[:, i] = coef_Reg
+                    # Attributed warming for each component
+                    temp_Att_Results[:, :num_vars, i] = temp_Att
+                    # Actual temperature "ensemble" that was dependent variable
+                    temp_Att_Results[:, -2, i] = temp_Ens
+                    # The signal for this ensemble (ie minus internal variability)
+                    temp_Att_Results[:, -1, i] = temp_Obs_signal
+                    IV_names.append('_'.join(temp_IV_Ens.split('_')[:1]))
+                    
+                    # Note that it is more efficient to calculate the total and
+                    # anthropogenic afterwards for the entire matrix at once.
+                    
+                    # Visual display of pregress through calculation
+                    percentage = int((i+1)/n*100)
+                    loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
+                    print(f'calculating {loading_bar} {percentage}%', end='\r')
+                    i += 1
+
+
+    # CALCULATE OTHER KEY RESULTS #################################################
+    # TOTAL
+    temp_Att_Results[:, -4, :] = (
+        temp_Att_Results[:, :num_vars, :].sum(axis=1))
+    # Residual
+    temp_Att_Results[:, -3, :] = (
+        temp_Att_Results[:, -2, :] - temp_Att_Results[:, -4, :])
+    # Anthropogenic
+    _temp_Ant_Results = (
+        temp_Att_Results[:, -4, :] -
+        # Remove the Natural forcing component in next line:
+        temp_Att_Results[:, forc_Group_names.index('Nat'), :] -
+        # Remove constant term in regression in next line:
+        int(inc_reg_const) * temp_Att_Results[:, num_vars-1, :]
+                        )
+    temp_Att_Results[:, -5, :] = _temp_Ant_Results
+
+    np.save('temp_Att_Results.npy', temp_Att_Results)
+    np.save('coef_Reg_Results.npy', coef_Reg_Results)
+
+elif calc_switch == 'n':
+    temp_Att_Results = np.load('temp_Att_Results.npy')
+    coef_Reg_Results = np.load('coef_Reg_Results.npy')
+    n = temp_Att_Results.shape[2]
+
+else:
+    print(f'{calc_switch} not valid; exiting script.')
+    sys.exit()
 
 t2 = dt.datetime.now()
 print(f'Total calculation took {t2-t1}')
-
-# CALCULATE OTHER KEY RESULTS #################################################
-# TOTAL
-temp_Att_Results[:, -4, :] = (
-    temp_Att_Results[:, :num_vars, :].sum(axis=1))
-# Residual
-temp_Att_Results[:, -3, :] = (
-    temp_Att_Results[:, -2, :] - temp_Att_Results[:, -4, :])
-# Anthropogenic
-_temp_Ant_Results = (
-    temp_Att_Results[:, -4, :] -
-    # Remove the Natural forcing component in next line:
-    temp_Att_Results[:, forc_Group_names.index('Nat'), :] -
-    # Remove constant term in regression in next line:
-    int(inc_reg_const) * temp_Att_Results[:, num_vars-1, :]
-                     )
-temp_Att_Results[:, -5, :] = _temp_Ant_Results
-
 
 # For diagnosing: filter out results with particular regression coefficients.
 
@@ -666,23 +637,24 @@ if mask_switch:
 ###############################################################################
 
 # GWI PLOT ####################################################################
+print('Creating GWI Plot...')
+
 fig = plt.figure(figsize=(15, 10))
 ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
 ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
 ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
+ax4 = plt.subplot2grid(shape=(3, 4), loc=(2, 3), rowspan=1, colspan=1)
 
-# Plot the internal variability range #########################################
+# Plot the dependent temperature range ########################################
 temp_Ens_unique = np.unique(temp_Att_Results[:, -2, :], axis=1)
-for p in sigmas:
-    ax1.fill_between(temp_Yrs,
-                     np.percentile(temp_Ens_unique, p[0], axis=1),
-                     np.percentile(temp_Ens_unique, p[1], axis=1),
-                     alpha=0.05, color='black')
-    if p == sigmas[-1]:
-        ax1.plot(temp_Yrs,
-                 np.percentile(temp_Ens_unique, 50, axis=1),
-                 color='black',
-                 label='CMIP5 piControl')
+temp_prcntls = np.percentile(temp_Ens_unique, sigmas_all, axis=1)
+
+for p in range(len(sigmas)):
+    ax1.fill_between(temp_Yrs, temp_prcntls[p, :], temp_prcntls[-(p+2), :],
+                     color='gray', alpha=0.1)
+ax1.plot(temp_Yrs, temp_prcntls[-1, :],
+         color='gray', alpha=0.8,
+         label='CMIP5 piControl')
 
 # Plot the observed temperatures on top as a scatter ##########################
 err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
@@ -693,102 +665,122 @@ ax1.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
              yerr=(err_neg, err_pos),
              fmt='o', color='black', ms=2.5, lw=1,
              label='HadCRUT5')
-
+t2a = dt.datetime.now()
+print(f'Dependent temperatures took {t2a-t2}')
 # Plot the attribution results ################################################
 
 # Select which components we want:
 # gwi_component_name = ['Aer', 'GHG', 'Nat', 'Ant']
 # gwi_component_list = [0, 1, 2, -5]
 
-for p in sigmas:
-    for i in range(len(forc_Group_names)):
-        ax1.fill_between(temp_Yrs,
-            np.percentile(temp_Att_Results[:, i, :], (p[0]), axis=1),
-            np.percentile(temp_Att_Results[:, i, :], (p[1]), axis=1),
-            color=forc_Group[forc_Group_names[i]]['Colour'],
-            alpha=0.1
-            )
-        if p == sigmas[-1]:
-            ax1.plot(temp_Yrs,
-                np.percentile(temp_Att_Results[:, i, :], (50), axis=1),
-                color=forc_Group[forc_Group_names[i]]['Colour'],
-                label=(forc_Group_names[i]),
-                )
+# gwi_plot_names = ['TOT', 'Ant', 'Aer', 'GHG', 'Nat']
+gwi_plot_names = ['TOT', 'Ant', 'Aer', 'GHG', 'Nat', 'Res']
 
-    # Total
-    ax1.fill_between(temp_Yrs,
-                     np.percentile(temp_Att_Results[:, -4, :], (p[0]), axis=1),
-                     np.percentile(temp_Att_Results[:, -4, :], (p[1]), axis=1),
-                     color='purple',
-                     alpha=0.1)
-    # Anthropogenic
-    ax1.fill_between(temp_Yrs,
-                     np.percentile(temp_Att_Results[:, -5, :], (p[0]), axis=1),
-                     np.percentile(temp_Att_Results[:, -5, :], (p[1]), axis=1),
-                     color='red',
-                     alpha=0.1)
+# gwi_plot_colours = ['purple', 'red', 'orange', 'green', 'blue']
+gwi_plot_colours = ['xkcd:magenta', 'red',
+                    'xkcd:goldenrod', 'xkcd:teal', 'xkcd:azure',
+                    'gray']
 
-    if p == sigmas[-1]:
-        # Total
-        ax1.plot(temp_Yrs, np.percentile(temp_Att_Results[:, -4, :], (50), axis=1),
-                 color='purple', label='TOTAL')
-        # Anthropogenic
-        ax1.plot(temp_Yrs, np.percentile(temp_Att_Results[:, -5, :], (50), axis=1),
-                 color='red', label='Ant')
+# gwi_plot_components = [-4, -5, 0, 1, 2, -3]
+gwi_plot_components = [-4, -5, 0, 1, 2, -3]
 
+gwi_prcntls = np.percentile(temp_Att_Results[:, gwi_plot_components, :],
+                            sigmas_all, axis=2)
+# WARNING TO SELF: multidimensional np.percentile() changes the order of the
+# axes, so that the axis along which you took the percentiles is now the first
+# axis, and the other axes are the remaining axes. This doesn't make any sense
+# to me why this would be useful, but it is waht it is...
+for c in range(len(gwi_plot_names)):
+    if gwi_plot_names[c] in {'TOT', 'Aer', 'GHG', 'Nat'}:
+        for p in range(len(sigmas)):
+            ax1.fill_between(temp_Yrs,
+                            gwi_prcntls[p, :, c], gwi_prcntls[-(p+2), :, c],
+                            color=gwi_plot_colours[c],
+                            alpha=0.1
+                            )
+        ax1.plot(temp_Yrs, gwi_prcntls[-1, :, c],
+                    color=gwi_plot_colours[c],
+                    label=gwi_plot_names[c]
+                    )
 ax1.set_ylabel('Warming Anomaly (°C)')
 
-# Residuals
-for p in sigmas:
+t2b = dt.datetime.now()
+print(f'Independent temperatures took {t2b-t2a}')
+
+# Residuals ###################################################################
+for p in range(len(sigmas)):
     ax3.fill_between(temp_Yrs,
-        np.percentile(temp_Att_Results[:, -3, :], (p[0]), axis=1),
-        np.percentile(temp_Att_Results[:, -3, :], (p[1]), axis=1),
-        color='gray',
-        alpha=0.1
-        )
-    if p == sigmas[-1]:
-        ax3.plot(temp_Yrs,
-            np.percentile(temp_Att_Results[:, -3, :], (50), axis=1),
-            color='gray',
-            label=(forc_Group_names[i]),
-            )
+                     gwi_prcntls[p, :, -1], gwi_prcntls[-(p+2), :, -1],
+                     color='gray', alpha=0.1)
+
+ax3.plot(temp_Yrs, gwi_prcntls[-1, :, -1], color='gray',)
 ax3.plot(temp_Yrs, np.zeros(len(temp_Yrs)),
-         color='purple', alpha=0.5,
-         label='Attributed')
+        color='xkcd:magenta', alpha=0.5,
+        label='Attributed')
 ax3.set_ylabel('Regression Residuals (°C)')
 
-
-for i in range(len(forc_Group_names)):
-    binwidth = 0.01
-    bins = np.arange(np.min(temp_Att_Results[-1, i, :]),
-                     np.max(temp_Att_Results[-1, i, :]) + binwidth,
-                     binwidth)
-    ax2.hist(temp_Att_Results[-1, i, :], bins=bins,
-             density=True, orientation='horizontal',
-             color=forc_Group[forc_Group_names[i]]['Colour'],
-             alpha=0.3
-             )
-
-bins = np.arange(np.min(temp_Att_Results[-1, -5, :]),
-                 np.max(temp_Att_Results[-1, -5, :]) + binwidth,
-                 binwidth)
-ax2.hist(temp_Att_Results[-1, -5, :], bins=bins,
-         density=True, orientation='horizontal',
-         color='pink', alpha=0.3
-         )
-
-bins = np.arange(np.min(temp_Att_Results[-1, -4, :]),
-                 np.max(temp_Att_Results[-1, -4, :]) + binwidth,
-                 binwidth)
-ax2.hist(temp_Att_Results[-1, -4, :], bins=bins,
-         density=True, orientation='horizontal',
-         color='gray', alpha=0.3
-         )
+t2c = dt.datetime.now()
+print(f'Residuals plot took {t2c-t2b}')
 
 
-ax2.set_xlabel(f'PDF in {end_yr}')
+# Distributions ###############################################################
+for c in range(len(gwi_plot_names)):
+    if gwi_plot_names[c] in {'TOT', 'Aer', 'GHG', 'Nat'}:
+        # binwidth = 0.01
+        # bins = np.arange(np.min(temp_Att_Results[-1, gwi_plot_components[i], :]),
+        #                  np.max(temp_Att_Results[-1, gwi_plot_components[i], :]) + binwidth,
+        #                  binwidth)
+        # ax2.hist(temp_Att_Results[-1, gwi_plot_components[i], :], bins=bins,
+        #          density=True, orientation='horizontal',
+        #          color=gwi_plot_colours[i],
+        #          alpha=0.3
+        #          )
+        density = ss.gaussian_kde(temp_Att_Results[-1, gwi_plot_components[c], :])
+        x = np.linspace(
+            temp_Att_Results[-1, gwi_plot_components[c], :].min(),
+            temp_Att_Results[-1, gwi_plot_components[c], :].max(),
+            100)
+        y = density(x)
+        # ax2.plot(y, x, color=gwi_plot_colours[i], alpha=0.7)
+        ax2.fill_betweenx(x, np.zeros(len(y)), y,
+                          color=gwi_plot_colours[c], alpha=0.3)
+
+# bins = np.arange(np.min(temp_Att_Results[-1, -5, :]),
+#                  np.max(temp_Att_Results[-1, -5, :]) + binwidth,
+#                  binwidth)
+# ax2.hist(temp_Att_Results[-1, -5, :], bins=bins,
+#          density=True, orientation='horizontal',
+#          color='pink', alpha=0.3
+#          )
+
+# bins = np.arange(np.min(temp_Att_Results[-1, -4, :]),
+#                  np.max(temp_Att_Results[-1, -4, :]) + binwidth,
+#                  binwidth)
+# ax2.hist(temp_Att_Results[-1, -4, :], bins=bins,
+#          density=True, orientation='horizontal',
+#          color='gray', alpha=0.3
+#          )
+
+
+ax2.set_title(f'PDF in {end_yr}')
 ax2.set_ylim(ax1.get_ylim())
 
+t2d = dt.datetime.now()
+print(f'Distributions took {t2d-t2c}')
+
+# Plotting anthropogenic vs total warming #####################################
+ax4.plot([-0.2, 1.5], [-0.2, 1.5], color='gray', alpha=0.7)
+
+for p in range(len(sigmas)):
+    ax4.plot(gwi_prcntls[p, :, 1], gwi_prcntls[p, :, 0],
+             color='xkcd:magenta', alpha=0.7)
+
+ax4.set_xlabel('Ant')
+ax4.set_ylabel('TOT')
+ax4.set_xlim(-0.2, 1.5)
+ax4.set_ylim(-0.2, 1.5)
+
+# Make the headline result...
 gwi = np.around(np.percentile(temp_Att_Results[-1, -4, :], (50)), decimals=3)
 gwi_pls = np.around(np.percentile(temp_Att_Results[-1, -4, :], (95)) -
                     np.percentile(temp_Att_Results[-1, -4, :], (50)),
@@ -799,43 +791,51 @@ gwi_min = np.around(np.percentile(temp_Att_Results[-1, -4, :], (50)) -
 
 str_GWI = r'${%s}^{+{%s}}_{-{%s}}$' % (gwi, gwi_pls, gwi_min)
 # str_temp_Obs = r'${%s}^{+{%s}}_{-{%s}}$' % (tmp, tmp_pls, tmp_min)
-fig.text(s=(f'Warming in {end_yr}: ' +
-            f'human-induced-warming = {str_GWI} (°C)'),
-            # f'observed warming = {str_temp_Obs}'),
-         y=0.9, x=0.5, horizontalalignment='center')
-
+# fig.text(s=(f'Warming in {end_yr}: ' +
+#             f'human-induced-warming = {str_GWI} (°C)'),
+#             # f'observed warming = {str_temp_Obs}'),
+#          y=0.9, x=0.5, horizontalalignment='center')
+ax1.set_title(f'Warming in {end_yr}: ' +
+            f'human-induced-warming = {str_GWI} (°C)')
 fig.suptitle(f'Global Warming Index ({n} samplings)')
 ax1.legend()
 fig.savefig('PLOTS/2_GWI.png')
 
-# Plot coefficients ###########################################################
+t3 = dt.datetime.now()
+print(f'... all took {t3-t2}')
+
+# # Plot coefficients ###########################################################
+print('Creating Coefficient Plot...', end=' ')
 fig = plt.figure(figsize=(15, 10))
 ax = plt.subplot2grid(
     shape=(1, 1), loc=(0, 0),
     # rowspan=1, colspan=3
     )
-unique_IV_names = sorted(list(set(IV_names)))
-cm = 'Set3'
-cols = np.array(sns.color_palette(cm, len(unique_IV_names)))
-cols_hex = [matplotlib.colors.rgb2hex(cols[i, :])
-            for i in range(cols.shape[0])]
+# unique_IV_names = sorted(list(set(IV_names)))
+# cm = 'Set3'
+# cols = np.array(sns.color_palette(cm, len(unique_IV_names)))
+# cols_hex = [matplotlib.colors.rgb2hex(cols[i, :])
+#             for i in range(cols.shape[0])]
 
-IV_col_dic = dict(zip(unique_IV_names, cols_hex))
-use_colours = [IV_col_dic[_IV] for _IV in IV_names]
-ax.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :], color=use_colours,
-            alpha=0.02, edgecolors='none', s=20)
+# IV_col_dic = dict(zip(unique_IV_names, cols_hex))
+# use_colours = [IV_col_dic[_IV] for _IV in IV_names]
+ax.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :],
+           #    color=use_colours,
+           color='xkcd:teal',
+           alpha=0.02, edgecolors='none', s=20)
 ax.set_xlabel('AER')
 ax.set_ylabel('GHG')
 # plt.ylim(bottom=0)
 fig.suptitle(f'Coefficients from {n} Samplings')
 fig.savefig('PLOTS/3_Coefficients.png')
-
+t4 = dt.datetime.now()
+print(f'took {t4-t3}')
 
 ###############################################################################
 # Recreate IPCC AR6 SPM.2 Plot
 # https://www.ipcc.ch/report/ar6/wg1/downloads/report/IPCC_AR6_WGI_SPM.pdf
 ###############################################################################
-
+print('Creating IPCC Comparison Bar Plot...', end=' ')
 SPM2_list = ['TOT', 'Ant', 'Aer', 'GHG', 'Nat']
 # Note that the central estimate for aerosols isn't given; only the range is
 # specified; a pixel ruler was used on the pdf to get the rough central value.
@@ -875,20 +875,22 @@ ax = plt.subplot2grid(
     # rowspan=1, colspan=3
     )
 ax.bar(recent_x_axis-bar_width/2, SPM2_med,
-        width=bar_width, color='royalblue', label='SPM.2')
+       width=bar_width, color='xkcd:teal', label='SPM.2', alpha=0.4)
 ax.errorbar(recent_x_axis-bar_width/2, SPM2_med, yerr=(SPM2_neg, SPM2_pos),
              fmt='none', color='black')
 # Plot GWI data
 ax.bar(recent_x_axis+bar_width/2, recent_med,
-        width=bar_width, color='lightcoral', label='GWI')
+        width=bar_width, color='xkcd:azure', label='GWI', alpha=0.4)
 ax.errorbar(recent_x_axis+bar_width/2, recent_med, yerr=(recent_neg, recent_pos),
              fmt='none', color='black')
 ax.set_xticks(recent_x_axis, SPM2_list)
 ax.set_ylabel('Contributions to 2010-2019 warming relative to 1850-1900')
+gr.overall_legend(fig, 'lower center', 2)
 fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
 fig.savefig('PLOTS/4_SPM2_Comparison.png')
 
-
+t5 = dt.datetime.now()
+print(f'took {t5-t4}')
 
 
 sys.exit()
