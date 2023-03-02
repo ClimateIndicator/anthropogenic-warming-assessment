@@ -12,7 +12,7 @@ import scipy.stats as ss
 import seaborn as sns
 
 import graphing as gr
-import AR5_IR
+import models.AR5_IR as AR5_IR
 
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
@@ -261,7 +261,7 @@ for t in range(len(timeframes)):
     axA.set_ylabel(f'Internal Variability (°C) \n ({timeframes[t]}-year moving mean)')
 gr.overall_legend(fig, loc='lower center', ncol=2, nrow=False)
 fig.suptitle('Selected Sample of Internal Variability from CMIP5 pi-control')
-fig.savefig('PLOTS/0_Selected_CMIP5_Ensembles.png')
+fig.savefig('plots/0_Selected_CMIP5_Ensembles.png')
 
 
 print('Number of CMIP5 internal variability samples remaining:' +
@@ -318,7 +318,7 @@ ax2.get_xaxis().set_visible(False)
 
 
 fig.suptitle('Selected Sample of Internal Variability from CMIP5 pi-control')
-fig.savefig('PLOTS/1_Distribution_Internal_Variability.png')
+fig.savefig('plots/1_Distribution_Internal_Variability.png')
 
 
 ### ERF
@@ -474,12 +474,12 @@ if calc_switch == 'y':
                         )
     temp_Att_Results[:, -5, :] = _temp_Ant_Results
 
-    np.save('temp_Att_Results.npy', temp_Att_Results)
-    np.save('coef_Reg_Results.npy', coef_Reg_Results)
+    np.save('results/temp_Att_Results.npy', temp_Att_Results)
+    np.save('results/coef_Reg_Results.npy', coef_Reg_Results)
 
 elif calc_switch == 'n':
-    temp_Att_Results = np.load('temp_Att_Results.npy')
-    coef_Reg_Results = np.load('coef_Reg_Results.npy')
+    temp_Att_Results = np.load('results/temp_Att_Results.npy')
+    coef_Reg_Results = np.load('results/coef_Reg_Results.npy')
     n = temp_Att_Results.shape[2]
 
 else:
@@ -679,7 +679,7 @@ ax1.set_title(f'Warming in {end_yr}: ' +
               f'human-induced-warming = {str_GWI} (°C)')
 fig.suptitle(f'Global Warming Index ({n} samplings)')
 gr.overall_legend(fig, 'lower center', 6)
-fig.savefig('PLOTS/2_GWI.png')
+fig.savefig('plots/2_GWI.png')
 
 t3 = dt.datetime.now()
 print(f'... all took {t3-t2}')
@@ -707,7 +707,7 @@ ax.set_xlabel('AER')
 ax.set_ylabel('GHG')
 # plt.ylim(bottom=0)
 fig.suptitle(f'Coefficients from {n} Samplings')
-fig.savefig('PLOTS/3_Coefficients.png')
+fig.savefig('plots/3_Coefficients.png')
 t4 = dt.datetime.now()
 print(f'took {t4-t3}')
 
@@ -722,7 +722,7 @@ g.map_upper(sns.scatterplot)
 g.map_lower(sns.kdeplot)
 g.map_diag(sns.kdeplot, lw=3, legend=False)
 g.fig.suptitle('Regression Coefficient Distributions')
-plt.savefig('data/SNS TEST.png')
+plt.savefig('plots/SNS TEST.png')
 
 ###############################################################################
 # Recreate IPCC AR6 SPM.2 Plot
@@ -780,7 +780,7 @@ ax.set_xticks(recent_x_axis, SPM2_list)
 ax.set_ylabel('Contributions to 2010-2019 warming relative to 1850-1900')
 gr.overall_legend(fig, 'lower center', 2)
 fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
-fig.savefig('PLOTS/4_SPM2_Comparison.png')
+fig.savefig('plots/4_SPM2_Comparison.png')
 
 t5 = dt.datetime.now()
 print(f'took {t5-t4}')
