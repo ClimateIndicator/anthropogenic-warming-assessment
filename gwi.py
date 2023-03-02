@@ -654,7 +654,7 @@ for p in range(len(sigmas)):
                      color='gray', alpha=0.1)
 ax1.plot(temp_Yrs, temp_prcntls[-1, :],
          color='gray', alpha=0.8,
-         label='CMIP5 piControl')
+         label='Dependent Temps: HadCRUT5 + CMIP5 piControl')
 
 # Plot the observed temperatures on top as a scatter ##########################
 err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
@@ -663,8 +663,8 @@ err_neg = (df_temp_Obs.quantile(q=0.5, axis=1) -
            df_temp_Obs.quantile(q=0.05, axis=1))
 ax1.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
              yerr=(err_neg, err_pos),
-             fmt='o', color='black', ms=2.5, lw=1,
-             label='HadCRUT5')
+             fmt='o', color='gray', ms=2.5, lw=1,
+             label='Reference Temp: HadCRUT5')
 t2a = dt.datetime.now()
 print(f'Dependent temperatures took {t2a-t2}')
 # Plot the attribution results ################################################
@@ -677,7 +677,7 @@ print(f'Dependent temperatures took {t2a-t2}')
 gwi_plot_names = ['TOT', 'Ant', 'Aer', 'GHG', 'Nat', 'Res']
 
 # gwi_plot_colours = ['purple', 'red', 'orange', 'green', 'blue']
-gwi_plot_colours = ['xkcd:magenta', 'red',
+gwi_plot_colours = ['xkcd:magenta', 'xkcd:crimson',
                     'xkcd:goldenrod', 'xkcd:teal', 'xkcd:azure',
                     'gray']
 
@@ -715,8 +715,7 @@ for p in range(len(sigmas)):
 
 ax3.plot(temp_Yrs, gwi_prcntls[-1, :, -1], color='gray',)
 ax3.plot(temp_Yrs, np.zeros(len(temp_Yrs)),
-        color='xkcd:magenta', alpha=0.5,
-        label='Attributed')
+         color='xkcd:magenta', alpha=1.0)
 ax3.set_ylabel('Regression Residuals (°C)')
 
 t2c = dt.datetime.now()
@@ -796,9 +795,9 @@ str_GWI = r'${%s}^{+{%s}}_{-{%s}}$' % (gwi, gwi_pls, gwi_min)
 #             # f'observed warming = {str_temp_Obs}'),
 #          y=0.9, x=0.5, horizontalalignment='center')
 ax1.set_title(f'Warming in {end_yr}: ' +
-            f'human-induced-warming = {str_GWI} (°C)')
+              f'human-induced-warming = {str_GWI} (°C)')
 fig.suptitle(f'Global Warming Index ({n} samplings)')
-ax1.legend()
+gr.overall_legend(fig, 'lower center', 6)
 fig.savefig('PLOTS/2_GWI.png')
 
 t3 = dt.datetime.now()
@@ -822,7 +821,7 @@ ax = plt.subplot2grid(
 ax.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :],
            #    color=use_colours,
            color='xkcd:teal',
-           alpha=0.02, edgecolors='none', s=20)
+           alpha=0.01, edgecolors='none', s=20)
 ax.set_xlabel('AER')
 ax.set_ylabel('GHG')
 # plt.ylim(bottom=0)
@@ -830,6 +829,19 @@ fig.suptitle(f'Coefficients from {n} Samplings')
 fig.savefig('PLOTS/3_Coefficients.png')
 t4 = dt.datetime.now()
 print(f'took {t4-t3}')
+
+########### TEST SEABORN
+plt.close()
+
+coef_df = pd.DataFrame(coef_Reg_Results.T,
+                       columns=['Aer', 'GHG', 'Nat', 'Const'])
+# print(coef_df.head())
+g = sns.PairGrid(coef_df.sample(5000))
+g.map_upper(sns.scatterplot)
+g.map_lower(sns.kdeplot)
+g.map_diag(sns.kdeplot, lw=3, legend=False)
+g.fig.suptitle('Regression Coefficient Distributions')
+plt.savefig('data/SNS TEST.png')
 
 ###############################################################################
 # Recreate IPCC AR6 SPM.2 Plot
