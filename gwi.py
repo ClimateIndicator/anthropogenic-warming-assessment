@@ -1,18 +1,22 @@
 """Script to generate global warming index."""
 
-import numpy as np
-import pandas as pd
-import matplotlib
-import matplotlib.pyplot as plt
-import datetime as dt
 import os
 import sys
+
+import datetime as dt
 import functools
+
+import numpy as np
+import pandas as pd
+
+import matplotlib
+import matplotlib.pyplot as plt
 import scipy.stats as ss
 import seaborn as sns
 
 import graphing as gr
 import models.AR5_IR as AR5_IR
+
 
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
