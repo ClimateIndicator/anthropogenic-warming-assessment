@@ -127,15 +127,65 @@ elif inc_reg_const not in allowed_options:
 inc_pi_offset = True if inc_pi_offset == 'y' else False
 inc_reg_const = True if inc_reg_const == 'y' else False
 
-##############################################################################
-# READ IN THE DATA ###########################################################
-##############################################################################
 
 start_yr, end_yr = 1850, 2022
 start_pi, end_pi = 1850, 1900  # As in IPCC AR6 Ch-3 Fig-3.4
 
 sigmas = [[32, 68], [5, 95], [0.3, 99.7]]
 sigmas_all = list(np.concatenate((np.sort(np.ravel(sigmas)), [50]), axis=0))
+
+# plot_folder = 'plots/'
+plot_folder = 'plots/internal-variability/'
+
+
+##############################################################################
+# READ IN THE DATA ###########################################################
+##############################################################################
+
+### ERF #######################################################################
+forc_Path = './data/ERF Samples/'
+list_ERF = ['_'.join(file.split('_')[1:-1])
+            for file in os.listdir(forc_Path)
+            if '.csv' in file]
+
+# forc_Group = {
+#             #   'Ant': {'Consists': ['ant'], 'Colour': 'green'},
+#               'Nat': {'Consists': ['nat'], 'Colour': 'blue'},
+#               'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'h2o_stratospheric',
+#                                    'o3_tropospheric', 'o3_stratospheric',
+#                                    'other_wmghg', 'land_use'],
+#                       'Colour': 'green'},
+#               'Aer': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails'],
+#                       'Colour': 'orange'}
+#               }
+
+forc_Group = {
+            #   'Ant': {'Consists': ['ant'], 'Colour': 'green'},
+              'Nat': {'Consists': ['nat'], 'Colour': 'green'},
+              'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'h2o_stratospheric',
+                                   'other_wmghg'],
+                      'Colour': 'orange'},
+              'OHF': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails',
+                                   'o3_tropospheric', 'o3_stratospheric',
+                                   'land_use'],
+                      'Colour': 'blue'}
+              }
+
+for grouping in forc_Group:
+    list_df = []
+    for element in forc_Group[grouping]['Consists']:
+        _df = pd.read_csv(forc_Path + f'rf_{element}_200samples.csv',
+                          skiprows=[1]
+                          ).rename(columns={'Unnamed: 0': 'Year'}
+                          ).set_index('Year')
+        list_df.append(_df.loc[_df.index <= end_yr])
+    
+    forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y),
+                                                  list_df)
+
+forc_Group_names = sorted(list(forc_Group.keys()))
+
+forc_All_ensemble_names = list(forc_Group[forc_Group_names[0]]['df'])
 
 
 # TEMPERATURE #################################################################
@@ -154,8 +204,7 @@ df_temp_Obs = df_temp_Obs.loc[(df_temp_Obs.index >= start_yr) &
                               temp_Obs_ensemble_names] - ofst_Obs
 
 ## CMIP5 PI-CONTROL
-obs_yrs = df_temp_Obs.shape[0]
-n_yrs = obs_yrs
+n_yrs = df_temp_Obs.shape[0]
 
 df_temp_PiC = pd.read_csv('./data/piControl/piControl.csv')
 
@@ -169,7 +218,7 @@ for ens in list(df_temp_PiC):
         # pi Control data located all over the place in csv; the following
         # lines strip the NaN values, and limits slices to the same length as
         # observed temperatures
-        temp = np.array(df_temp_PiC[ens].dropna())[:obs_yrs]
+        temp = np.array(df_temp_PiC[ens].dropna())[:n_yrs]
         
         # Remove pre-industrial mean period; this is done because the models
         # use different "zero" temperatures (eg 0, 100, 287, etc).
@@ -207,7 +256,7 @@ for ens in list(df_temp_PiC):
         # data is approved.
         # The second condition ensures that we aren't including timeseries that
         # are too short (not all pic control runs last the required 173 years).
-        if _cond and len(temp) == obs_yrs:
+        if _cond and len(temp) == n_yrs:
             temp_IV_Group[ens] = temp
 
 # Include the internval variability (IV) from HadCRUT to the overall
@@ -238,7 +287,7 @@ for t in range(len(timeframes)):
     axA.set_ylim(-lims[t], lims[t])
     cut_beg = timeframes[t]//2
     cut_end = timeframes[t]-1-timeframes[t]//2
-    _time = np.arange(obs_yrs) + 1850
+    _time = np.arange(n_yrs) + 1850
     
     if timeframes[t] == 1:
         _time_sliced = _time[:]
@@ -265,7 +314,7 @@ for t in range(len(timeframes)):
     axA.set_ylabel(f'Internal Variability (°C) \n ({timeframes[t]}-year moving mean)')
 gr.overall_legend(fig, loc='lower center', ncol=2, nrow=False)
 fig.suptitle('Selected Sample of Internal Variability from CMIP5 pi-control')
-fig.savefig('plots/0_Selected_CMIP5_Ensembles.png')
+fig.savefig(f'{plot_folder}0_Selected_CMIP5_Ensembles.png')
 
 
 print('Number of CMIP5 internal variability samples remaining:' +
@@ -322,40 +371,8 @@ ax2.get_xaxis().set_visible(False)
 
 
 fig.suptitle('Selected Sample of Internal Variability from CMIP5 pi-control')
-fig.savefig('plots/1_Distribution_Internal_Variability.png')
+fig.savefig(f'{plot_folder}1_Distribution_Internal_Variability.png')
 
-
-### ERF
-forc_Path = './data/ERF Samples/'
-list_ERF = ['_'.join(file.split('_')[1:-1])
-            for file in os.listdir(forc_Path)
-            if '.csv' in file]
-forc_Group = {
-            #   'Ant': {'Consists': ['ant'], 'Colour': 'green'},
-              'Nat': {'Consists': ['nat'], 'Colour': 'blue'},
-              'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'h2o_stratospheric',
-                                   'o3_tropospheric', 'o3_stratospheric',
-                                   'other_wmghg', 'land_use'],
-                      'Colour': 'green'},
-              'Aer': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails'],
-                      'Colour': 'orange'}
-              }
-
-for grouping in forc_Group:
-    list_df = []
-    for element in forc_Group[grouping]['Consists']:
-        _df = pd.read_csv(forc_Path + f'rf_{element}_200samples.csv',
-                          skiprows=[1]
-                          ).rename(columns={'Unnamed: 0': 'Year'}
-                          ).set_index('Year')
-        list_df.append(_df.loc[_df.index <= end_yr])
-    
-    forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y),
-                                                  list_df)
-
-forc_Group_names = sorted(list(forc_Group.keys()))
-
-forc_All_ensemble_names = list(forc_Group[forc_Group_names[0]]['df'])
 
 ############ Set model parameters #############################################
 # We only use a[10], a[11], a[15], a[16]
@@ -396,7 +413,7 @@ if calc_switch == 'y':
     # This is why we have the +1 +1 +1 +1 +1 above:
     #  +1 each for Ant, TOT, Res, Ens, Sig
     # NOTE: the order in dimension is:
-    # 'AER, GHG, NAT, CONST, ANT, TOTAL, RESIDUAL, Temp_Ens, Temp_Sig'
+    # 'GHG, NAT, OHF, CONST, ANT, TOTAL, RESIDUAL, Temp_Ens, Temp_Sig'
     temp_Att_Results = np.zeros(
       (173, len(forc_Group_names) + int(inc_reg_const) + 1 + 1 + 1 + 1 + 1, n))
     Result_Components = forc_Group_names + ['Ant', 'TOT', 'Res', 'T_Ens', 'T_Sig']
@@ -555,16 +572,17 @@ print(f'Dependent temperatures took {t2a-t2}')
 # Plot the attribution results ################################################
 
 # Select which components we want:
-# gwi_component_name = ['Aer', 'GHG', 'Nat', 'Ant']
+# gwi_component_name = ['GHG', 'Nat', 'OHF', 'Ant']
 # gwi_component_list = [0, 1, 2, -5]
 
-# gwi_plot_names = ['TOT', 'Ant', 'Aer', 'GHG', 'Nat']
-gwi_plot_names = ['TOT', 'Ant', 'Aer', 'GHG', 'Nat', 'Res']
+# gwi_plot_names = ['TOT', 'Ant', 'GHG', 'Nat', 'OHF']
+gwi_plot_names = ['TOT', 'Ant', 'GHG', 'Nat', 'OHF', 'Res']
 
 # gwi_plot_colours = ['purple', 'red', 'orange', 'green', 'blue']
 gwi_plot_colours = ['xkcd:magenta', 'xkcd:crimson',
-                    'xkcd:goldenrod', 'xkcd:teal', 'xkcd:azure',
-                    'gray']
+                    'xkcd:teal', 'xkcd:azure', 'xkcd:goldenrod',
+                    'gray'
+                    ]
 
 # gwi_plot_components = [-4, -5, 0, 1, 2, -3]
 gwi_plot_components = [-4, -5, 0, 1, 2, -3]
@@ -576,7 +594,7 @@ gwi_prcntls = np.percentile(temp_Att_Results[:, gwi_plot_components, :],
 # axis, and the other axes are the remaining axes. This doesn't make any sense
 # to me why this would be useful, but it is waht it is...
 for c in range(len(gwi_plot_names)):
-    if gwi_plot_names[c] in {'TOT', 'Aer', 'GHG', 'Nat'}:
+    if gwi_plot_names[c] in {'TOT', 'GHG', 'Nat', 'OHF'}:
         for p in range(len(sigmas)):
             ax1.fill_between(temp_Yrs,
                             gwi_prcntls[p, :, c], gwi_prcntls[-(p+2), :, c],
@@ -609,7 +627,7 @@ print(f'Residuals plot took {t2c-t2b}')
 
 # Distributions ###############################################################
 for c in range(len(gwi_plot_names)):
-    if gwi_plot_names[c] in {'TOT', 'Aer', 'GHG', 'Nat'}:
+    if gwi_plot_names[c] in {'TOT', 'GHG', 'Nat', 'OHF'}:
         # binwidth = 0.01
         # bins = np.arange(np.min(temp_Att_Results[-1, gwi_plot_components[i], :]),
         #                  np.max(temp_Att_Results[-1, gwi_plot_components[i], :]) + binwidth,
@@ -683,7 +701,7 @@ ax1.set_title(f'Warming in {end_yr}: ' +
               f'human-induced-warming = {str_GWI} (°C)')
 fig.suptitle(f'Global Warming Index ({n} samplings)')
 gr.overall_legend(fig, 'lower center', 6)
-fig.savefig('plots/2_GWI.png')
+fig.savefig(f'{plot_folder}2_GWI.png')
 
 t3 = dt.datetime.now()
 print(f'... all took {t3-t2}')
@@ -707,11 +725,11 @@ ax.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :],
            #    color=use_colours,
            color='xkcd:teal',
            alpha=0.01, edgecolors='none', s=20)
-ax.set_xlabel('AER')
+ax.set_xlabel('OHF')
 ax.set_ylabel('GHG')
 # plt.ylim(bottom=0)
 fig.suptitle(f'Coefficients from {n} Samplings')
-fig.savefig('plots/3_Coefficients.png')
+fig.savefig(f'{plot_folder}3_Coefficients.png')
 t4 = dt.datetime.now()
 print(f'took {t4-t3}')
 
@@ -719,21 +737,21 @@ print(f'took {t4-t3}')
 plt.close()
 
 coef_df = pd.DataFrame(coef_Reg_Results.T,
-                       columns=['Aer', 'GHG', 'Nat', 'Const'])
+                       columns=['GHG', 'Nat', 'OHF', 'Const'])
 # print(coef_df.head())
 g = sns.PairGrid(coef_df.sample(5000))
 g.map_upper(sns.scatterplot)
 g.map_lower(sns.kdeplot)
 g.map_diag(sns.kdeplot, lw=3, legend=False)
 g.fig.suptitle('Regression Coefficient Distributions')
-plt.savefig('plots/SNS TEST.png')
+plt.savefig(f'{plot_folder}SNS TEST.png')
 
 ###############################################################################
 # Recreate IPCC AR6 SPM.2 Plot
 # https://www.ipcc.ch/report/ar6/wg1/downloads/report/IPCC_AR6_WGI_SPM.pdf
 ###############################################################################
 print('Creating IPCC Comparison Bar Plot...', end=' ')
-SPM2_list = ['TOT', 'Ant', 'Aer', 'GHG', 'Nat']
+SPM2_list = ['TOT', 'Ant', 'GHG', 'Nat', 'OHF']
 # Note that the central estimate for aerosols isn't given; only the range is
 # specified; a pixel ruler was used on the pdf to get the rough central value.
 SPM2_med = [1.09,
@@ -784,7 +802,7 @@ ax.set_xticks(recent_x_axis, SPM2_list)
 ax.set_ylabel('Contributions to 2010-2019 warming relative to 1850-1900')
 gr.overall_legend(fig, 'lower center', 2)
 fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
-fig.savefig('plots/4_SPM2_Comparison.png')
+fig.savefig(f'plots/internal-variability/4_SPM2_Comparison.png')
 
 t5 = dt.datetime.now()
 print(f'took {t5-t4}')
