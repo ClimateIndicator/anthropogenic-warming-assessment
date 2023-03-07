@@ -836,17 +836,26 @@ ax = plt.subplot2grid(
     shape=(1, 1), loc=(0, 0),
     # rowspan=1, colspan=3
     )
-ax.bar(recent_x_axis-bar_width/2, SPM2_med,
-       width=bar_width, color='xkcd:teal', label='SPM.2', alpha=0.4)
-ax.errorbar(recent_x_axis-bar_width/2, SPM2_med,
-            yerr=(SPM2_neg, SPM2_pos),
-            fmt='none', color='black')
+bars1 = ax.bar(recent_x_axis-bar_width/2, SPM2_med,
+               yerr=(SPM2_neg, SPM2_pos),
+               label='AR6 WG1 SPM.2',
+               width=bar_width, color='#4a8fcc', alpha=1.0)
+# ax.errorbar(recent_x_axis-bar_width/2, SPM2_med,
+#             yerr=(SPM2_neg, SPM2_pos),
+#             fmt='none', color='black')
 # Plot GWI data
-ax.bar(recent_x_axis+bar_width/2, recent_med,
-        width=bar_width, color='xkcd:azure', label='GWI', alpha=0.4)
-ax.errorbar(recent_x_axis+bar_width/2, recent_med,
-            yerr=(recent_neg, recent_pos),
-            fmt='none', color='black')
+bars2 = ax.bar(recent_x_axis+bar_width/2,
+               recent_med,
+               yerr=(recent_neg, recent_pos),
+               label='GWI',
+               width=bar_width, color='xkcd:azure', alpha=0.4)
+# ax.errorbar(recent_x_axis+bar_width/2, recent_med,
+#             yerr=(recent_neg, recent_pos),
+#             fmt='none', color='black')
+
+ax.bar_label(bars1, padding=10, fmt='%.2f')
+ax.bar_label(bars2, padding=10, fmt='%.2f')
+
 ax.set_xticks(recent_x_axis, SPM2_list)
 ax.set_ylabel('Contributions to 2010-2019 warming relative to 1850-1900')
 gr.overall_legend(fig, 'lower center', 2)
