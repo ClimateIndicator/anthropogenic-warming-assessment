@@ -21,48 +21,135 @@ import models.AR5_IR as AR5_IR
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
 ###############################################################################
-def regress_single_gwi(forc_All, temp_Obs, params, offset=False):
-    """Regress GWI timeseries for single given ERF and Observed Temperature."""
+def GWI(variables,  inc_reg_const,
+        df_forc_Group, params, df_temp_PiC, df_temp_Obs,
+        gwi_end_yr):
+    """Calculate the global warming index (GWI)."""
+    # TODO:
+    # - BRING FORC_YRS INSIDE THE FUNCTION
+    # - BRING START_PI AND END_PI INSIDE THE FUNCTION
     
-    temp_All = forc_All.copy()
-    vars = list(forc_All)
-    for var in vars:
-        # Calculate the temperature from ERF
-        _forc = forc_All[var]
-        _temp = AR5_IR.FTmod(forc_All.shape[0], params) @ _forc
-        temp_All[var] = _temp
-        # Substract preindustrial baseline
-        _ofst = temp_All.loc[(temp_All.index >= start_pi) &
-                             (temp_All.index <= end_pi),
-                             var
-                             ].mean()
-        temp_All[var] -= _ofst
-        
-    temp_All = temp_All.loc[(temp_All.index >= start_yr) &
-                            (temp_All.index <= end_yr)]
-    
-    # print(temp_All.head())
-        
-    # Calculate regression coefficients
-    # The following code below is equivalent to the (more easily readable)
-    # three lines of code immediately below
-    # a = np.vstack([temp_GHG, temp_Aer, temp_Nat, np.ones(len(temp_GHG))]).T
-    # b = np.linalg.lstsq(a, temp_Obs)[0]
-    # coef_GHG, coef_Aer, coef_Nat, coef_Cst = b[0], b[1], b[2], b[3]
+    # Prepare results #########################################################
+    n = (df_temp_Obs.shape[1] * df_temp_PiC.shape[1] *
+         df_forc_Group[list(df_forc_Group.keys())[0]]['df'].shape[1] *
+         params.shape[1])
+    # Include residuals and totals for sum total and anthropogenic warming in
+    # the same array as attributed results. +1 each for Ant, TOT, Res,
+    # InternalVariability, ObservedTemperatures
+    # NOTE: the order in dimension is:
+    # 'GHG, NAT, OHF, CONST, ANT, TOTAL, RESIDUAL, Temp_PiC, Temp_Obs'
+    temp_Att_Results = np.zeros(
+      (173,  # years
+       len(variables) + int(inc_reg_const) + 5,  # variables
+       n))  # samples)
+    coef_Reg_Results = np.zeros((len(variables) + int(inc_reg_const), n))
 
-    # Then we regain (outside this function function for now)
-    # temp_TOT = coef_GHG * temp_GHG + coef_Aer * temp_Aer + coef_Nat * temp_Nat + coef_Cst
+    # Loop over all sampling combinations #####################################
+    i = 0
+    for j in range(params.shape[1]):
+        params_j = np.zeros(20)
+        params_j[10:12] = [0.631, 0.429]
+        params_j[15:17] = params[:, j]
+        # params[15:17] = [8.400, 409.5]
+        FTmodel = AR5_IR.FTmod(len(forc_Yrs), params_j)
 
-    if offset:
-        temp_All['ones'] = np.ones(temp_All.shape[0])
-    temp_Mod_arr = np.array(temp_All)[:]
-    temp_Mod_df = temp_All.copy()
-    coef_Reg = np.linalg.lstsq(temp_Mod_arr, temp_Obs, rcond=None)[0]
-    for i in range(temp_Mod_arr.shape[1]):  # ie number of variables
-        temp_Mod_arr[:, i] *= coef_Reg[i]
-        temp_Mod_df[list(temp_All)[i]] = temp_Mod_arr[:, i]
-    temp_Mod_df['temp_TOT'] = temp_Mod_df.sum(axis=1)
-    return temp_Mod_arr, temp_Mod_df
+        for forc_Ens in df_forc_Group[variables[0]]['df'].columns:
+            forc_All = np.array([df_forc_Group[group]['df'][forc_Ens]
+                                 for group in variables]).T
+            temp_All = FTmodel @ forc_All
+            if inc_pi_offset:
+                _ofst = temp_All[(forc_Yrs >= start_pi) &
+                                 (forc_Yrs <= end_pi), :
+                                 ].mean(axis=0)
+            else:
+                _ofst = 0
+            temp_Mod = temp_All[(forc_Yrs >= start_yr) &
+                                (forc_Yrs <= end_yr)] - _ofst
+
+            # Decide whether to include a Constant offset term in regression
+            if inc_reg_const:
+                temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)),
+                                     axis=1)
+            num_vars = temp_Mod.shape[1]
+
+            coef_Obs_Results = np.empty((temp_Mod.shape[1],
+                                         df_temp_Obs.shape[1]))
+            coef_PiC_Results = np.empty((temp_Mod.shape[1],
+                                         df_temp_PiC.shape[1]))
+
+            c_i = 0
+            for temp_Obs_Ens in df_temp_Obs.columns:
+                temp_Obs_i = np.array(df_temp_Obs[temp_Obs_Ens])
+                coef_Obs_i = np.linalg.lstsq(temp_Mod, temp_Obs_i,
+                                             rcond=None)[0]
+                coef_Obs_Results[:, c_i] = coef_Obs_i
+                c_i += 1
+
+            c_j = 0
+            for temp_PiC_Ens in df_temp_PiC.columns:
+                temp_PiC_j = np.array(df_temp_PiC[temp_PiC_Ens])
+                coef_PiC_j = np.linalg.lstsq(temp_Mod, temp_PiC_j,
+                                             rcond=None)[0]
+                coef_PiC_Results[:, c_j] = coef_PiC_j
+                c_j += 1
+
+            coef_Results = np.array([x + y
+                                     for x in coef_Obs_Results.T
+                                     for y in coef_PiC_Results.T]).T
+            
+            for c_k in range(coef_Obs_Results.shape[1]):
+                for c_l in range(coef_PiC_Results.shape[1]):
+                    # Regression coefficients
+                    coef_Reg = (coef_Obs_Results[:, c_k] +
+                                coef_PiC_Results[:, c_l])
+                    # Attributed warming for each component
+                    temp_Att = temp_Mod * coef_Reg
+
+                    # Extract T_Obs and T_PiC data for this c_i, c_j combo.
+                    temp_Obs_kl = np.array(
+                        df_temp_Obs[df_temp_Obs.columns[c_k]])
+                    temp_PiC_kl = np.array(
+                        df_temp_PiC[df_temp_PiC.columns[c_l]])
+
+                    # Save outputs from the calculation:
+                    # Regression coefficients
+                    coef_Reg_Results[:, i] = coef_Reg
+                    # Attributed warming for each component
+                    temp_Att_Results[:, :num_vars, i] = temp_Att
+                    # Actual piControl IV sample that used for this c_k, c_l
+                    temp_Att_Results[:, -2, i] = temp_PiC_kl
+                    # The temp_Obs (dependent var) for this c_k, c_l
+                    temp_Att_Results[:, -1, i] = temp_Obs_kl
+
+                    # Visual display of pregress through calculation
+                    percentage = int((i+1)/n*100)
+                    loading_bar = (percentage // 5*'.' +
+                                   (20 - percentage // 5)*' ')
+                    print(f'calculating {loading_bar} {percentage}%', end='\r')
+                    i += 1
+
+
+    # CALCULATE OTHER KEY RESULTS #############################################
+    # TOTAL
+    temp_Att_Results[:, -4, :] = (
+        temp_Att_Results[:, :num_vars, :].sum(axis=1))
+    # Residual
+    temp_Att_Results[:, -3, :] = (
+        temp_Att_Results[:, -1, :] - temp_Att_Results[:, -4, :])
+    # Anthropogenic
+    _temp_Ant_Results = (
+        temp_Att_Results[:, -4, :] -
+        # Remove the Natural forcing component in next line:
+        temp_Att_Results[:, forc_Group_names.index('Nat'), :] -
+        # Remove constant term in regression in next line:
+        int(inc_reg_const) * temp_Att_Results[:, num_vars-1, :]
+                        )
+    temp_Att_Results[:, -5, :] = _temp_Ant_Results
+
+    np.save('results/temp_Att_Results.npy', temp_Att_Results)
+    np.save('results/coef_Reg_Results.npy', coef_Reg_Results)
+
+    return temp_Att_Results, coef_Reg_Results
 
 
 def moving_average(data, w):
@@ -73,11 +160,11 @@ def moving_average(data, w):
 
 def temp_signal(data, w, method):
     # Sensibly extend data (to avoid shortening the length of moving average)
- 
+
     # These are the lengths of the pads to add before and after the data.
     start_pad = w//2
     end_pad = w-1-w//2
-    
+
     if method == 'constant':
         # Choices are:
         # - 0 before 1850 (we are defining this as preindustrial)
@@ -85,18 +172,18 @@ def temp_signal(data, w, method):
         data_padded = np.pad(data, (start_pad, end_pad),
                              mode='constant',
                              constant_values=(0, 1.5))
-    
+
     elif method == 'extrapolate':
         # Add zeros to the beginning (corresponding to pre-industrial state)
         extrap_start = np.zeros(start_pad)
-        
+
         # Extrapolate the final w years to the end of the data
         A = np.vstack([np.arange(w), np.ones(w)]).T
         coef = np.linalg.lstsq(A, data[-w:], rcond=None)[0]
         B = np.vstack([np.arange(w + end_pad), np.ones(w + end_pad)]).T
         extrap_end = np.sum(coef*B, axis=1)[-end_pad:]
         data_padded = np.concatenate((extrap_start, data, extrap_end), axis=0)
-    
+
     return moving_average(data_padded, w)
     return np.convolve(data_padded, np.ones(w), 'valid') / w
 
@@ -161,9 +248,10 @@ list_ERF = ['_'.join(file.split('_')[1:-1])
 
 forc_Group = {
             #   'Ant': {'Consists': ['ant'], 'Colour': 'green'},
-              'Nat': {'Consists': ['nat'], 'Colour': 'green'},
-              'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'h2o_stratospheric',
-                                   'other_wmghg'],
+              'Nat': {'Consists': ['nat'],
+                      'Colour': 'green'},
+              'GHG': {'Consists': ['co2', 'ch4', 'n2o',
+                                   'h2o_stratospheric', 'other_wmghg'],
                       'Colour': 'orange'},
               'OHF': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails',
                                    'o3_tropospheric', 'o3_stratospheric',
@@ -184,9 +272,6 @@ for grouping in forc_Group:
                                                   list_df)
 
 forc_Group_names = sorted(list(forc_Group.keys()))
-
-forc_All_ensemble_names = list(forc_Group[forc_Group_names[0]]['df'])
-
 
 # TEMPERATURE #################################################################
 # HadCRUT5 Observations
@@ -273,6 +358,11 @@ temp_Obs_signal = temp_signal(np.array(df_temp_Obs.quantile(q=0.5, axis=1)),
 temp_Obs_IV = df_temp_Obs.quantile(q=0.5, axis=1) - temp_Obs_signal
 # In this new handling of IV uncertainty, we shouldn't include HadCRUT.
 # temp_IV_Group['HadCRUT5 median'] = np.array(temp_Obs_IV)
+
+
+# df_temp_PiC = pd.DataFrame(temp_IV_Group)
+# df_temp_PiC.set_index(np.arange(173)+1850, inplace=True)
+# print(df_temp_PiC)
 
 timeframes = [1, 3, 30]
 lims = [0.6, 0.4, 0.15]
@@ -396,152 +486,43 @@ Geoff = np.array([[4.0, 5.0, 4.5, 2.8, 5.2, 3.9, 4.2, 3.6,
 forc_Yrs = np.array(forc_Group[forc_Group_names[0]]['df'].index)
 temp_Yrs = np.array(df_temp_Obs.index)
 
-i = 0
-t1 = dt.datetime.now()
-
 # CARRY OUT REGRESSION CALCULATION ############################################
+
+t1 = dt.datetime.now()
 calc_switch = input('Recalculate? y/n: ')
 if calc_switch == 'y':
-    
-    # Prepare results #############################################################
-
     samples = int(input('numer of samples (0-200): '))  # for temperature, and ERF
-    n = samples * samples * len(temp_IV_Group.keys()) * Geoff.shape[1]
-    print('Total number of combinations to sample: ' +
-      f'{samples} forcings X {samples} HadCRUT X {len(temp_IV_Group.keys())}' +
-      f' Internal Variability X {Geoff.shape[1]} Parameters = {n}')
-    # Instead of using a separate array for the residuals and totals for sum
-    # total and anthropogenic warming, now just include these in the attributed
-    # results. This is why we have the +1 +1 +1 +1 +1 above:
-    #  +1 each for Ant, TOT, Res, Ens, Sig
-    # NOTE: the order in dimension is:
-    # 'GHG, NAT, OHF, CONST, ANT, TOTAL, RESIDUAL, Temp_Ens, Temp_Sig'
-    temp_Att_Results = np.zeros(
-      (173,  # years
-       len(forc_Group_names) + int(inc_reg_const) + 5,  # variables
-       n)  # samples
-       )
-    Result_Components = (forc_Group_names +
-                         ['Ant', 'TOT', 'Res', 'T_PiC', 'T_Obs'])
-    coef_Reg_Results = np.zeros((len(forc_Group_names) + int(inc_reg_const),
-                                 n))
-    IV_names = []
 
-    for j in range(Geoff.shape[1]):
-        params = np.zeros(20)
-        params[10:12] = [0.631, 0.429]
-        params[15:17] = Geoff[:, j]
-        # params[15:17] = [8.400, 409.5]
-        FTmodel = AR5_IR.FTmod(len(forc_Yrs), params)
-
-        for forc_Ens in forc_All_ensemble_names[:samples]:
-            forc_All = np.array([forc_Group[group]['df'][forc_Ens]
-                                 for group in forc_Group_names]
-                                 ).T
-
-            temp_All = FTmodel @ forc_All
-            if inc_pi_offset:
-                _ofst = temp_All[(forc_Yrs >= start_pi) &
-                                 (forc_Yrs <= end_pi), :
-                                 ].mean(axis=0)
-            else:
-                _ofst = 0
-            temp_Mod = temp_All[(forc_Yrs >= start_yr) &
-                                (forc_Yrs <= end_yr)] - _ofst
-
-            # Decide whether to include a Constant offset term in regression
-            if inc_reg_const:
-                temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)),
-                                     axis=1)
-            num_vars = temp_Mod.shape[1]
-
-            coef_Obs_Results = np.empty((temp_Mod.shape[1],
-                                         samples))
-            coef_PiC_Results = np.empty((temp_Mod.shape[1],
-                                         len(temp_IV_Group.keys())))
-
-            c_i = 0
-            for temp_sig_Ens in temp_Obs_ensemble_names[:samples]:
-                temp_Obs = np.array(df_temp_Obs[temp_sig_Ens])
-                coef_Obs = np.linalg.lstsq(temp_Mod, temp_Obs, rcond=None)[0]
-                coef_Obs_Results[:, c_i] = coef_Obs
-                c_i += 1
-
-            c_j = 0
-            for temp_IV_Ens in sorted(temp_IV_Group.keys()):
-                temp_PiC = temp_IV_Group[temp_IV_Ens]
-                coef_PiC = np.linalg.lstsq(temp_Mod, temp_PiC, rcond=None)[0]
-                coef_PiC_Results[:, c_j] = coef_PiC
-
-                c_j += 1
-
-            coef_Results = np.array([x + y
-                                     for x in coef_Obs_Results.T
-                                     for y in coef_PiC_Results.T]).T
-            
-            for c_i in range(coef_Obs_Results.shape[1]):
-                for c_j in range(coef_PiC_Results.shape[1]):
-                    # Regression coefficients
-                    coef_Reg = (coef_Obs_Results[:, c_i] +
-                                coef_PiC_Results[:, c_j])
-                    # Attributed warming for each component
-                    temp_Att = temp_Mod * coef_Reg
-
-                    # Extract T_Obs and T_PiC data for this c_i, c_j combo.
-                    temp_Obs = np.array(df_temp_Obs[
-                        temp_Obs_ensemble_names[c_i]])
-                    temp_PiC = temp_IV_Group[
-                        sorted(temp_IV_Group.keys())[c_j]]
-
-                    # Save outputs from the calculation:
-                    # Regression coefficients
-                    coef_Reg_Results[:, i] = coef_Reg
-                    # Attributed warming for each component
-                    temp_Att_Results[:, :num_vars, i] = temp_Att
-                    # Actual piControl IV sample that used for this c_i, c_j
-                    temp_Att_Results[:, -2, i] = temp_PiC
-                    # The temp_Obs (dependent var) for this c_i, c_j
-                    temp_Att_Results[:, -1, i] = temp_Obs
-                    IV_names.append('_'.join(
-                        sorted(temp_IV_Group.keys())[c_j].split('_')[:1]))
+    # Select (simple) sub-set sampling of all data:
+    # 1. Select random samples of the forcing data
+    forc_Group_subset = {var: {'df': forc_Group[var]['df'].iloc[
+        :, :min(samples, forc_Group[var]['df'].shape[1])]}
+                         for var in forc_Group_names}
+    # 2. Select random samples of the model parameters
+    Geoff_subset = Geoff[:, :min(samples, Geoff.shape[1])]
+    # 3. Select random samples of the temperature data
+    df_temp_Obs_subset = df_temp_Obs.iloc[
+        :, :min(samples, df_temp_Obs.shape[1])]
+    # 4. Select random samples of the internal variability
+    df_temp_PiC = pd.DataFrame(temp_IV_Group, index=temp_Yrs)
+    df_temp_PiC_subset = df_temp_PiC.iloc[
+        :, :min(samples, df_temp_PiC.shape[1])]
 
 
-                    # Visual display of pregress through calculation
-                    percentage = int((i+1)/n*100)
-                    loading_bar = (percentage // 5*'.' +
-                                   (20 - percentage // 5)*' ')
-                    print(f'calculating {loading_bar} {percentage}%', end='\r')
-                    i += 1
-
-
-    # CALCULATE OTHER KEY RESULTS #############################################
-    # TOTAL
-    temp_Att_Results[:, -4, :] = (
-        temp_Att_Results[:, :num_vars, :].sum(axis=1))
-    # Residual
-    temp_Att_Results[:, -3, :] = (
-        temp_Att_Results[:, -1, :] - temp_Att_Results[:, -4, :])
-    # Anthropogenic
-    _temp_Ant_Results = (
-        temp_Att_Results[:, -4, :] -
-        # Remove the Natural forcing component in next line:
-        temp_Att_Results[:, forc_Group_names.index('Nat'), :] -
-        # Remove constant term in regression in next line:
-        int(inc_reg_const) * temp_Att_Results[:, num_vars-1, :]
-                        )
-    temp_Att_Results[:, -5, :] = _temp_Ant_Results
-
-    np.save('results/temp_Att_Results.npy', temp_Att_Results)
-    np.save('results/coef_Reg_Results.npy', coef_Reg_Results)
+    temp_Att_Results, coef_Reg_Results = GWI(
+        forc_Group_names, inc_reg_const,
+        forc_Group_subset, Geoff_subset,
+        df_temp_PiC_subset, df_temp_Obs_subset,
+        2022)
 
 elif calc_switch == 'n':
     temp_Att_Results = np.load('results/temp_Att_Results.npy')
     coef_Reg_Results = np.load('results/coef_Reg_Results.npy')
-    n = temp_Att_Results.shape[2]
 
 else:
     print(f'{calc_switch} not valid; exiting script.')
-    sys.exit()
+
+n = temp_Att_Results.shape[2]
 
 t2 = dt.datetime.now()
 print(f'Total calculation took {t2-t1}')
@@ -584,10 +565,6 @@ ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
 ax4 = plt.subplot2grid(shape=(3, 4), loc=(2, 3), rowspan=1, colspan=1)
 
 # Plot the dependent temperature range
-
-# For reference.
-# Result_Components = (forc_Group_names +
-#                      ['Ant', 'TOT', 'Res', 'T_PiC', 'T_Obs'])
 
 temp_PiC_unique = np.unique(temp_Att_Results[:, -2, :], axis=1)
 temp_PiC_prcntls = np.percentile(temp_PiC_unique, sigmas_all, axis=1)
@@ -756,14 +733,7 @@ ax = plt.subplot2grid(
     shape=(1, 1), loc=(0, 0),
     # rowspan=1, colspan=3
     )
-# unique_IV_names = sorted(list(set(IV_names)))
-# cm = 'Set3'
-# cols = np.array(sns.color_palette(cm, len(unique_IV_names)))
-# cols_hex = [matplotlib.colors.rgb2hex(cols[i, :])
-#             for i in range(cols.shape[0])]
 
-# IV_col_dic = dict(zip(unique_IV_names, cols_hex))
-# use_colours = [IV_col_dic[_IV] for _IV in IV_names]
 ax.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :],
            #    color=use_colours,
            color='xkcd:teal',
@@ -898,102 +868,3 @@ sys.exit()
 ###############################################################################
 # Calculate the historical-only GWI ###########################################
 ###############################################################################
-
-hist_start = 1900
-historical_samples = 50
-n = historical_samples ** 2
-hist_temp_Att_Results = np.empty((
-    end_yr - hist_start + 1,  # num generated years
-    len(forc_Group_names) + int(inc_reg_const),  # forcings
-    n  # samples
-    ))
-
-
-t1 = dt.datetime.now()
-for y in temp_Yrs[temp_Yrs >= hist_start]:
-    yi = np.where(temp_Yrs[temp_Yrs >= hist_start] == y)
-    forc_Yrs_y = forc_Yrs[forc_Yrs <= y]
-    i = 0
-    for forc_Ens in forc_All_ensemble_names[:historical_samples]:
-        # Calculate forcing -> temperature response. The below steps calculate
-        # temperature for all sources simultaneously (eg Nat, GHG, and Aer)
-        # forc_All = np.array([df_forc_Nat[forc_Ens], df_forc_Ant[forc_Ens]]).T
-
-        forc_All = np.array([forc_Group[group]['df'][forc_Ens].loc[
-                                forc_Group[group]['df'][forc_Ens].index <= y]
-                            for group in forc_Group_names]).T
-        params = AR5_IR.a_params('Carbon Dioxide')
-        temp_All = AR5_IR.FTmod(forc_All.shape[0], params) @ forc_All
-
-        if inc_pi_offset:
-            _ofst = temp_All[(forc_Yrs_y >= start_pi) &
-                             (forc_Yrs_y <= min(end_pi, y)), :
-                             ].mean(axis=0)
-        else:
-            _ofst = 0
-        temp_Mod = temp_All[(forc_Yrs_y >= start_yr) & (forc_Yrs_y <= y)] - _ofst
-
-        # Decide whether to include a inc_Constant offset term in regression
-        if inc_reg_const:
-            temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)), axis=1)
-
-        for temp_Ens in temp_Obs_ensemble_names[:historical_samples]:
-            # Select the relevant observational data
-            temp_Obs = np.array(df_temp_Obs[temp_Ens])[(temp_Yrs >= start_yr) & (temp_Yrs <= y)]
-
-            # Carry out regression calculation
-            coef_Reg = np.linalg.lstsq(temp_Mod, temp_Obs, rcond=None)[0]
-            # coef_Reg = sp.optimize.lsq_linear(temp_Mod, temp_Obs, bounds=(1, 1.5))['x']
-            
-            GWI_y = temp_Mod[-1, :] * coef_Reg
-            hist_temp_Att_Results[yi, :, i] = GWI_y
-            i += 1
-    
-    # Visual display of pregress through calculation
-    percentage = int((yi[0]+1)/len(list(temp_Yrs[temp_Yrs >= hist_start]))*100)
-    loading_bar = percentage // 5*'.' + (20 - percentage // 5)*' '
-    print(f'calculating {loading_bar} {percentage}%', end='\r')
-
-t2 = dt.datetime.now()
-print(f'Total calculation took {t2-t1}')
-
-
-plt.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
-             yerr=(err_neg, err_pos),
-             fmt='o', color='black', ms=2.5, lw=1,
-             label='HadCRUT5')
-
-for p in sigmas:
-    for i in range(len(forc_Group_names)):
-        plt.fill_between(temp_Yrs[temp_Yrs >= hist_start],  
-            np.percentile(hist_temp_Att_Results[:, i, :], (p[0]), axis=1),
-            np.percentile(hist_temp_Att_Results[:, i, :], (p[1]), axis=1),
-            color=forc_Group[forc_Group_names[i]]['Colour'],
-            alpha=0.1)
-
-        if p == sigmas[-1]:
-            plt.plot(temp_Yrs[temp_Yrs >= hist_start],
-                np.percentile(hist_temp_Att_Results[:, i, :], (50), axis=1),
-                color=forc_Group[forc_Group_names[i]]['Colour'],
-                label=forc_Group_names[i]
-                )
-hist_temp_Ant_Results = (temp_Att_Results.sum(axis=1) -
-                    temp_Att_Results[:, forc_Group_names.index('Nat'), :] - 
-                    int(inc_reg_const) * temp_Att_Results[:, len(forc_Group_names), :]  # Remove constant term in regression
-                    )
-hist_temp_TOT_Results = hist_temp_Att_Results.sum(axis=1)
-for p in sigmas:
-    plt.fill_between(temp_Yrs[temp_Yrs >= hist_start],
-                    np.percentile(hist_temp_TOT_Results, (p[0]), axis=1),
-                    np.percentile(hist_temp_TOT_Results, (p[1]), axis=1),
-                    color='gray',
-                    alpha=0.1)
-    if p == sigmas[-1]:
-        plt.plot(temp_Yrs[temp_Yrs >= hist_start],
-                np.percentile(hist_temp_TOT_Results, (50), axis=1),
-                color='gray',
-                label='TOT')
-
-plt.legend()
-plt.title('Historical GWI')
-plt.savefig(f'Historical GWI PI_offset-{inc_pi_offset} Reg_Const-{inc_reg_const}.png')
