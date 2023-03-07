@@ -402,6 +402,7 @@ t1 = dt.datetime.now()
 # CARRY OUT REGRESSION CALCULATION ############################################
 calc_switch = input('Recalculate? y/n: ')
 if calc_switch == 'y':
+    
     # Prepare results #############################################################
 
     samples = int(input('numer of samples (0-200): '))  # for temperature, and ERF
@@ -786,7 +787,7 @@ g.map_upper(sns.scatterplot)
 g.map_lower(sns.kdeplot)
 g.map_diag(sns.kdeplot, lw=3, legend=False)
 g.fig.suptitle('Regression Coefficient Distributions')
-plt.savefig(f'{plot_folder}SNS TEST.png')
+plt.savefig(f'{plot_folder}SNS_TEST.png')
 
 ###############################################################################
 # Recreate IPCC AR6 SPM.2 Plot
