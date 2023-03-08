@@ -98,7 +98,7 @@ def GWI(model_choice, variables,  inc_reg_const,
             # Convert back into numpy array for comapbililty with the pre-FaIR
             # code below.
             temp_All = np.array(temp_All)
-            
+
             # Remove pre-industrial offset before regression
             if inc_pi_offset:
                 _ofst = temp_All[(forc_Yrs >= start_pi) &
@@ -655,7 +655,7 @@ print(f'Dependent temperatures took {t2a-t2}')
 # gwi_component_list = [0, 1, 2, -5]
 
 
-gwi_plot_names = ['TOT', 'Ant', 'GHG', 'Nat', 'OHF', 'Res', 'T_PiC']
+gwi_plot_names = ['TOT', 'Ant', 'GHG', 'Nat', 'OHF', 'Res', 'PiC']
 
 gwi_plot_colours = ['xkcd:magenta', 'xkcd:crimson',
                     'xkcd:teal', 'xkcd:azure', 'xkcd:goldenrod',
@@ -670,7 +670,7 @@ gwi_prcntls = np.percentile(temp_Att_Results[:, gwi_plot_components, :],
 # axis, and the other axes are the remaining axes. This doesn't make any sense
 # to me why this would be useful, but it is what it is...
 for c in range(len(gwi_plot_names)):
-    if gwi_plot_names[c] in {'TOT', 'GHG', 'Nat', 'OHF', 'T_PiC'}:
+    if gwi_plot_names[c] in {'TOT', 'GHG', 'Nat', 'OHF', 'PiC'}:
         for p in range(len(sigmas)):
             ax1.fill_between(temp_Yrs,
                              gwi_prcntls[p, :, c], gwi_prcntls[-(p+2), :, c],
@@ -702,7 +702,7 @@ print(f'Residuals plot took {t2c-t2b}')
 
 # Distributions ###############################################################
 for c in range(len(gwi_plot_names)):
-    if gwi_plot_names[c] in {'TOT', 'GHG', 'Nat', 'OHF', 'T_Obs', 'T_PiC'}:
+    if gwi_plot_names[c] in {'TOT', 'GHG', 'Nat', 'OHF', 'PiC'}:
         # binwidth = 0.01
         # bins = np.arange(np.min(temp_Att_Results[-1, gwi_plot_components[i], :]),
         #                  np.max(temp_Att_Results[-1, gwi_plot_components[i], :]) + binwidth,
@@ -823,7 +823,7 @@ plt.savefig(f'{plot_folder}SNS_TEST.png')
 # https://www.ipcc.ch/report/ar6/wg1/downloads/report/IPCC_AR6_WGI_SPM.pdf
 ###############################################################################
 print('Creating IPCC Comparison Bar Plot...', end=' ')
-SPM2_list = ['TOT', 'Ant', 'GHG', 'Nat', 'OHF', 'T_PiC']
+SPM2_list = ['TOT', 'Ant', 'GHG', 'Nat', 'OHF', 'PiC']
 # Note that the central estimate for aerosols isn't given; only the range is
 # specified; a pixel ruler was used on the pdf to get the rough central value.
 SPM2_med = [1.09,
