@@ -545,23 +545,27 @@ calc_switch = input('Recalculate? y/n: ')
 if calc_switch == 'y':
     samples = int(input('numer of samples (0-200): '))  # for temperature, and ERF
 
-    # Select (simple) sub-set sampling of all data:
+    # Select random sub-set sampling of all ensemble members:
     # 1. Select random samples of the forcing data
-    forc_Group_subset = {var: {'df': forc_Group[var]['df'].iloc[
-        :, :min(samples, forc_Group[var]['df'].shape[1])]}
-                         for var in forc_Group_names}
+    forc_Group_subset_columns = forc_Group['GHG']['df'].sample(
+        n=min(samples, forc_Group['GHG']['df'].shape[1]), axis=1).columns
+    forc_Group_subset = {
+        var: {'df': forc_Group[var]['df'][forc_Group_subset_columns]}
+        for var in forc_Group_names}
     # 2. Select random samples of the model parameters
     if model_choice == 'AR5_IR':
         params_subset = Geoff[:, :min(samples, Geoff.shape[1])]
     elif model_choice == 'FaIR_V2':
         params_subset = CMIP6_param_df
     # 3. Select random samples of the temperature data
-    df_temp_Obs_subset = df_temp_Obs.iloc[
-        :, :min(samples, df_temp_Obs.shape[1])]
+    df_temp_Obs_subset = df_temp_Obs.sample(
+        n=min(samples, df_temp_Obs.shape[1]), axis=1)
     # 4. Select random samples of the internal variability
     df_temp_PiC = pd.DataFrame(temp_IV_Group, index=temp_Yrs)
-    df_temp_PiC_subset = df_temp_PiC.iloc[
-        :, :min(samples, df_temp_PiC.shape[1])]
+    df_temp_PiC_subset = df_temp_PiC.sample(
+        n=min(samples, df_temp_PiC.shape[1]), axis=1)
+    
+
 
 
     temp_Att_Results, coef_Reg_Results = GWI(
