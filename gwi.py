@@ -16,13 +16,14 @@ import seaborn as sns
 
 import graphing as gr
 import models.AR5_IR as AR5_IR
+import models.FaIR_V2.FaIRv2_0_0_alpha1.fair.fair_runner as fair
 
 
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
 ###############################################################################
-def GWI(variables,  inc_reg_const,
-        df_forc_Group, params, df_temp_PiC, df_temp_Obs,
+def GWI(model_choice, variables,  inc_reg_const,
+        forc_Group, params, df_temp_PiC, df_temp_Obs,
         gwi_end_yr):
     """Calculate the global warming index (GWI)."""
     # TODO:
@@ -31,8 +32,8 @@ def GWI(variables,  inc_reg_const,
     
     # Prepare results #########################################################
     n = (df_temp_Obs.shape[1] * df_temp_PiC.shape[1] *
-         df_forc_Group[list(df_forc_Group.keys())[0]]['df'].shape[1] *
-         params.shape[1])
+         forc_Group[list(forc_Group.keys())[0]]['df'].shape[1] *
+         len(params.columns.levels[0]))
     # Include residuals and totals for sum total and anthropogenic warming in
     # the same array as attributed results. +1 each for Ant, TOT, Res,
     # InternalVariability, ObservedTemperatures
@@ -46,17 +47,59 @@ def GWI(variables,  inc_reg_const,
 
     # Loop over all sampling combinations #####################################
     i = 0
-    for j in range(params.shape[1]):
-        params_j = np.zeros(20)
-        params_j[10:12] = [0.631, 0.429]
-        params_j[15:17] = params[:, j]
-        # params[15:17] = [8.400, 409.5]
-        FTmodel = AR5_IR.FTmod(len(forc_Yrs), params_j)
 
-        for forc_Ens in df_forc_Group[variables[0]]['df'].columns:
-            forc_All = np.array([df_forc_Group[group]['df'][forc_Ens]
-                                 for group in variables]).T
-            temp_All = FTmodel @ forc_All
+    # THIS IS FOR AR5_IR - HAS BEEN REPLACED BY FaIRV2 IN THE BELOW
+    # for j in range(params.shape[1]):
+    #     if model_choice == 'AR5_IR':
+    #         params_j = np.zeros(20)
+    #         params_j[10:12] = [0.631, 0.429]
+    #         params_j[15:17] = params[:, j]
+    #         # params[15:17] = [8.400, 409.5]
+    #         FTmodel = AR5_IR.FTmod(len(forc_Yrs), params_j)
+
+    for CMIP6_model in params.columns.levels[0]:
+        # Select the specific model's parameters
+        params_FaIR = params[CMIP6_model]
+        # Since the above line seems to get rid of the top colum level (the
+        # model name), and therefore reduce the level to 1, we need to re-add
+        # the level=0 column name (the model name) in order for this to be
+        # compatible with the required FaIR format...
+        params_FaIR.columns = pd.MultiIndex.from_product(
+            [[CMIP6_model], params_FaIR.columns])
+
+        for forc_Ens in forc_Group[variables[0]]['df'].columns:
+            
+            # AR5_IR has now been replaced by FaIRV2
+            # forc_All = np.array([df_forc_Group[group]['df'][forc_Ens]
+            #                      for group in variables]).T
+            # temp_All = FTmodel @ forc_All
+
+            # PREPARE FAIR-COMPATIBLE FORCINGS
+            forc_Ens_All = pd.DataFrame(
+                {var: forc_Group[var]['df'][forc_Ens] for var in variables})
+            # FaIR won't run without emissions or concentrations, so specify
+            # no zero emissions for input.
+            emis_FAIR = fair.return_empty_emissions(
+                df_to_copy=False,
+                start_year=min(forc_Yrs), end_year=max(forc_Yrs), timestep=1,
+                scen_names=forc_Ens_All.columns)
+            # Prepare a FaIR-compatible forcing dataframe
+            forc_FaIR = fair.return_empty_forcing(
+                df_to_copy=False,
+                start_year=min(forc_Yrs), end_year=max(forc_Yrs), timestep=1,
+                scen_names=forc_Ens_All.columns)
+            for var in forc_Ens_All.columns:
+                forc_FaIR[var] = forc_Ens_All[var]
+            # Run FaIR
+            temp_All = fair.run_FaIR(emissions_in=emis_FAIR,
+                                     forcing_in=forc_FaIR,
+                                     thermal_parameters=params_FaIR,
+                                     show_run_info=False)['T']
+            # Convert back into numpy array for comapbililty with the pre-FaIR
+            # code below.
+            temp_All = np.array(temp_All)
+            
+            # Remove pre-industrial offset before regression
             if inc_pi_offset:
                 _ofst = temp_All[(forc_Yrs >= start_pi) &
                                  (forc_Yrs <= end_pi), :
@@ -213,6 +256,9 @@ elif inc_reg_const not in allowed_options:
 
 inc_pi_offset = True if inc_pi_offset == 'y' else False
 inc_reg_const = True if inc_reg_const == 'y' else False
+
+model_choice = 'AR5_IR'
+model_choice = 'FaIR_V2'
 
 
 start_yr, end_yr = 1850, 2022
@@ -466,18 +512,24 @@ fig.savefig(f'{plot_folder}1_Distribution_Internal_Variability.png')
 
 
 ############ Set model parameters #############################################
-# We only use a[10], a[11], a[15], a[16]
-# Defaults:
-# a_ar5[10:12] = [0.631, 0.429]  # AR5 thermal sensitivity coeffs
-# a_ar5[15:17] = [8.400, 409.5]  # AR5 thermal time-inc_Constants -- could use Geoffroy et al [4.1,249.]
+if model_choice == 'AR5_IR':
+    # We only use a[10], a[11], a[15], a[16]
+    # Defaults:
+    # a_ar5[10:12] = [0.631, 0.429]  # AR5 thermal sensitivity coeffs
+    # a_ar5[15:17] = [8.400, 409.5]  # AR5 thermal time-inc_Constants -- could use Geoffroy et al [4.1,249.]
 
-# a_ar5 = np.zeros(20, 16)
+    # a_ar5 = np.zeros(20, 16)
 
-# # Geoffrey 2013 paramters for a_ar5[15:17]
-Geoff = np.array([[4.0, 5.0, 4.5, 2.8, 5.2, 3.9, 4.2, 3.6,
-                   1.6, 5.3, 4.0, 5.5, 3.5, 3.9, 4.3, 4.0],
-                  [126, 267, 193, 132, 289, 200, 317, 197,
-                   184, 280, 698, 286, 285, 164, 150, 218]])
+    # # Geoffrey 2013 paramters for a_ar5[15:17]
+    Geoff = np.array([[4.0, 5.0, 4.5, 2.8, 5.2, 3.9, 4.2, 3.6,
+                    1.6, 5.3, 4.0, 5.5, 3.5, 3.9, 4.3, 4.0],
+                    [126, 267, 193, 132, 289, 200, 317, 197,
+                    184, 280, 698, 286, 285, 164, 150, 218]])
+
+elif model_choice == 'FaIR_V2':
+    CMIP6_param_csv = ('models/FaIR_V2/FaIRv2_0_0_alpha1/fair/util/' +
+                       'parameter-sets/CMIP6_climresp.csv')
+    CMIP6_param_df = pd.read_csv(CMIP6_param_csv, index_col=[0], header=[0, 1])
 
 ###############################################################################
 # Calculate GWI ###############################################################
@@ -499,7 +551,10 @@ if calc_switch == 'y':
         :, :min(samples, forc_Group[var]['df'].shape[1])]}
                          for var in forc_Group_names}
     # 2. Select random samples of the model parameters
-    Geoff_subset = Geoff[:, :min(samples, Geoff.shape[1])]
+    if model_choice == 'AR5_IR':
+        params_subset = Geoff[:, :min(samples, Geoff.shape[1])]
+    elif model_choice == 'FaIR_V2':
+        params_subset = CMIP6_param_df
     # 3. Select random samples of the temperature data
     df_temp_Obs_subset = df_temp_Obs.iloc[
         :, :min(samples, df_temp_Obs.shape[1])]
@@ -510,8 +565,8 @@ if calc_switch == 'y':
 
 
     temp_Att_Results, coef_Reg_Results = GWI(
-        forc_Group_names, inc_reg_const,
-        forc_Group_subset, Geoff_subset,
+        model_choice, forc_Group_names, inc_reg_const,
+        forc_Group_subset, params_subset,
         df_temp_PiC_subset, df_temp_Obs_subset,
         2022)
 
