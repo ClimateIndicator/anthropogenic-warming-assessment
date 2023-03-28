@@ -22,6 +22,65 @@ import models.FaIR_V2.FaIRv2_0_0_alpha1.fair.fair_runner as fair
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
 ###############################################################################
+def load_ERF_Stuart():
+    """Load the ERFs from Stuart's ERF datasets."""
+    forc_Path = './data/ERF Samples/Stuart/'
+    # list_ERF = ['_'.join(file.split('_')[1:-1])
+    #             for file in os.listdir(forc_Path)
+    #             if '.csv' in file]
+    forc_Group = {
+                #   'Ant': {'Consists': ['ant'], 'Colour': 'green'},
+                'Nat': {'Consists': ['nat'],
+                        'Colour': 'green'},
+                'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'other_wmghg'],
+                        'Colour': 'orange'},
+                'OHF': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails',
+                                     'o3_tropospheric', 'o3_stratospheric',
+                                     'h2o_stratospheric', 'land_use'],
+                        'Colour': 'blue'}
+                }
+
+    for grouping in forc_Group:
+        list_df = []
+        for element in forc_Group[grouping]['Consists']:
+            _df = pd.read_csv(forc_Path + f'rf_{element}_200samples.csv',
+                              skiprows=[1]
+                              ).rename(columns={'Unnamed: 0': 'Year'}
+                              ).set_index('Year')
+            list_df.append(_df.loc[_df.index <= end_yr])
+
+        forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y),
+                                                      list_df)
+    return forc_Group
+
+
+def load_HadCRUT(start_pi, end_pi):
+    """Load HadCRUT5 observations and remove PI baseline."""
+    temp_ens_Path = './data/Temp/HadCRUT/HadCRUT.5.0.1.0.analysis.ensemble_series.global.annual.csv'
+    # read temp_Path into pandas dataframe, rename column 'Time' to 'Year'
+    # and set the index to 'Year', keeping only columns with 'Realization' in
+    # the column name, since these are the ensembles
+    df_temp_Obs = pd.read_csv(temp_ens_Path,
+                              ).rename(columns={'Time': 'Year'}
+                                       ).set_index('Year'
+                                                   ).filter(regex='Realization')
+
+    # Find PI offset that is the PI-mean of the median (HadCRUT best estimate)
+    # of the ensemble and substract this from entire ensemble. Importantly,
+    # the same offset is applied to the entire ensemble to maintain accurate
+    # spread of HadCRUT (ie it is wrong to subtract the PI-mean for each
+    # ensemble member from itself).
+    ofst_Obs = df_temp_Obs.median(axis=1).loc[
+        (df_temp_Obs.index >= start_pi) &
+        (df_temp_Obs.index <= end_pi),
+        ].mean(axis=0)
+    df_temp_Obs -= ofst_Obs
+
+    return df_temp_Obs
+
+
+
+
 def GWI(model_choice, variables,  inc_reg_const,
         forc_Group, params, df_temp_PiC, df_temp_Obs,
         gwi_end_yr):
@@ -257,7 +316,7 @@ elif inc_reg_const not in allowed_options:
 inc_pi_offset = True if inc_pi_offset == 'y' else False
 inc_reg_const = True if inc_reg_const == 'y' else False
 
-model_choice = 'AR5_IR'
+# model_choice = 'AR5_IR'
 model_choice = 'FaIR_V2'
 
 
@@ -275,120 +334,70 @@ plot_folder = 'plots/internal-variability/'
 # READ IN THE DATA ###########################################################
 ##############################################################################
 
-### ERF #######################################################################
-forc_Path = './data/ERF Samples/'
-list_ERF = ['_'.join(file.split('_')[1:-1])
-            for file in os.listdir(forc_Path)
-            if '.csv' in file]
-
-# forc_Group = {
-#             #   'Ant': {'Consists': ['ant'], 'Colour': 'green'},
-#               'Nat': {'Consists': ['nat'], 'Colour': 'blue'},
-#               'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'h2o_stratospheric',
-#                                    'o3_tropospheric', 'o3_stratospheric',
-#                                    'other_wmghg', 'land_use'],
-#                       'Colour': 'green'},
-#               'Aer': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails'],
-#                       'Colour': 'orange'}
-#               }
-
-forc_Group = {
-            #   'Ant': {'Consists': ['ant'], 'Colour': 'green'},
-              'Nat': {'Consists': ['nat'],
-                      'Colour': 'green'},
-              'GHG': {'Consists': ['co2', 'ch4', 'n2o',
-                                   'h2o_stratospheric', 'other_wmghg'],
-                      'Colour': 'orange'},
-              'OHF': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails',
-                                   'o3_tropospheric', 'o3_stratospheric',
-                                   'land_use'],
-                      'Colour': 'blue'}
-              }
-
-for grouping in forc_Group:
-    list_df = []
-    for element in forc_Group[grouping]['Consists']:
-        _df = pd.read_csv(forc_Path + f'rf_{element}_200samples.csv',
-                          skiprows=[1]
-                          ).rename(columns={'Unnamed: 0': 'Year'}
-                          ).set_index('Year')
-        list_df.append(_df.loc[_df.index <= end_yr])
-    
-    forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y),
-                                                  list_df)
-
+# ERF
+forc_Group = load_ERF_Stuart()
 forc_Group_names = sorted(list(forc_Group.keys()))
 
-# TEMPERATURE #################################################################
-# HadCRUT5 Observations
-temp_Path = './data/HadCRUT/HadCRUT.5.0.1.0.analysis.ensemble_series.global.annual.csv'
-df_temp_Obs = pd.read_csv(temp_Path,
-                          ).rename(columns={'Time': 'Year'}
-                          ).set_index('Year')
-temp_Obs_ensemble_names = list(df_temp_Obs)[2:]
-ofst_Obs = df_temp_Obs.loc[(df_temp_Obs.index >= start_pi) &
-                           (df_temp_Obs.index <= end_pi),
-                           temp_Obs_ensemble_names
-                           ].mean(axis=0)
-df_temp_Obs = df_temp_Obs.loc[(df_temp_Obs.index >= start_yr) &
-                              (df_temp_Obs.index <= end_yr),
-                              temp_Obs_ensemble_names] - ofst_Obs
+# TEMPERATURE
+df_temp_Obs = load_HadCRUT(start_pi, end_pi)
 
 ## CMIP5 PI-CONTROL
 n_yrs = df_temp_Obs.shape[0]
 
-df_temp_PiC = pd.read_csv('./data/piControl/piControl.csv')
+df_temp_PiC = pd.read_csv('./data/piControl/piControl.csv'
+                          ).rename(columns={'year': 'Year'}
+                                   ).set_index('Year')
 
-model_names = list(set(['_'.join(ens.split('_')[:1])
-                        for ens in list(df_temp_PiC)]))
+
+# model_names = list(set(['_'.join(ens.split('_')[:1])
+#                         for ens in list(df_temp_PiC)]))
 
 temp_IV_Group = {}
 
 for ens in list(df_temp_PiC):
-    if 'year' not in ens:
-        # pi Control data located all over the place in csv; the following
-        # lines strip the NaN values, and limits slices to the same length as
-        # observed temperatures
-        temp = np.array(df_temp_PiC[ens].dropna())[:n_yrs]
-        
-        # Remove pre-industrial mean period; this is done because the models
-        # use different "zero" temperatures (eg 0, 100, 287, etc).
-        # An alternative approach would be to simply subtract the first value
-        # to start all models on 0; the removal of the first 50 years
-        # is used here in case the models don't start in equilibrium (and jump
-        # up by x degrees at the start, for example), and the baseline period
-        # is just defined as the same as for the observation PI period.
-        temp -= temp[:start_pi-end_pi+1].mean()
+    # pi Control data located all over the place in csv; the following
+    # lines strip the NaN values, and limits slices to the same length as
+    # observed temperatures
+    temp = np.array(df_temp_PiC[ens].dropna())[:n_yrs]
     
-        # Establish inclusion condition, which is that the smoothed internal
-        # variability of a CMIP5 ensemble must operate within certain bounds:
-        # 1. there must be a minimum level of variation (to remove those models
-        # that are clearly wrong, eg oscillating between 0.01 and 0 warming)
-        # 2. they must not exceed a certain min or max temperature bound; the
-        # 0.3 value is roughyl similar to a 0.15 drift per century limit. I may
-        # need to check this...
-        # The final ensemble distribution are plotted against HadCRUT5 median
-        # below, to check that the percentiles of this median run are similar
-        # to the percentiles on the entire CMIP5 ensemble. ie, if the observed
-        # internal variability is essentially a sampling of the climate each
-        # year, you would expect the percentiles over history to be similar
-        # to the percentiles of the ensemble in any given year. I allow the
-        # ensemble to be slightly broader, to allow reasonably allow for a
-        # wider range of behaviours than we have seen in the real world.
-        temp_ma_3 = moving_average(temp, 3)
-        temp_ma_30 = moving_average(temp, 30)
-        _cond = (
-                 (max(temp_ma_3) < 0.3 and min(temp_ma_3) > -0.3)
-                 and ((max(temp_ma_3) - min(temp_ma_3)) > 0.06)
-                 and (max(temp_ma_30) < 0.1 and min(temp_ma_30) > -0.1)
-                 )
+    # Remove pre-industrial mean period; this is done because the models
+    # use different "zero" temperatures (eg 0, 100, 287, etc).
+    # An alternative approach would be to simply subtract the first value
+    # to start all models on 0; the removal of the first 50 years
+    # is used here in case the models don't start in equilibrium (and jump
+    # up by x degrees at the start, for example), and the baseline period
+    # is just defined as the same as for the observation PI period.
+    temp -= temp[:start_pi-end_pi+1].mean()
 
-        # Approve actual (ie not smoothed) data if the corresponding smoothed
-        # data is approved.
-        # The second condition ensures that we aren't including timeseries that
-        # are too short (not all pic control runs last the required 173 years).
-        if _cond and len(temp) == n_yrs:
-            temp_IV_Group[ens] = temp
+    # Establish inclusion condition, which is that the smoothed internal
+    # variability of a CMIP5 ensemble must operate within certain bounds:
+    # 1. there must be a minimum level of variation (to remove those models
+    # that are clearly wrong, eg oscillating between 0.01 and 0 warming)
+    # 2. they must not exceed a certain min or max temperature bound; the
+    # 0.3 value is roughyl similar to a 0.15 drift per century limit. I may
+    # need to check this...
+    # The final ensemble distribution are plotted against HadCRUT5 median
+    # below, to check that the percentiles of this median run are similar
+    # to the percentiles on the entire CMIP5 ensemble. ie, if the observed
+    # internal variability is essentially a sampling of the climate each
+    # year, you would expect the percentiles over history to be similar
+    # to the percentiles of the ensemble in any given year. I allow the
+    # ensemble to be slightly broader, to allow reasonably allow for a
+    # wider range of behaviours than we have seen in the real world.
+    temp_ma_3 = moving_average(temp, 3)
+    temp_ma_30 = moving_average(temp, 30)
+    _cond = (
+                (max(temp_ma_3) < 0.3 and min(temp_ma_3) > -0.3)
+                and ((max(temp_ma_3) - min(temp_ma_3)) > 0.06)
+                and (max(temp_ma_30) < 0.1 and min(temp_ma_30) > -0.1)
+                )
+
+    # Approve actual (ie not smoothed) data if the corresponding smoothed
+    # data is approved.
+    # The second condition ensures that we aren't including timeseries that
+    # are too short (not all pic control runs last the required 173 years).
+    if _cond and len(temp) == n_yrs:
+        temp_IV_Group[ens] = temp
 
 # Include the internval variability (IV) from HadCRUT to the overall
 # dictionary of internal variabilities.
@@ -627,15 +636,15 @@ ax4 = plt.subplot2grid(shape=(3, 4), loc=(2, 3), rowspan=1, colspan=1)
 
 temp_PiC_unique = np.unique(temp_Att_Results[:, -2, :], axis=1)
 temp_PiC_prcntls = np.percentile(temp_PiC_unique, sigmas_all, axis=1)
-
-# # Plot the piControl temperatures as a filled area
-# for p in range(len(sigmas)):
-#     ax1.fill_between(temp_Yrs,
-#                      temp_PiC_prcntls[p, :], temp_PiC_prcntls[-(p+2), :],
-#                      color='gray', alpha=0.1)
-# ax1.plot(temp_Yrs, temp_PiC_prcntls[-1, :],
-#          color='gray', alpha=0.8,
-#          label='CMIP5 piControl')
+print(temp_PiC_unique.shape)
+# Plot the piControl temperatures as a filled area
+for p in range(len(sigmas)):
+    ax1.fill_between(temp_Yrs,
+                     temp_PiC_prcntls[p, :], temp_PiC_prcntls[-(p+2), :],
+                     color='gray', alpha=0.1)
+ax1.plot(temp_Yrs, temp_PiC_prcntls[-1, :],
+         color='gray', alpha=0.8,
+         label='PiC')
 
 # Plot the observed temperatures on top as a scatter
 err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
@@ -655,13 +664,13 @@ print(f'Dependent temperatures took {t2a-t2}')
 # gwi_component_list = [0, 1, 2, -5]
 
 
-gwi_plot_names = ['TOT', 'Ant', 'GHG', 'Nat', 'OHF', 'Res', 'PiC']
+gwi_plot_names = ['TOT', 'Ant', 'GHG', 'Nat', 'OHF', 'Res']
 
 gwi_plot_colours = ['xkcd:magenta', 'xkcd:crimson',
                     'xkcd:teal', 'xkcd:azure', 'xkcd:goldenrod',
                     'gray', 'gray']
 
-gwi_plot_components = [-4, -5, 0, 1, 2, -3, -2]
+gwi_plot_components = [-4, -5, 0, 1, 2, -3]
 
 gwi_prcntls = np.percentile(temp_Att_Results[:, gwi_plot_components, :],
                             sigmas_all, axis=2)
@@ -670,7 +679,7 @@ gwi_prcntls = np.percentile(temp_Att_Results[:, gwi_plot_components, :],
 # axis, and the other axes are the remaining axes. This doesn't make any sense
 # to me why this would be useful, but it is what it is...
 for c in range(len(gwi_plot_names)):
-    if gwi_plot_names[c] in {'TOT', 'GHG', 'Nat', 'OHF', 'PiC'}:
+    if gwi_plot_names[c] in {'Ant', 'GHG', 'Nat', 'OHF'}:
         for p in range(len(sigmas)):
             ax1.fill_between(temp_Yrs,
                              gwi_prcntls[p, :, c], gwi_prcntls[-(p+2), :, c],
@@ -702,7 +711,7 @@ print(f'Residuals plot took {t2c-t2b}')
 
 # Distributions ###############################################################
 for c in range(len(gwi_plot_names)):
-    if gwi_plot_names[c] in {'TOT', 'GHG', 'Nat', 'OHF', 'PiC'}:
+    if gwi_plot_names[c] in {'Ant', 'GHG', 'Nat', 'OHF'}:
         # binwidth = 0.01
         # bins = np.arange(np.min(temp_Att_Results[-1, gwi_plot_components[i], :]),
         #                  np.max(temp_Att_Results[-1, gwi_plot_components[i], :]) + binwidth,
@@ -722,6 +731,17 @@ for c in range(len(gwi_plot_names)):
         # ax2.plot(y, x, color=gwi_plot_colours[i], alpha=0.7)
         ax2.fill_betweenx(x, np.zeros(len(y)), y,
                           color=gwi_plot_colours[c], alpha=0.3)
+
+# Add PiC PDF
+density = ss.gaussian_kde(
+            temp_PiC_unique[-1, :])
+x = np.linspace(
+    temp_PiC_unique[-1, :].min(),
+    temp_PiC_unique[-1, :].max(),
+    100)
+y = density(x)
+ax2.fill_betweenx(x, np.zeros(len(y)), y,
+                    color='gray', alpha=0.3)
 
 # bins = np.arange(np.min(temp_Att_Results[-1, -5, :]),
 #                  np.max(temp_Att_Results[-1, -5, :]) + binwidth,
@@ -749,10 +769,15 @@ print(f'Distributions took {t2d-t2c}')
 # Plotting anthropogenic vs total warming #####################################
 ax4.plot([-0.2, 1.5], [-0.2, 1.5], color='gray', alpha=0.7)
 
-for p in range(len(sigmas)):
-    ax4.plot(gwi_prcntls[p, :, gwi_plot_names.index('Ant')],
-             gwi_prcntls[p, :, gwi_plot_names.index('TOT')],
-             color='xkcd:magenta', alpha=0.7)
+# for p in range(len(sigmas)):
+#     ax4.plot(gwi_prcntls[p, :, gwi_plot_names.index('Ant')],
+#              gwi_prcntls[p, :, gwi_plot_names.index('TOT')],
+#              color='xkcd:magenta', alpha=0.7)
+
+ax4.plot(gwi_prcntls[-1, :, gwi_plot_names.index('Ant')],
+         gwi_prcntls[-1, :, gwi_plot_names.index('TOT')],
+         color='xkcd:magenta', alpha=0.7)
+
 
 ax4.set_xlabel('Ant')
 ax4.set_ylabel('TOT')
@@ -778,45 +803,16 @@ ax1.set_title(f'Warming in {end_yr}: ' +
               f'human-induced-warming = {str_GWI} (°C)')
 fig.suptitle(f'Global Warming Index ({n} samplings)')
 gr.overall_legend(fig, 'lower center', 6)
-fig.savefig(f'{plot_folder}2_GWI.png')
+fig.savefig(f'{plot_folder}2_GWI_Ant.png')
+
+# Save a zoomed version from 1950 onwards
 ax1.set_xlim(1950, end_yr)
 ax3.set_xlim(1950, end_yr)
-fig.savefig(f'{plot_folder}2_GWI_(1950_onwards).png')
+fig.savefig(f'{plot_folder}2_GWI_Ant_(1950_onwards).png')
 t3 = dt.datetime.now()
 print(f'... all took {t3-t2}')
 
-# # Plot coefficients #########################################################
-print('Creating Coefficient Plot...', end=' ')
-fig = plt.figure(figsize=(15, 10))
-ax = plt.subplot2grid(
-    shape=(1, 1), loc=(0, 0),
-    # rowspan=1, colspan=3
-    )
 
-ax.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :],
-           #    color=use_colours,
-           color='xkcd:teal',
-           alpha=0.01, edgecolors='none', s=20)
-ax.set_xlabel('OHF')
-ax.set_ylabel('GHG')
-# plt.ylim(bottom=0)
-fig.suptitle(f'Coefficients from {n} Samplings')
-fig.savefig(f'{plot_folder}3_Coefficients.png')
-t4 = dt.datetime.now()
-print(f'took {t4-t3}')
-
-########### TEST SEABORN
-plt.close()
-
-coef_df = pd.DataFrame(coef_Reg_Results.T,
-                       columns=['GHG', 'Nat', 'OHF', 'Const'])
-# print(coef_df.head())
-g = sns.PairGrid(coef_df.sample(5000))
-g.map_upper(sns.scatterplot)
-g.map_lower(sns.kdeplot)
-g.map_diag(sns.kdeplot, lw=3, legend=False)
-g.fig.suptitle('Regression Coefficient Distributions')
-plt.savefig(f'{plot_folder}SNS_TEST.png')
 
 ###############################################################################
 # Recreate IPCC AR6 SPM.2 Plot
@@ -892,11 +888,47 @@ gr.overall_legend(fig, 'lower center', 2)
 fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
 fig.savefig(f'plots/internal-variability/4_SPM2_Comparison.png')
 
-t5 = dt.datetime.now()
-print(f'took {t5-t4}')
+t4 = dt.datetime.now()
+print(f'took {t4-t3}')
 
 
 sys.exit()
+
+# # Plot coefficients #########################################################
+print('Creating Coefficient Plot...', end=' ')
+fig = plt.figure(figsize=(15, 10))
+ax = plt.subplot2grid(
+    shape=(1, 1), loc=(0, 0),
+    # rowspan=1, colspan=3
+    )
+
+ax.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :],
+           #    color=use_colours,
+           color='xkcd:teal',
+           alpha=0.01, edgecolors='none', s=20)
+ax.set_xlabel('OHF')
+ax.set_ylabel('GHG')
+# plt.ylim(bottom=0)
+fig.suptitle(f'Coefficients from {n} Samplings')
+fig.savefig(f'{plot_folder}3_Coefficients.png')
+t5 = dt.datetime.now()
+print(f'took {t5-t4}')
+
+########### TEST SEABORN
+plt.close()
+
+coef_df = pd.DataFrame(coef_Reg_Results.T,
+                       columns=['GHG', 'Nat', 'OHF', 'Const'])
+# print(coef_df.head())
+g = sns.PairGrid(coef_df.sample(5000))
+g.map_upper(sns.scatterplot)
+g.map_lower(sns.kdeplot)
+g.map_diag(sns.kdeplot, lw=3, legend=False)
+g.fig.suptitle('Regression Coefficient Distributions')
+plt.savefig(f'{plot_folder}SNS_TEST.png')
+
+
+
 ############### WHAT IS UP WITH THE NEGATIVE COEFFICIENT FITS...
 
 for example in range(temp_Att_Results.shape[2]):
