@@ -79,6 +79,72 @@ def load_HadCRUT(start_pi, end_pi):
     return df_temp_Obs
 
 
+def load_PiC_Stuart(n_yrs):
+
+    df_temp_PiC = pd.read_csv('./data/piControl/piControl.csv'
+                          ).rename(columns={'year': 'Year'}
+                                   ).set_index('Year')
+    # model_names = list(set(['_'.join(ens.split('_')[:1])
+    #                         for ens in list(df_temp_PiC)]))
+
+    temp_IV_Group = {}
+
+    for ens in list(df_temp_PiC):
+        # pi Control data located all over the place in csv; the following
+        # lines strip the NaN values, and limits slices to the same length as
+        # observed temperatures
+        temp = np.array(df_temp_PiC[ens].dropna())[:n_yrs]
+
+        # Remove pre-industrial mean period; this is done because the models
+        # use different "zero" temperatures (eg 0, 100, 287, etc).
+        # An alternative approach would be to simply subtract the first value
+        # to start all models on 0; the removal of the first 50 years
+        # is used here in case the models don't start in equilibrium (and jump
+        # up by x degrees at the start, for example), and the baseline period
+        # is just defined as the same as for the observation PI period.
+        temp -= temp[:start_pi-end_pi+1].mean()
+
+        if len(temp) == n_yrs:
+            temp_IV_Group[ens] = temp
+
+    return pd.DataFrame(temp_IV_Group)
+
+
+def filter_PiControl(df, timeframes, lims):
+    dict_temp_PiC = {}
+    for ens in list(df):
+        # Establish inclusion condition, which is that the smoothed internal
+        # variability of a CMIP5 ensemble must operate within certain bounds:
+        # 1. there must be a minimum level of variation (to remove those models
+        # that are clearly wrong, eg oscillating between 0.01 and 0 warming)
+        # 2. they must not exceed a certain min or max temperature bound; the
+        # 0.3 value is roughyl similar to a 0.15 drift per century limit. I may
+        # need to check this...
+        # The final ensemble distribution are plotted against HadCRUT5 median
+        # below, to check that the percentiles of this median run are similar
+        # to the percentiles on the entire CMIP5 ensemble. ie, if the observed
+        # internal variability is essentially a sampling of the climate each
+        # year, you would expect the percentiles over history to be similar
+        # to the percentiles of the ensemble in any given year. I allow the
+        # ensemble to be slightly broader, to allow reasonably allow for a
+        # wider range of behaviours than we have seen in the real world.
+        temp = np.array(df[ens])
+        temp_ma_3 = moving_average(temp, 3)
+        temp_ma_30 = moving_average(temp, 30)
+        _cond = (
+                    (max(temp_ma_3) < 0.3 and min(temp_ma_3) > -0.3)
+                    and ((max(temp_ma_3) - min(temp_ma_3)) > 0.06)
+                    and (max(temp_ma_30) < 0.1 and min(temp_ma_30) > -0.1)
+                    )
+
+        # Approve actual (ie not smoothed) data if the corresponding smoothed
+        # data is approved.
+        # The second condition ensures that we aren't including timeseries that
+        # are too short (not all pic control runs last the required 173 years).
+        if _cond:
+            dict_temp_PiC[ens] = temp
+
+    return pd.DataFrame(dict_temp_PiC)
 
 
 def GWI(model_choice, variables,  inc_reg_const,
@@ -198,7 +264,7 @@ def GWI(model_choice, variables,  inc_reg_const,
             coef_Results = np.array([x + y
                                      for x in coef_Obs_Results.T
                                      for y in coef_PiC_Results.T]).T
-            
+
             for c_k in range(coef_Obs_Results.shape[1]):
                 for c_l in range(coef_PiC_Results.shape[1]):
                     # Regression coefficients
@@ -340,117 +406,57 @@ forc_Group_names = sorted(list(forc_Group.keys()))
 
 # TEMPERATURE
 df_temp_Obs = load_HadCRUT(start_pi, end_pi)
-
-## CMIP5 PI-CONTROL
 n_yrs = df_temp_Obs.shape[0]
 
-df_temp_PiC = pd.read_csv('./data/piControl/piControl.csv'
-                          ).rename(columns={'year': 'Year'}
-                                   ).set_index('Year')
+# CMIP5 PI-CONTROL
+timeframes = [1, 3, 30]
+lims = [0.6, 0.4, 0.15]
+df_temp_PiC = load_PiC_Stuart(n_yrs)
+df_temp_PiC = filter_PiControl(df_temp_PiC, timeframes, lims)
+df_temp_PiC.set_index(np.arange(end_yr-start_yr+1)+1850, inplace=True)
 
-
-# model_names = list(set(['_'.join(ens.split('_')[:1])
-#                         for ens in list(df_temp_PiC)]))
-
-temp_IV_Group = {}
-
-for ens in list(df_temp_PiC):
-    # pi Control data located all over the place in csv; the following
-    # lines strip the NaN values, and limits slices to the same length as
-    # observed temperatures
-    temp = np.array(df_temp_PiC[ens].dropna())[:n_yrs]
-    
-    # Remove pre-industrial mean period; this is done because the models
-    # use different "zero" temperatures (eg 0, 100, 287, etc).
-    # An alternative approach would be to simply subtract the first value
-    # to start all models on 0; the removal of the first 50 years
-    # is used here in case the models don't start in equilibrium (and jump
-    # up by x degrees at the start, for example), and the baseline period
-    # is just defined as the same as for the observation PI period.
-    temp -= temp[:start_pi-end_pi+1].mean()
-
-    # Establish inclusion condition, which is that the smoothed internal
-    # variability of a CMIP5 ensemble must operate within certain bounds:
-    # 1. there must be a minimum level of variation (to remove those models
-    # that are clearly wrong, eg oscillating between 0.01 and 0 warming)
-    # 2. they must not exceed a certain min or max temperature bound; the
-    # 0.3 value is roughyl similar to a 0.15 drift per century limit. I may
-    # need to check this...
-    # The final ensemble distribution are plotted against HadCRUT5 median
-    # below, to check that the percentiles of this median run are similar
-    # to the percentiles on the entire CMIP5 ensemble. ie, if the observed
-    # internal variability is essentially a sampling of the climate each
-    # year, you would expect the percentiles over history to be similar
-    # to the percentiles of the ensemble in any given year. I allow the
-    # ensemble to be slightly broader, to allow reasonably allow for a
-    # wider range of behaviours than we have seen in the real world.
-    temp_ma_3 = moving_average(temp, 3)
-    temp_ma_30 = moving_average(temp, 30)
-    _cond = (
-                (max(temp_ma_3) < 0.3 and min(temp_ma_3) > -0.3)
-                and ((max(temp_ma_3) - min(temp_ma_3)) > 0.06)
-                and (max(temp_ma_30) < 0.1 and min(temp_ma_30) > -0.1)
-                )
-
-    # Approve actual (ie not smoothed) data if the corresponding smoothed
-    # data is approved.
-    # The second condition ensures that we aren't including timeseries that
-    # are too short (not all pic control runs last the required 173 years).
-    if _cond and len(temp) == n_yrs:
-        temp_IV_Group[ens] = temp
-
-# Include the internval variability (IV) from HadCRUT to the overall
-# dictionary of internal variabilities.
-# for _temp_Ens in df_temp_Obs:
-#     # Pick every 10th realisation
-#     if int(_temp_Ens.split(' ')[1]) % 10 == 0:
-#         _temp_Obs_signal = temp_signal(df_temp_Obs[_temp_Ens], 30)
-#         _temp_Obs_IV = df_temp_Obs[_temp_Ens] - _temp_Obs_signal
-#         temp_IV_Group[f'HadCRUT5 {_temp_Ens}'] = np.array(_temp_Obs_IV)
-
+# Create a very rough estimate of the internal variability for the HadCRUT5
+# best estimate.
+# TODO: Regress natural forcings out of this as well...
 temp_Obs_signal = temp_signal(np.array(df_temp_Obs.quantile(q=0.5, axis=1)),
                               30, 'extrapolate')
 temp_Obs_IV = df_temp_Obs.quantile(q=0.5, axis=1) - temp_Obs_signal
-# In this new handling of IV uncertainty, we shouldn't include HadCRUT.
-# temp_IV_Group['HadCRUT5 median'] = np.array(temp_Obs_IV)
 
-
-# df_temp_PiC = pd.DataFrame(temp_IV_Group)
-# df_temp_PiC.set_index(np.arange(173)+1850, inplace=True)
-# print(df_temp_PiC)
-
-timeframes = [1, 3, 30]
-lims = [0.6, 0.4, 0.15]
-
+# PLOT THE INTERNAL VARIABILITY ###############################################
 fig = plt.figure(figsize=(15, 10))
-
 for t in range(len(timeframes)):
     axA = plt.subplot2grid(shape=(len(timeframes), 4), loc=(t, 0),
                            rowspan=1, colspan=3)
     axB = plt.subplot2grid(shape=(len(timeframes), 4), loc=(t, 3),
                            rowspan=1, colspan=1)
-    
+
     axA.set_ylim(-lims[t], lims[t])
     cut_beg = timeframes[t]//2
     cut_end = timeframes[t]-1-timeframes[t]//2
     _time = np.arange(n_yrs) + 1850
-    
+
     if timeframes[t] == 1:
         _time_sliced = _time[:]
     else:
         _time_sliced = _time[cut_beg: -cut_end]
 
-    for ens in temp_IV_Group:
-        colour = 'xkcd:teal' if ens == 'HadCRUT5 median' else 'gray'
-        label = 'HadCRUT5 median' if ens == 'HadCRUT5 median' else 'CMIP5 picontrol'
-        alpha = 1 if ens == 'HadCRUT5 median' else 0.3
-        _data = moving_average(temp_IV_Group[ens], timeframes[t])
-        axA.plot(_time_sliced, _data, color=colour, alpha=alpha, label=label)
+    for ens in df_temp_PiC.columns:
+        _data = moving_average(df_temp_PiC[ens], timeframes[t])
+        axA.plot(_time_sliced, _data, label='CMIP6 PiControl',
+                 color='gray', alpha=0.3)
 
         density = ss.gaussian_kde(_data)
         x = np.linspace(axA.get_ylim()[0], axA.get_ylim()[1], 50)
         y = density(x)
-        axB.plot(y, x, color=colour, alpha=alpha)
+        axB.plot(y, x, color='gray', alpha=0.3)
+
+    _data = moving_average(temp_Obs_IV, timeframes[t])
+    axA.plot(_time_sliced, _data, label='HadCRUT5 median',
+             color='xkcd:teal', alpha=1)
+    density = ss.gaussian_kde(_data)
+    x = np.linspace(axA.get_ylim()[0], axA.get_ylim()[1], 50)
+    y = density(x)
+    axB.plot(y, x, color='xkcd:teal', alpha=1)
 
     # axes[i].set_ylim([-0.6, +0.6])
     axA.set_xlim(1845, 2030)
@@ -459,35 +465,34 @@ for t in range(len(timeframes)):
     axB.get_xaxis().set_visible(False)
     axA.set_ylabel(f'Internal Variability (°C) \n ({timeframes[t]}-year moving mean)')
 gr.overall_legend(fig, loc='lower center', ncol=2, nrow=False)
-fig.suptitle('Selected Sample of Internal Variability from CMIP5 pi-control')
-fig.savefig(f'{plot_folder}0_Selected_CMIP5_Ensembles.png')
+fig.suptitle('Selected Sample of Internal Variability from CMIP6 PiControl')
+fig.savefig(f'{plot_folder}0_Selected_CMIP6_Ensembles.png')
 
 
-print('Number of CMIP5 internal variability samples remaining:' +
-      f'{len(temp_IV_Group.keys())}')
-
+print('Number of CMIP6 internal variability samples remaining:' +
+      f'{len(df_temp_PiC.columns)}')
 
 #### PLOT THE ENSEMBLE ####
-_t_IV = np.array([temp_IV_Group[ens] for ens in temp_IV_Group.keys()])
-
 fig = plt.figure(figsize=(15, 10))
 ax1 = plt.subplot2grid(shape=(1, 4), loc=(0, 0), rowspan=1, colspan=3)
 ax2 = plt.subplot2grid(shape=(1, 4), loc=(0, 3), rowspan=1, colspan=1)
 
-_t_IV_prcntls = np.percentile(_t_IV, sigmas_all, axis=0)
 # Internal Variability Sample
 for p in range(len(sigmas)):
-    ax1.fill_between(df_temp_Obs.index,
-                     _t_IV_prcntls[p, :], _t_IV_prcntls[-(p+2), :],
+    ax1.fill_between(df_temp_PiC.index,
+                     df_temp_PiC.quantile(q=sigmas_all[p]/100, axis=1),
+                     df_temp_PiC.quantile(q=sigmas_all[-(p+2)]/100, axis=1),
                      color='gray', alpha=0.2)
     ax2.fill_between(x=[3, 4],
-                     y1=_t_IV_prcntls[p, :].mean()*np.ones(2),
-                     y2=_t_IV_prcntls[-(p+2), :].mean()*np.ones(2),
+                     y1=df_temp_PiC.quantile(
+                        q=sigmas_all[p]/100, axis=1).mean()*np.ones(2),
+                     y2=df_temp_PiC.quantile(
+                        q=sigmas_all[-(p+2)]/100, axis=1).mean()*np.ones(2),
                      color='gray', alpha=0.2)
-               
-ax1.plot(df_temp_Obs.index, _t_IV_prcntls[-1, :],
-         color='gray', alpha=0.7, label='CMIP5 piControl')
-ax2.plot([3, 4], _t_IV_prcntls[-1, :].mean()*np.ones(2),
+
+ax1.plot(df_temp_PiC.index, df_temp_PiC.quantile(q=0.5, axis=1),
+         color='gray', alpha=0.7, label='CMIP6 piControl')
+ax2.plot([3, 4], df_temp_PiC.quantile(q=0.5, axis=1).mean()*np.ones(2),
          color='gray', alpha=0.7)
 
 # HadCRUT5 median
@@ -496,12 +501,12 @@ ax1.plot(df_temp_Obs.index,
           np.ones((len(df_temp_Obs.index), len(sigmas_all)))),
          color='xkcd:teal', alpha=0.7, ls='--')
 ax1.plot(df_temp_Obs.index, temp_Obs_IV,
-            color='xkcd:teal', alpha=0.7, label='HadCRUT5 median')
+         color='xkcd:teal', alpha=0.7, label='HadCRUT5 median')
 for p in sigmas:
     ax2.fill_between(x=[1, 2],
-                    y1=np.percentile(temp_Obs_IV, p[0])*np.ones(2),
-                    y2=np.percentile(temp_Obs_IV, p[1])*np.ones(2),
-                    color='xkcd:teal', alpha=0.2)
+                     y1=np.percentile(temp_Obs_IV, p[0])*np.ones(2),
+                     y2=np.percentile(temp_Obs_IV, p[1])*np.ones(2),
+                     color='xkcd:teal', alpha=0.2)
 ax2.plot([1, 2], np.percentile(temp_Obs_IV, 50)*np.ones(2),
          color='xkcd:teal', alpha=0.7)
 
@@ -516,10 +521,10 @@ ax2.get_xaxis().set_visible(False)
 # Do the HadCRUT5...
 
 
-fig.suptitle('Selected Sample of Internal Variability from CMIP5 pi-control')
+fig.suptitle('Selected Sample of Internal Variability from CMIP6 pi-control')
 fig.savefig(f'{plot_folder}1_Distribution_Internal_Variability.png')
 
-
+# CARRY OUT GWI CALCULATION ###################################################
 ############ Set model parameters #############################################
 if model_choice == 'AR5_IR':
     # We only use a[10], a[11], a[15], a[16]
@@ -570,7 +575,6 @@ if calc_switch == 'y':
     df_temp_Obs_subset = df_temp_Obs.sample(
         n=min(samples, df_temp_Obs.shape[1]), axis=1)
     # 4. Select random samples of the internal variability
-    df_temp_PiC = pd.DataFrame(temp_IV_Group, index=temp_Yrs)
     df_temp_PiC_subset = df_temp_PiC.sample(
         n=min(samples, df_temp_PiC.shape[1]), axis=1)
     
