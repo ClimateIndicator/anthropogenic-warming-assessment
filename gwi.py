@@ -110,6 +110,63 @@ def load_PiC_Stuart(n_yrs):
     return pd.DataFrame(temp_IV_Group)
 
 
+def load_PiC_CMIP6(n_yrs, start_pi, end_pi):
+    """Create DataFrame of piControl data from .MAG files."""
+    # Create list of all .MAG files recursively inside the directory
+    # data/piControl/CMIP6
+    # These files are simply as extracted from zip downloaded from
+    # https://cmip6.science.unimelb.edu.au/results?experiment_id=piControl&normalised=&mip_era=CMIP6&timeseriestype=average-year-mid-year&variable_id=tas&region=World#download
+    # (ie a CMIP6 archive for pre-meaned data, saving much data/time.)
+    mag_files = sorted(glob.glob('data/piControl/CMIP6/**/*.MAG',
+                                 recursive=True))
+    # print the number of .mag files, stating first that this is for mag_files
+    print('mag_files has', len(mag_files), 'files')
+
+    # flatten r into a 1D array
+    # print(r.index.get_level_values(1).unique())
+    dict_temp = {}
+    for file in mag_files:
+        # Adopt nomenclature format that matches earlier csv from Stuart
+        group = file.split('\\')[4]
+        model = file.split('\\')[-1].split('_')[3]
+        member = file.split('\\')[-1].split('_')[5]
+        var = file.split('\\')[-1].split('_')[1]
+        experiment = file.split('\\')[-1].split('_')[4]
+        model_name = '_'.join([group, model, member, var, experiment])
+
+        # use pymagicc to read the .MAG file
+        pic = pymagicc.io.MAGICCData(file).to_xarray().to_dataframe()
+        # select only the data with keyword 'world' in the level 1 index
+        pic = pic.xs('World', level=1)
+        # replace the cftime index with an integer for the cftime year
+        pic.index = pic.index.year
+
+        temp = np.array(pic.dropna()).ravel()
+        # index = np.arange(temp.shape[0])
+        # temp -= temp[:50].mean()
+        # plt.plot(index, temp,label='ALL')
+
+        # Create multiple segments with 50% overlap from each other.
+        # ie 0:173, 86:259, 172:345, etc
+        segments = (temp.shape[0] - (n_yrs - n_yrs//2)) // (n_yrs//2)
+        # print(model_name)
+        # print(segments)
+        for s in range(segments):
+            # print(s*(n_yrs//2), s*(n_yrs//2)+n_yrs)
+            temp_s = temp[s*(n_yrs//2):s*(n_yrs//2)+n_yrs]
+            temp_s = temp_s - temp_s[:(end_pi-start_pi)].mean()
+            # years = index[s*(n_yrs//2):s*(n_yrs//2)+n_yrs]
+            dict_temp[
+                f'{model_name}_slice-{s*(n_yrs//2)}:{s*(n_yrs//2)+n_yrs}'
+                ] = temp_s
+            # plt.plot(years, temp_s,
+            #          label=f'{model_name}_slice-{s*(n_yrs//2)}:{s*(n_yrs//2)+n_yrs}')
+        # plt.legend()
+        # plt.show()
+
+    return pd.DataFrame(dict_temp)
+
+
 def filter_PiControl(df, timeframes, lims):
     dict_temp_PiC = {}
     for ens in list(df):
@@ -411,7 +468,8 @@ n_yrs = df_temp_Obs.shape[0]
 # CMIP5 PI-CONTROL
 timeframes = [1, 3, 30]
 lims = [0.6, 0.4, 0.15]
-df_temp_PiC = load_PiC_Stuart(n_yrs)
+# df_temp_PiC = load_PiC_Stuart(n_yrs)
+df_temp_PiC = load_PiC_CMIP6(n_yrs, start_pi, end_pi)
 df_temp_PiC = filter_PiControl(df_temp_PiC, timeframes, lims)
 df_temp_PiC.set_index(np.arange(end_yr-start_yr+1)+1850, inplace=True)
 
