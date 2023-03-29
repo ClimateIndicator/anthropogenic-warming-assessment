@@ -9,6 +9,7 @@ import functools
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -54,6 +55,31 @@ def load_ERF_Stuart():
         forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y),
                                                       list_df)
     return forc_Group
+
+
+def load_ERF_CMIP6():
+    """Load the ERFs from CMIP6."""
+    # ERF stored here
+    file_ERF = 'data/ERF Samples/Chris/ERF_DAMIP_1000.nc'
+    # import ERF_file as a xarray dataset
+    xr_ERF = xr.open_dataset(file_ERF)
+    # Convert to pandas dataframe
+    df_ERF = xr_ERF.to_dataframe()
+    # assign the columns the name 'variable'
+    df_ERF.columns.names = ['variable']
+    # remove the column called 'total' from df_ERF
+    df_ERF = df_ERF.drop(columns='total')
+    # rename the variable columns
+    df_ERF = df_ERF.rename(columns={'wmghg': 'GHG',
+                                    'other_ant': 'OHF',
+                                    'natural':'Nat'})
+    # move the multi-index 'ensemble' level to a column,
+    # and then set the 'ensemble' column to second column level
+    df_ERF = df_ERF.reset_index(level='ensemble')
+    df_ERF['ensemble'] = 'ens' + df_ERF['ensemble'].astype(str)
+    df_ERF = df_ERF.pivot(columns='ensemble')
+
+    return df_ERF
 
 
 def load_HadCRUT(start_pi, end_pi):
@@ -205,7 +231,7 @@ def filter_PiControl(df, timeframes, lims):
 
 
 def GWI(model_choice, variables,  inc_reg_const,
-        forc_Group, params, df_temp_PiC, df_temp_Obs,
+        df_forc, params, df_temp_PiC, df_temp_Obs,
         gwi_end_yr):
     """Calculate the global warming index (GWI)."""
     # TODO:
@@ -214,7 +240,8 @@ def GWI(model_choice, variables,  inc_reg_const,
     
     # Prepare results #########################################################
     n = (df_temp_Obs.shape[1] * df_temp_PiC.shape[1] *
-         forc_Group[list(forc_Group.keys())[0]]['df'].shape[1] *
+         len(forc_subset.columns.get_level_values("ensemble").unique()) *
+        #  forc_Group[list(forc_Group.keys())[0]]['df'].shape[1] *
          len(params.columns.levels[0]))
     # Include residuals and totals for sum total and anthropogenic warming in
     # the same array as attributed results. +1 each for Ant, TOT, Res,
@@ -226,6 +253,7 @@ def GWI(model_choice, variables,  inc_reg_const,
        len(variables) + int(inc_reg_const) + 5,  # variables
        n))  # samples)
     coef_Reg_Results = np.zeros((len(variables) + int(inc_reg_const), n))
+    forc_Yrs = df_forc.index.to_numpy()
 
     # Loop over all sampling combinations #####################################
     i = 0
@@ -239,7 +267,7 @@ def GWI(model_choice, variables,  inc_reg_const,
     #         # params[15:17] = [8.400, 409.5]
     #         FTmodel = AR5_IR.FTmod(len(forc_Yrs), params_j)
 
-    for CMIP6_model in params.columns.levels[0]:
+    for CMIP6_model in params.columns.levels[0].unique():
         # Select the specific model's parameters
         params_FaIR = params[CMIP6_model]
         # Since the above line seems to get rid of the top colum level (the
@@ -248,8 +276,10 @@ def GWI(model_choice, variables,  inc_reg_const,
         # compatible with the required FaIR format...
         params_FaIR.columns = pd.MultiIndex.from_product(
             [[CMIP6_model], params_FaIR.columns])
-
-        for forc_Ens in forc_Group[variables[0]]['df'].columns:
+        # OLD
+        # for forc_Ens in forc_Group[variables[0]]['df'].columns:
+        # NEW
+        for forc_Ens in df_forc.columns.get_level_values("ensemble").unique():
             
             # AR5_IR has now been replaced by FaIRV2
             # forc_All = np.array([df_forc_Group[group]['df'][forc_Ens]
@@ -257,21 +287,26 @@ def GWI(model_choice, variables,  inc_reg_const,
             # temp_All = FTmodel @ forc_All
 
             # PREPARE FAIR-COMPATIBLE FORCINGS
-            forc_Ens_All = pd.DataFrame(
-                {var: forc_Group[var]['df'][forc_Ens] for var in variables})
+            # OLD
+            # forc_Ens_All = pd.DataFrame(
+            #     {var: forc_Group[var]['df'][forc_Ens] for var in variables})
+            # NEW
+            forc_Ens_All = df_forc.loc[:, (slice(None), forc_Ens)]
+            
             # FaIR won't run without emissions or concentrations, so specify
             # no zero emissions for input.
             emis_FAIR = fair.return_empty_emissions(
                 df_to_copy=False,
                 start_year=min(forc_Yrs), end_year=max(forc_Yrs), timestep=1,
-                scen_names=forc_Ens_All.columns)
+                scen_names=variables)
             # Prepare a FaIR-compatible forcing dataframe
             forc_FaIR = fair.return_empty_forcing(
                 df_to_copy=False,
                 start_year=min(forc_Yrs), end_year=max(forc_Yrs), timestep=1,
-                scen_names=forc_Ens_All.columns)
-            for var in forc_Ens_All.columns:
-                forc_FaIR[var] = forc_Ens_All[var]
+                scen_names=variables)
+            for var in variables:
+                forc_FaIR[var] = forc_Ens_All[var].to_numpy()
+
             # Run FaIR
             temp_All = fair.run_FaIR(emissions_in=emis_FAIR,
                                      forcing_in=forc_FaIR,
@@ -458,8 +493,13 @@ plot_folder = 'plots/internal-variability/'
 ##############################################################################
 
 # ERF
-forc_Group = load_ERF_Stuart()
-forc_Group_names = sorted(list(forc_Group.keys()))
+# forc_Group = load_ERF_Stuart()
+# forc_Group_names = sorted(list(forc_Group.keys()))
+# print(forc_Group_names)
+
+df_forc = load_ERF_CMIP6()
+forc_Group_names = sorted(
+    df_forc.columns.get_level_values('variable').unique())
 
 # TEMPERATURE
 df_temp_Obs = load_HadCRUT(start_pi, end_pi)
@@ -605,7 +645,8 @@ elif model_choice == 'FaIR_V2':
 # Calculate GWI ###############################################################
 ###############################################################################
 
-forc_Yrs = np.array(forc_Group[forc_Group_names[0]]['df'].index)
+# forc_Yrs = np.array(forc_Group[forc_Group_names[0]]['df'].index)
+forc_Yrs = np.array(df_forc.index)
 temp_Yrs = np.array(df_temp_Obs.index)
 
 # CARRY OUT REGRESSION CALCULATION ############################################
@@ -618,15 +659,25 @@ if calc_switch == 'y':
 
     # Select random sub-set sampling of all ensemble members:
     # 1. Select random samples of the forcing data
-    print(f'Forcing ensembles all: {forc_Group["GHG"]["df"].shape[1]}')
-    forc_Group_subset_columns = forc_Group['GHG']['df'].sample(
-        n=min(samples, forc_Group['GHG']['df'].shape[1]), axis=1).columns
-    forc_Group_subset = {
-        var: {'df': forc_Group[var]['df'][forc_Group_subset_columns]}
-        for var in forc_Group_names}
-    print(f'Forcing ensembles pruned: {forc_Group_subset["GHG"]["df"].shape[1]}')
+    # print(f'Forcing ensembles all: {forc_Group["GHG"]["df"].shape[1]}')
+    # forc_Group_subset_columns = forc_Group['GHG']['df'].sample(
+    #     n=min(samples, forc_Group['GHG']['df'].shape[1]), axis=1).columns
+    # forc_Group_subset = {
+    #     var: {'df': forc_Group[var]['df'][forc_Group_subset_columns]}
+    #     for var in forc_Group_names}
+    # print(f'Forcing ensembles pruned: {forc_Group_subset["GHG"]["df"].shape[1]}')
+
+    print(f'Forcing ensemble all: {len(df_forc.columns.levels[1])}')
+    forc_sample = np.random.choice(df_forc.columns.levels[1],
+        min(samples, len(df_forc.columns.levels[1])), replace=False)
+    # select all variables for first column level,
+    # and forc_sample for second column level
+    forc_subset = df_forc.loc[:, (slice(None), forc_sample)]
+    # forc_subset = df_forc.xs(tuple(forc_sample), axis=1, level=1)
+    print(f'Forcing ensemble pruned: {len(forc_subset.columns.get_level_values("ensemble").unique())}')
+
     # 2. Select random samples of the model parameters
-    print(f'FaIR Parameters: {CMIP6_param_df.shape[1]}')
+    print(f'FaIR Parameters: {len(CMIP6_param_df.columns.levels[0].unique())}')
     if model_choice == 'AR5_IR':
         params_subset = Geoff[:, :min(samples, Geoff.shape[1])]
     elif model_choice == 'FaIR_V2':
@@ -641,13 +692,10 @@ if calc_switch == 'y':
     df_temp_PiC_subset = df_temp_PiC.sample(
         n=min(samples, df_temp_PiC.shape[1]), axis=1)
     print(f'Internal variability ensembles pruned: {df_temp_PiC_subset.shape[1]}')
-    
-
-
 
     temp_Att_Results, coef_Reg_Results = GWI(
         model_choice, forc_Group_names, inc_reg_const,
-        forc_Group_subset, params_subset,
+        forc_subset, params_subset,
         df_temp_PiC_subset, df_temp_Obs_subset,
         2022)
 
@@ -657,6 +705,7 @@ elif calc_switch == 'n':
 
 else:
     print(f'{calc_switch} not valid; exiting script.')
+    sys.exit()
 
 n = temp_Att_Results.shape[2]
 
