@@ -2,6 +2,7 @@
 
 import os
 import sys
+import glob
 
 import datetime as dt
 import functools
@@ -17,6 +18,7 @@ import seaborn as sns
 import graphing as gr
 import models.AR5_IR as AR5_IR
 import models.FaIR_V2.FaIRv2_0_0_alpha1.fair.fair_runner as fair
+import pymagicc
 
 
 ###############################################################################
@@ -120,10 +122,8 @@ def load_PiC_CMIP6(n_yrs, start_pi, end_pi):
     mag_files = sorted(glob.glob('data/piControl/CMIP6/**/*.MAG',
                                  recursive=True))
     # print the number of .mag files, stating first that this is for mag_files
-    print('mag_files has', len(mag_files), 'files')
+    # print('mag_files has', len(mag_files), 'files')
 
-    # flatten r into a 1D array
-    # print(r.index.get_level_values(1).unique())
     dict_temp = {}
     for file in mag_files:
         # Adopt nomenclature format that matches earlier csv from Stuart
@@ -527,8 +527,6 @@ fig.suptitle('Selected Sample of Internal Variability from CMIP6 PiControl')
 fig.savefig(f'{plot_folder}0_Selected_CMIP6_Ensembles.png')
 
 
-print('Number of CMIP6 internal variability samples remaining:' +
-      f'{len(df_temp_PiC.columns)}')
 
 #### PLOT THE ENSEMBLE ####
 fig = plt.figure(figsize=(15, 10))
@@ -614,27 +612,35 @@ temp_Yrs = np.array(df_temp_Obs.index)
 
 t1 = dt.datetime.now()
 calc_switch = input('Recalculate? y/n: ')
+
 if calc_switch == 'y':
     samples = int(input('numer of samples (0-200): '))  # for temperature, and ERF
 
     # Select random sub-set sampling of all ensemble members:
     # 1. Select random samples of the forcing data
+    print(f'Forcing ensembles all: {forc_Group["GHG"]["df"].shape[1]}')
     forc_Group_subset_columns = forc_Group['GHG']['df'].sample(
         n=min(samples, forc_Group['GHG']['df'].shape[1]), axis=1).columns
     forc_Group_subset = {
         var: {'df': forc_Group[var]['df'][forc_Group_subset_columns]}
         for var in forc_Group_names}
+    print(f'Forcing ensembles pruned: {forc_Group_subset["GHG"]["df"].shape[1]}')
     # 2. Select random samples of the model parameters
+    print(f'FaIR Parameters: {CMIP6_param_df.shape[1]}')
     if model_choice == 'AR5_IR':
         params_subset = Geoff[:, :min(samples, Geoff.shape[1])]
     elif model_choice == 'FaIR_V2':
         params_subset = CMIP6_param_df
     # 3. Select random samples of the temperature data
+    print(f'Temperature ensembles all: {df_temp_Obs.shape[1]}')
     df_temp_Obs_subset = df_temp_Obs.sample(
         n=min(samples, df_temp_Obs.shape[1]), axis=1)
+    print(f'Temperature ensembles pruned: {df_temp_Obs_subset.shape[1]}')
     # 4. Select random samples of the internal variability
+    print(f'Internal variability ensembles all: {df_temp_PiC.shape[1]}')
     df_temp_PiC_subset = df_temp_PiC.sample(
         n=min(samples, df_temp_PiC.shape[1]), axis=1)
+    print(f'Internal variability ensembles pruned: {df_temp_PiC_subset.shape[1]}')
     
 
 
