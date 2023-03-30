@@ -46,10 +46,10 @@ def load_ERF_Stuart():
     for grouping in forc_Group:
         list_df = []
         for element in forc_Group[grouping]['Consists']:
-            _df = pd.read_csv(forc_Path + f'rf_{element}_200samples.csv',
-                              skiprows=[1]
-                              ).rename(columns={'Unnamed: 0': 'Year'}
-                              ).set_index('Year')
+            _df = pd.read_csv(
+                forc_Path + f'rf_{element}_200samples.csv', skiprows=[1]
+                   ).rename(columns={'Unnamed: 0': 'Year'}
+                   ).set_index('Year')
             list_df.append(_df.loc[_df.index <= end_yr])
 
         forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y),
@@ -59,12 +59,10 @@ def load_ERF_Stuart():
 
 def load_ERF_CMIP6():
     """Load the ERFs from CMIP6."""
-    # ERF stored here
+    # ERF location
     file_ERF = 'data/ERF Samples/Chris/ERF_DAMIP_1000.nc'
-    # import ERF_file as a xarray dataset
-    xr_ERF = xr.open_dataset(file_ERF)
-    # Convert to pandas dataframe
-    df_ERF = xr_ERF.to_dataframe()
+    # import ERF_file to xarray dataset and convert to pandas dataframe
+    df_ERF = xr.open_dataset(file_ERF).to_dataframe()
     # assign the columns the name 'variable'
     df_ERF.columns.names = ['variable']
     # remove the column called 'total' from df_ERF
@@ -84,7 +82,9 @@ def load_ERF_CMIP6():
 
 def load_HadCRUT(start_pi, end_pi):
     """Load HadCRUT5 observations and remove PI baseline."""
-    temp_ens_Path = './data/Temp/HadCRUT/HadCRUT.5.0.1.0.analysis.ensemble_series.global.annual.csv'
+    temp_ens_Path = (
+        './data/Temp/HadCRUT/' +
+        'HadCRUT.5.0.1.0.analysis.ensemble_series.global.annual.csv')
     # read temp_Path into pandas dataframe, rename column 'Time' to 'Year'
     # and set the index to 'Year', keeping only columns with 'Realization' in
     # the column name, since these are the ensembles
@@ -108,7 +108,7 @@ def load_HadCRUT(start_pi, end_pi):
 
 
 def load_PiC_Stuart(n_yrs):
-
+    """Load piControl data from Stuart's ERF datasets."""
     df_temp_PiC = pd.read_csv('./data/piControl/piControl.csv'
                           ).rename(columns={'year': 'Year'}
                                    ).set_index('Year')
@@ -121,7 +121,7 @@ def load_PiC_Stuart(n_yrs):
         # pi Control data located all over the place in csv; the following
         # lines strip the NaN values, and limits slices to the same length as
         # observed temperatures
-        temp = np.array(df_temp_PiC[ens].dropna())[:n_yrs]
+        temp = df_temp_PiC[ens].dropna().to_numpy()[:n_yrs]
 
         # Remove pre-industrial mean period; this is done because the models
         # use different "zero" temperatures (eg 0, 100, 287, etc).
@@ -141,14 +141,11 @@ def load_PiC_Stuart(n_yrs):
 def load_PiC_CMIP6(n_yrs, start_pi, end_pi):
     """Create DataFrame of piControl data from .MAG files."""
     # Create list of all .MAG files recursively inside the directory
-    # data/piControl/CMIP6
-    # These files are simply as extracted from zip downloaded from
-    # https://cmip6.science.unimelb.edu.au/results?experiment_id=piControl&normalised=&mip_era=CMIP6&timeseriestype=average-year-mid-year&variable_id=tas&region=World#download
-    # (ie a CMIP6 archive for pre-meaned data, saving much data/time.)
+    # data/piControl/CMIP6. These files are simply as extracted from zip
+    # downloaded from https://cmip6.science.unimelb.edu.au/results?experiment_id=piControl&normalised=&mip_era=CMIP6&timeseriestype=average-year-mid-year&variable_id=tas&region=World#download
+    # (ie a CMIP6 archive for pre-meaned data, saving data/time.)
     mag_files = sorted(glob.glob('data/piControl/CMIP6/**/*.MAG',
                                  recursive=True))
-    # print the number of .mag files, stating first that this is for mag_files
-    # print('mag_files has', len(mag_files), 'files')
 
     dict_temp = {}
     for file in mag_files:
@@ -161,39 +158,30 @@ def load_PiC_CMIP6(n_yrs, start_pi, end_pi):
         model_name = '_'.join([group, model, member, var, experiment])
 
         # use pymagicc to read the .MAG file
-        pic = pymagicc.io.MAGICCData(file).to_xarray().to_dataframe()
+        df_PiC = pymagicc.io.MAGICCData(file).to_xarray().to_dataframe()
         # select only the data with keyword 'world' in the level 1 index
-        pic = pic.xs('World', level=1)
+        df_PiC = df_PiC.xs('World', level=1)
         # replace the cftime index with an integer for the cftime year
-        pic.index = pic.index.year
+        df_PiC.index = df_PiC.index.year
 
-        temp = np.array(pic.dropna()).ravel()
-        # index = np.arange(temp.shape[0])
-        # temp -= temp[:50].mean()
-        # plt.plot(index, temp,label='ALL')
+        temp = df_PiC.dropna().to_numpy().ravel()
 
         # Create multiple segments with 50% overlap from each other.
         # ie 0:173, 86:259, 172:345, etc
         segments = (temp.shape[0] - (n_yrs - n_yrs//2)) // (n_yrs//2)
-        # print(model_name)
-        # print(segments)
         for s in range(segments):
             # print(s*(n_yrs//2), s*(n_yrs//2)+n_yrs)
             temp_s = temp[s*(n_yrs//2):s*(n_yrs//2)+n_yrs]
             temp_s = temp_s - temp_s[:(end_pi-start_pi)].mean()
-            # years = index[s*(n_yrs//2):s*(n_yrs//2)+n_yrs]
             dict_temp[
                 f'{model_name}_slice-{s*(n_yrs//2)}:{s*(n_yrs//2)+n_yrs}'
                 ] = temp_s
-            # plt.plot(years, temp_s,
-            #          label=f'{model_name}_slice-{s*(n_yrs//2)}:{s*(n_yrs//2)+n_yrs}')
-        # plt.legend()
-        # plt.show()
 
     return pd.DataFrame(dict_temp)
 
 
 def filter_PiControl(df, timeframes, lims):
+    """Remove simulations that correspond poorly with observations."""
     dict_temp_PiC = {}
     for ens in list(df):
         # Establish inclusion condition, which is that the smoothed internal
@@ -211,7 +199,7 @@ def filter_PiControl(df, timeframes, lims):
         # to the percentiles of the ensemble in any given year. I allow the
         # ensemble to be slightly broader, to allow reasonably allow for a
         # wider range of behaviours than we have seen in the real world.
-        temp = np.array(df[ens])
+        temp = df[ens].to_numpy()
         temp_ma_3 = moving_average(temp, 3)
         temp_ma_30 = moving_average(temp, 30)
         _cond = (
@@ -222,26 +210,21 @@ def filter_PiControl(df, timeframes, lims):
 
         # Approve actual (ie not smoothed) data if the corresponding smoothed
         # data is approved.
-        # The second condition ensures that we aren't including timeseries that
-        # are too short (not all pic control runs last the required 173 years).
         if _cond:
             dict_temp_PiC[ens] = temp
 
     return pd.DataFrame(dict_temp_PiC)
 
 
-def GWI(model_choice, variables,  inc_reg_const,
+def GWI(model_choice, variables, inc_reg_const,
         df_forc, params, df_temp_PiC, df_temp_Obs,
-        gwi_end_yr):
+        start_yr, end_yr):
     """Calculate the global warming index (GWI)."""
-    # TODO:
-    # - BRING FORC_YRS INSIDE THE FUNCTION
-    # - BRING START_PI AND END_PI INSIDE THE FUNCTION
-    
+    # - BRING start_pi AND end_pi INSIDE THE FUNCTION
+
     # Prepare results #########################################################
     n = (df_temp_Obs.shape[1] * df_temp_PiC.shape[1] *
          len(forc_subset.columns.get_level_values("ensemble").unique()) *
-        #  forc_Group[list(forc_Group.keys())[0]]['df'].shape[1] *
          len(params.columns.levels[0]))
     # Include residuals and totals for sum total and anthropogenic warming in
     # the same array as attributed results. +1 each for Ant, TOT, Res,
@@ -253,20 +236,15 @@ def GWI(model_choice, variables,  inc_reg_const,
        len(variables) + int(inc_reg_const) + 5,  # variables
        n))  # samples)
     coef_Reg_Results = np.zeros((len(variables) + int(inc_reg_const), n))
+
     forc_Yrs = df_forc.index.to_numpy()
+    # slice df_temp_obs dataframe to include years between start_yr and end_yr
+    df_temp_Obs = df_temp_Obs.loc[start_yr:end_yr]
+    # slice df_temp_PiC dataframe to include years between start_yr and end_yr
+    df_temp_PiC = df_temp_PiC.loc[start_yr:end_yr]
 
     # Loop over all sampling combinations #####################################
     i = 0
-
-    # THIS IS FOR AR5_IR - HAS BEEN REPLACED BY FaIRV2 IN THE BELOW
-    # for j in range(params.shape[1]):
-    #     if model_choice == 'AR5_IR':
-    #         params_j = np.zeros(20)
-    #         params_j[10:12] = [0.631, 0.429]
-    #         params_j[15:17] = params[:, j]
-    #         # params[15:17] = [8.400, 409.5]
-    #         FTmodel = AR5_IR.FTmod(len(forc_Yrs), params_j)
-
     for CMIP6_model in params.columns.levels[0].unique():
         # Select the specific model's parameters
         params_FaIR = params[CMIP6_model]
@@ -276,46 +254,32 @@ def GWI(model_choice, variables,  inc_reg_const,
         # compatible with the required FaIR format...
         params_FaIR.columns = pd.MultiIndex.from_product(
             [[CMIP6_model], params_FaIR.columns])
-        # OLD
-        # for forc_Ens in forc_Group[variables[0]]['df'].columns:
-        # NEW
-        for forc_Ens in df_forc.columns.get_level_values("ensemble").unique():
-            
-            # AR5_IR has now been replaced by FaIRV2
-            # forc_All = np.array([df_forc_Group[group]['df'][forc_Ens]
-            #                      for group in variables]).T
-            # temp_All = FTmodel @ forc_All
 
-            # PREPARE FAIR-COMPATIBLE FORCINGS
-            # OLD
-            # forc_Ens_All = pd.DataFrame(
-            #     {var: forc_Group[var]['df'][forc_Ens] for var in variables})
-            # NEW
-            forc_Ens_All = df_forc.loc[:, (slice(None), forc_Ens)]
-            
+        for forc_Ens in df_forc.columns.get_level_values("ensemble").unique():
+            # Select forcings for the specific ensemble member
+            forc_Ens_All = df_forc.loc[:end_yr, (slice(None), forc_Ens)]
+
             # FaIR won't run without emissions or concentrations, so specify
             # no zero emissions for input.
             emis_FAIR = fair.return_empty_emissions(
                 df_to_copy=False,
-                start_year=min(forc_Yrs), end_year=max(forc_Yrs), timestep=1,
+                start_year=min(forc_Yrs), end_year=end_yr, timestep=1,
                 scen_names=variables)
             # Prepare a FaIR-compatible forcing dataframe
             forc_FaIR = fair.return_empty_forcing(
                 df_to_copy=False,
-                start_year=min(forc_Yrs), end_year=max(forc_Yrs), timestep=1,
+                start_year=min(forc_Yrs), end_year=end_yr, timestep=1,
                 scen_names=variables)
             for var in variables:
                 forc_FaIR[var] = forc_Ens_All[var].to_numpy()
 
             # Run FaIR
+            # Convert back into numpy array for comapbililty with the pre-FaIR
+            # code below.
             temp_All = fair.run_FaIR(emissions_in=emis_FAIR,
                                      forcing_in=forc_FaIR,
                                      thermal_parameters=params_FaIR,
-                                     show_run_info=False)['T']
-            # Convert back into numpy array for comapbililty with the pre-FaIR
-            # code below.
-            temp_All = np.array(temp_All)
-
+                                     show_run_info=False)['T'].to_numpy()
             # Remove pre-industrial offset before regression
             if inc_pi_offset:
                 _ofst = temp_All[(forc_Yrs >= start_pi) &
@@ -328,7 +292,8 @@ def GWI(model_choice, variables,  inc_reg_const,
 
             # Decide whether to include a Constant offset term in regression
             if inc_reg_const:
-                temp_Mod = np.append(temp_Mod, np.ones((temp_Mod.shape[0], 1)),
+                temp_Mod = np.append(temp_Mod,
+                                     np.ones((temp_Mod.shape[0], 1)),
                                      axis=1)
             num_vars = temp_Mod.shape[1]
 
@@ -339,7 +304,7 @@ def GWI(model_choice, variables,  inc_reg_const,
 
             c_i = 0
             for temp_Obs_Ens in df_temp_Obs.columns:
-                temp_Obs_i = np.array(df_temp_Obs[temp_Obs_Ens])
+                temp_Obs_i = df_temp_Obs[temp_Obs_Ens].to_numpy()
                 coef_Obs_i = np.linalg.lstsq(temp_Mod, temp_Obs_i,
                                              rcond=None)[0]
                 coef_Obs_Results[:, c_i] = coef_Obs_i
@@ -347,15 +312,15 @@ def GWI(model_choice, variables,  inc_reg_const,
 
             c_j = 0
             for temp_PiC_Ens in df_temp_PiC.columns:
-                temp_PiC_j = np.array(df_temp_PiC[temp_PiC_Ens])
+                temp_PiC_j = df_temp_PiC[temp_PiC_Ens].to_numpy()
                 coef_PiC_j = np.linalg.lstsq(temp_Mod, temp_PiC_j,
                                              rcond=None)[0]
                 coef_PiC_Results[:, c_j] = coef_PiC_j
                 c_j += 1
 
-            coef_Results = np.array([x + y
-                                     for x in coef_Obs_Results.T
-                                     for y in coef_PiC_Results.T]).T
+            # coef_Results = np.array([x + y
+            #                          for x in coef_Obs_Results.T
+            #                          for y in coef_PiC_Results.T]).T
 
             for c_k in range(coef_Obs_Results.shape[1]):
                 for c_l in range(coef_PiC_Results.shape[1]):
@@ -366,10 +331,10 @@ def GWI(model_choice, variables,  inc_reg_const,
                     temp_Att = temp_Mod * coef_Reg
 
                     # Extract T_Obs and T_PiC data for this c_i, c_j combo.
-                    temp_Obs_kl = np.array(
-                        df_temp_Obs[df_temp_Obs.columns[c_k]])
-                    temp_PiC_kl = np.array(
-                        df_temp_PiC[df_temp_PiC.columns[c_l]])
+                    temp_Obs_kl = df_temp_Obs[df_temp_Obs.columns[c_k]
+                                              ].to_numpy()
+                    temp_PiC_kl = df_temp_PiC[df_temp_PiC.columns[c_l]
+                                              ].to_numpy()
 
                     # Save outputs from the calculation:
                     # Regression coefficients
@@ -406,19 +371,18 @@ def GWI(model_choice, variables,  inc_reg_const,
                         )
     temp_Att_Results[:, -5, :] = _temp_Ant_Results
 
-    np.save('results/temp_Att_Results.npy', temp_Att_Results)
-    np.save('results/coef_Reg_Results.npy', coef_Reg_Results)
-
     return temp_Att_Results, coef_Reg_Results
 
 
 def moving_average(data, w):
+    """Calculate a moving average of data with window size w."""
     # data_padded = np.pad(data, (w//2, w-1-w//2),
     #                      mode='constant', constant_values=(0, 1.5))
     return np.convolve(data, np.ones(w), 'valid') / w
 
 
 def temp_signal(data, w, method):
+    """Calculate the temperature signal as moving average of window w."""
     # Sensibly extend data (to avoid shortening the length of moving average)
 
     # These are the lengths of the pads to add before and after the data.
@@ -446,7 +410,6 @@ def temp_signal(data, w, method):
 
     return moving_average(data_padded, w)
     return np.convolve(data_padded, np.ones(w), 'valid') / w
-
 
 
 ###############################################################################
@@ -516,7 +479,7 @@ df_temp_PiC.set_index(np.arange(end_yr-start_yr+1)+1850, inplace=True)
 # Create a very rough estimate of the internal variability for the HadCRUT5
 # best estimate.
 # TODO: Regress natural forcings out of this as well...
-temp_Obs_signal = temp_signal(np.array(df_temp_Obs.quantile(q=0.5, axis=1)),
+temp_Obs_signal = temp_signal(df_temp_Obs.quantile(q=0.5, axis=1).to_numpy(),
                               30, 'extrapolate')
 temp_Obs_IV = df_temp_Obs.quantile(q=0.5, axis=1) - temp_Obs_signal
 
@@ -632,9 +595,9 @@ if model_choice == 'AR5_IR':
 
     # # Geoffrey 2013 paramters for a_ar5[15:17]
     Geoff = np.array([[4.0, 5.0, 4.5, 2.8, 5.2, 3.9, 4.2, 3.6,
-                    1.6, 5.3, 4.0, 5.5, 3.5, 3.9, 4.3, 4.0],
-                    [126, 267, 193, 132, 289, 200, 317, 197,
-                    184, 280, 698, 286, 285, 164, 150, 218]])
+                       1.6, 5.3, 4.0, 5.5, 3.5, 3.9, 4.3, 4.0],
+                      [126, 267, 193, 132, 289, 200, 317, 197,
+                       184, 280, 698, 286, 285, 164, 150, 218]])
 
 elif model_choice == 'FaIR_V2':
     CMIP6_param_csv = ('models/FaIR_V2/FaIRv2_0_0_alpha1/fair/util/' +
@@ -643,9 +606,7 @@ elif model_choice == 'FaIR_V2':
 
 ###############################################################################
 # Calculate GWI ###############################################################
-###############################################################################
-
-# forc_Yrs = np.array(forc_Group[forc_Group_names[0]]['df'].index)
+################################################################
 forc_Yrs = np.array(df_forc.index)
 temp_Yrs = np.array(df_temp_Obs.index)
 
@@ -658,7 +619,9 @@ if calc_switch == 'y':
     samples = int(input('numer of samples (0-200): '))  # for temperature, and ERF
 
     # Select random sub-set sampling of all ensemble members:
+
     # 1. Select random samples of the forcing data
+
     # print(f'Forcing ensembles all: {forc_Group["GHG"]["df"].shape[1]}')
     # forc_Group_subset_columns = forc_Group['GHG']['df'].sample(
     #     n=min(samples, forc_Group['GHG']['df'].shape[1]), axis=1).columns
@@ -668,13 +631,16 @@ if calc_switch == 'y':
     # print(f'Forcing ensembles pruned: {forc_Group_subset["GHG"]["df"].shape[1]}')
 
     print(f'Forcing ensemble all: {len(df_forc.columns.levels[1])}')
-    forc_sample = np.random.choice(df_forc.columns.levels[1],
-        min(samples, len(df_forc.columns.levels[1])), replace=False)
+    forc_sample = np.random.choice(
+        df_forc.columns.levels[1],
+        min(samples, len(df_forc.columns.levels[1])),
+        replace=False)
     # select all variables for first column level,
     # and forc_sample for second column level
     forc_subset = df_forc.loc[:, (slice(None), forc_sample)]
     # forc_subset = df_forc.xs(tuple(forc_sample), axis=1, level=1)
-    print(f'Forcing ensemble pruned: {len(forc_subset.columns.get_level_values("ensemble").unique())}')
+    print('Forcing ensemble pruned: '
+          f'{len(forc_subset.columns.get_level_values("ensemble").unique())}')
 
     # 2. Select random samples of the model parameters
     print(f'FaIR Parameters: {len(CMIP6_param_df.columns.levels[0].unique())}')
@@ -682,22 +648,33 @@ if calc_switch == 'y':
         params_subset = Geoff[:, :min(samples, Geoff.shape[1])]
     elif model_choice == 'FaIR_V2':
         params_subset = CMIP6_param_df
+
     # 3. Select random samples of the temperature data
     print(f'Temperature ensembles all: {df_temp_Obs.shape[1]}')
     df_temp_Obs_subset = df_temp_Obs.sample(
         n=min(samples, df_temp_Obs.shape[1]), axis=1)
     print(f'Temperature ensembles pruned: {df_temp_Obs_subset.shape[1]}')
+
     # 4. Select random samples of the internal variability
     print(f'Internal variability ensembles all: {df_temp_PiC.shape[1]}')
     df_temp_PiC_subset = df_temp_PiC.sample(
         n=min(samples, df_temp_PiC.shape[1]), axis=1)
-    print(f'Internal variability ensembles pruned: {df_temp_PiC_subset.shape[1]}')
+    print('Internal variability ensembles pruned: '
+          f'{df_temp_PiC_subset.shape[1]}')
 
     temp_Att_Results, coef_Reg_Results = GWI(
-        model_choice, forc_Group_names, inc_reg_const,
-        forc_subset, params_subset,
-        df_temp_PiC_subset, df_temp_Obs_subset,
-        2022)
+        model_choice,
+        forc_Group_names,
+        inc_reg_const,
+        forc_subset,
+        params_subset,
+        df_temp_PiC_subset,
+        df_temp_Obs_subset,
+        start_yr,
+        end_yr)
+
+    np.save('results/temp_Att_Results.npy', temp_Att_Results)
+    np.save('results/coef_Reg_Results.npy', coef_Reg_Results)
 
 elif calc_switch == 'n':
     temp_Att_Results = np.load('results/temp_Att_Results.npy')
@@ -712,6 +689,7 @@ n = temp_Att_Results.shape[2]
 t2 = dt.datetime.now()
 print(f'Total calculation took {t2-t1}')
 
+# FILTER RESULTS ##############################################################
 # For diagnosing: filter out results with particular regression coefficients.
 
 # If you only want to study subsets of the results based on certain constraints
@@ -723,7 +701,7 @@ print(f'Total calculation took {t2-t1}')
 # We select slice indices (forcing coefficients) we're interested in basing the
 # condition on:
 # AER is index 0, GHGs index 1, NAT index 2, Const index 3
-# Then choose whether you want any or all or the coefficients to meet the   
+# Then choose whether you want any or all or the coefficients to meet the
 # condition (in this case being less than zero)
 mask_switch = False
 if mask_switch:
@@ -733,7 +711,6 @@ if mask_switch:
     temp_Att_Results = temp_Att_Results[:, :, coef_mask]
     coef_Reg_Results = coef_Reg_Results[:, coef_mask]
     print(f'Shape of masked attribution results: {temp_Att_Results.shape}')
-
 
 
 ###############################################################################
@@ -757,7 +734,8 @@ print(temp_PiC_unique.shape)
 # Plot the piControl temperatures as a filled area
 for p in range(len(sigmas)):
     ax1.fill_between(temp_Yrs,
-                     temp_PiC_prcntls[p, :], temp_PiC_prcntls[-(p+2), :],
+                     temp_PiC_prcntls[p, :],
+                     temp_PiC_prcntls[-(p+2), :],
                      color='gray', alpha=0.1)
 ax1.plot(temp_Yrs, temp_PiC_prcntls[-1, :],
          color='gray', alpha=0.8,
