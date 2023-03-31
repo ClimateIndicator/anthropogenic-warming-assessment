@@ -202,6 +202,7 @@ def gwi_residuals(ax, df_Results_ts):
 
 
 def gwi_tot_vs_ant(ax, df_Results_ts):
+    """Plot the TOT vs. ANT timeseries."""
     ax.plot([-0.2, 1.5], [-0.2, 1.5], color='gray', alpha=0.7)
     ax.plot(df_Results_ts.loc[:, ('Ant', '50.0')].values,
             df_Results_ts.loc[:, ('Tot', '50.0')].values,

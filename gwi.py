@@ -216,12 +216,13 @@ def filter_PiControl(df, timeframes):
 
     return pd.DataFrame(dict_temp_PiC)
 
-
-def GWI(model_choice, variables, inc_reg_const,
+def GWI(
+        model_choice, variables, inc_reg_const,
         df_forc, params, df_temp_PiC, df_temp_Obs,
         start_yr, end_yr):
     """Calculate the global warming index (GWI)."""
     # - BRING start_pi AND end_pi INSIDE THE FUNCTION
+
 
     # Prepare results #########################################################
     n = (df_temp_Obs.shape[1] * df_temp_PiC.shape[1] *
@@ -232,11 +233,14 @@ def GWI(model_choice, variables, inc_reg_const,
     # InternalVariability, ObservedTemperatures
     # NOTE: the order in dimension is:
     # 'GHG, NAT, OHF, CONST, ANT, TOTAL, RESIDUAL, Temp_PiC, Temp_Obs'
-    vars = ['GHG', 'Nat', 'OHF', 'Const', 'Ant', 'Tot', 'Res', 'PiC', 'Obs']
+    # vars = ['GHG', 'Nat', 'OHF', 'Const', 'Ant', 'Tot', 'Res', 'PiC', 'Obs']
+    vars = ['GHG', 'Nat', 'OHF', 'Ant', 'Tot', 'Res']
     temp_Att_Results = np.zeros(
-      (173,  # years
-       len(variables) + int(inc_reg_const) + 5,  # variables
-       n))  # samples)
+      (end_yr - start_yr + 1,  # years
+       len(variables) + 3,  # variables
+       n),  # samples
+      dtype=np.float32  # make the array smaller in memory
+      )
     coef_Reg_Results = np.zeros((len(variables) + int(inc_reg_const), n))
 
     forc_Yrs = df_forc.index.to_numpy()
@@ -282,6 +286,7 @@ def GWI(model_choice, variables, inc_reg_const,
                                      forcing_in=forc_FaIR,
                                      thermal_parameters=params_FaIR,
                                      show_run_info=False)['T'].to_numpy()
+
             # Remove pre-industrial offset before regression
             if inc_pi_offset:
                 _ofst = temp_All[(forc_Yrs >= start_pi) &
@@ -297,7 +302,7 @@ def GWI(model_choice, variables, inc_reg_const,
                 temp_Mod = np.append(temp_Mod,
                                      np.ones((temp_Mod.shape[0], 1)),
                                      axis=1)
-            num_vars = temp_Mod.shape[1]
+            n_reg_vars = temp_Mod.shape[1]
 
             coef_Obs_Results = np.empty((temp_Mod.shape[1],
                                          df_temp_Obs.shape[1]))
@@ -335,44 +340,40 @@ def GWI(model_choice, variables, inc_reg_const,
                     # Extract T_Obs and T_PiC data for this c_i, c_j combo.
                     temp_Obs_kl = df_temp_Obs[df_temp_Obs.columns[c_k]
                                               ].to_numpy()
-                    temp_PiC_kl = df_temp_PiC[df_temp_PiC.columns[c_l]
-                                              ].to_numpy()
+                    # temp_PiC_kl = df_temp_PiC[df_temp_PiC.columns[c_l]
+                    #                           ].to_numpy()
 
                     # Save outputs from the calculation:
                     # Regression coefficients
                     coef_Reg_Results[:, i] = coef_Reg
+                    
                     # Attributed warming for each component
-                    temp_Att_Results[:, :num_vars, i] = temp_Att
-                    # Actual piControl IV sample that used for this c_k, c_l
-                    temp_Att_Results[:, -2, i] = temp_PiC_kl
-                    # The temp_Obs (dependent var) for this c_k, c_l
-                    temp_Att_Results[:, -1, i] = temp_Obs_kl
+                    temp_Att_Results[:, :(n_reg_vars-(1*inc_reg_const)), i] = \
+                        temp_Att[:, :-1]
+                    
+                    # # Actual piControl IV sample that used for this c_k, c_l
+                    # temp_Att_Results[:, -2, i] = temp_PiC_kl
+                    # # The temp_Obs (dependent var) for this c_k, c_l
+                    # temp_Att_Results[:, -1, i] = temp_Obs_kl
+                    # TOTAL
+                    temp_Tot = temp_Att.sum(axis=1)
+                    temp_Att_Results[:, -2, i] = temp_Tot
+                    # RESIDUAL
+                    temp_Att_Results[:, -1, i] = (temp_Obs_kl - temp_Tot)
+                    # ANTROPOGENIC
+                    temp_Ant = (temp_Att[:, variables.index('GHG')] + 
+                                temp_Att[:, variables.index('OHF')])
+                    temp_Att_Results[:, -3, i] = temp_Ant
 
                     # Visual display of pregress through calculation
-                    percentage = int((i+1)/n*100)
-                    loading_bar = (percentage // 5*'.' +
-                                   (20 - percentage // 5)*' ')
-                    print(f'calculating {loading_bar} {percentage}%', end='\r')
+                    if i % 1000 == 0:
+                        percentage = int((i+1)/n*100)
+                        loading_bar = (percentage // 5*'.' +
+                                    (20 - percentage // 5)*' ')
+                        print(f'calculating {loading_bar} {percentage}%', end='\r')
                     i += 1
 
-
-    # CALCULATE OTHER KEY RESULTS #############################################
-    # TOTAL
-    temp_Att_Results[:, -4, :] = (
-        temp_Att_Results[:, :num_vars, :].sum(axis=1))
-    # Residual
-    temp_Att_Results[:, -3, :] = (
-        temp_Att_Results[:, -1, :] - temp_Att_Results[:, -4, :])
-    # Anthropogenic
-    _temp_Ant_Results = (
-        temp_Att_Results[:, -4, :] -
-        # Remove the Natural forcing component in next line:
-        temp_Att_Results[:, forc_Group_names.index('Nat'), :] -
-        # Remove constant term in regression in next line:
-        int(inc_reg_const) * temp_Att_Results[:, num_vars-1, :]
-                        )
-    temp_Att_Results[:, -5, :] = _temp_Ant_Results
-
+    print(f"calculating {20*'.'} {100}%", end='\r')
     return temp_Att_Results, coef_Reg_Results, vars
 
 
@@ -595,6 +596,7 @@ if __name__ == "__main__":
             start_yr,
             end_yr)
         n = temp_Att_Results.shape[2]
+        print(temp_Att_Results.dtype)
 
         # FILTER RESULTS ##############################################################
         # For diagnosing: filter out results with particular regression coefficients.
@@ -624,6 +626,11 @@ if __name__ == "__main__":
 
 
         # PRODUCE FINAL RESULTS DATASETS ##########################################
+        # Remove old results first
+        files = os.listdir('results')
+        csvs = [f for f in files if f.endswith('.csv')]
+        for csv in csvs:
+            os.remove('results/' + csv)
 
         # WARNING TO SELF: multidimensional np.percentile() changes the order
         # of the axes, so that the axis along which you took the percentiles is
