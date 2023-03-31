@@ -141,3 +141,157 @@ def plot_internal_variability_sample(
     ax2.get_xaxis().set_visible(False)
 
 
+def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
+                   plot_vars, plot_cols):
+    """Plot the GWI timeseries for the given variables."""
+    ax.set_ylabel('Warming Anomaly (°C)')
+    fill_alpha = 0.1
+    line_alpha = 0.7
+    sigmas = df_Results_ts.columns.get_level_values('percentile').unique()
+    # Plot the observations
+    err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
+               df_temp_Obs.quantile(q=0.5, axis=1))
+    err_neg = (df_temp_Obs.quantile(q=0.5, axis=1) -
+               df_temp_Obs.quantile(q=0.05, axis=1))
+    ax.errorbar(df_temp_Obs.index, df_temp_Obs.quantile(q=0.5, axis=1),
+                yerr=(err_neg, err_pos),
+                fmt='o', color='gray', ms=2.5, lw=1,
+                label='Reference Temp: HadCRUT5')
+    for s in range(len(sigmas)//2):
+        # Plot the PiControl ensemble
+        ax.fill_between(
+            df_temp_PiC.index,
+            df_temp_PiC.quantile(q=float(sigmas[s])/100, axis=1),
+            df_temp_PiC.quantile(q=float(sigmas[-(s+2)])/100, axis=1),
+            color='gray', alpha=fill_alpha)
+        ax.plot(df_temp_PiC.index, df_temp_PiC.quantile(q=0.5, axis=1),
+                 color='gray', alpha=line_alpha, label='CMIP6 piControl')
+
+        # Plot the GWI timeseries
+        for var in plot_vars:
+            ax.fill_between(
+                df_Results_ts.index,
+                df_Results_ts.loc[:, (var, sigmas[s])].values,
+                df_Results_ts.loc[:, (var, sigmas[-(s+2)])].values,
+                color=plot_cols[var], alpha=fill_alpha)
+            ax.plot(df_Results_ts.index,
+                    df_Results_ts.loc[:, (var, sigmas[-1])].values,
+                    color=plot_cols[var], alpha=line_alpha, label=var)
+
+
+def gwi_residuals(ax, df_Results_ts):
+    """Plot the regression residuals of the GWI timeseries."""
+    ax.set_ylabel('Regression Residuals (°C)')
+    fill_alpha = 0.1
+    line_alpha = 0.7
+    sigmas = df_Results_ts.columns.get_level_values('percentile').unique()
+    for s in range(len(sigmas)//2):
+        ax.fill_between(
+            df_Results_ts.index,
+            df_Results_ts.loc[:, ('Res', sigmas[s])].values,
+            df_Results_ts.loc[:, ('Res', sigmas[-(s+2)])].values,
+            color='gray', alpha=fill_alpha)
+        ax.plot(df_Results_ts.index,
+                df_Results_ts.loc[:, ('Res', sigmas[-1])].values,
+                label='HadCRUT5 Residuals',
+                color='gray', alpha=line_alpha)
+    ax.plot(df_Results_ts.index, np.zeros(len(df_Results_ts.index)),
+            # label='Reference Temp: HadCRUT5',
+            color='xkcd:magenta', alpha=0.7,
+            )
+
+
+def gwi_tot_vs_ant(ax, df_Results_ts):
+    ax.plot([-0.2, 1.5], [-0.2, 1.5], color='gray', alpha=0.7)
+    ax.plot(df_Results_ts.loc[:, ('Ant', '50.0')].values,
+            df_Results_ts.loc[:, ('Tot', '50.0')].values,
+            color='xkcd:teal', alpha=0.7,)
+    ax.set_xlabel('Ant')
+    ax.set_ylabel('TOT')
+    ax.set_xlim(-0.2, 1.5)
+    ax.set_ylim(-0.2, 1.5)
+
+
+def gwi_pdf(ax):
+    """Plot the GWI PDFs for the given variables in end year."""
+    # NOTE THAT THIS IS THE OLD CODE FOR THE PDF PLOT USING NUMPY ARRAYS
+    # INSTEAD OF PANDAS DATAFRAMES FOR THE RESULTS.
+    # Distributions ###############################################################
+    for c in range(len(gwi_plot_names)):
+        if gwi_plot_names[c] in {'Ant', 'GHG', 'Nat', 'OHF'}:
+            # binwidth = 0.01
+            # bins = np.arange(np.min(temp_Att_Results[-1, gwi_plot_components[i], :]),
+            #                  np.max(temp_Att_Results[-1, gwi_plot_components[i], :]) + binwidth,
+            #                  binwidth)
+            # ax2.hist(temp_Att_Results[-1, gwi_plot_components[i], :], bins=bins,
+            #          density=True, orientation='horizontal',
+            #          color=gwi_plot_colours[i],
+            #          alpha=0.3
+            #          )
+            density = ss.gaussian_kde(
+                temp_Att_Results[-1, gwi_plot_components[c], :])
+            x = np.linspace(
+                temp_Att_Results[-1, gwi_plot_components[c], :].min(),
+                temp_Att_Results[-1, gwi_plot_components[c], :].max(),
+                100)
+            y = density(x)
+            # ax2.plot(y, x, color=gwi_plot_colours[i], alpha=0.7)
+            ax.fill_betweenx(x, np.zeros(len(y)), y,
+                            color=gwi_plot_colours[c], alpha=0.3)
+
+    # Add PiC PDF
+    density = ss.gaussian_kde(
+                temp_PiC_unique[-1, :])
+    x = np.linspace(
+        temp_PiC_unique[-1, :].min(),
+        temp_PiC_unique[-1, :].max(),
+        100)
+    y = density(x)
+    ax.fill_betweenx(x, np.zeros(len(y)), y,
+                        color='gray', alpha=0.3)
+
+    # bins = np.arange(np.min(temp_Att_Results[-1, -5, :]),
+    #                  np.max(temp_Att_Results[-1, -5, :]) + binwidth,
+    #                  binwidth)
+    # ax2.hist(temp_Att_Results[-1, -5, :], bins=bins,
+    #          density=True, orientation='horizontal',
+    #          color='pink', alpha=0.3
+    #          )
+
+    # bins = np.arange(np.min(temp_Att_Results[-1, -4, :]),
+    #                  np.max(temp_Att_Results[-1, -4, :]) + binwidth,
+    #                  binwidth)
+    # ax2.hist(temp_Att_Results[-1, -4, :], bins=bins,
+    #          density=True, orientation='horizontal',
+    #          color='gray', alpha=0.3
+    #          )
+
+
+def Fig_SPM2_plot(ax, period, vars, dict_dfs, source_cols):
+    """Plot the SPM2 figure."""
+    bar_width = (1.0-0.4)/len(dict_dfs.keys())
+    sources = sorted(list(dict_dfs.keys()))
+    for var in vars:
+        for source in sources:
+            med = dict_dfs[source].loc[period, (var, '50.0')]
+            neg = med - dict_dfs[source].loc[period, (var, '5.0')]
+            pos = dict_dfs[source].loc[period, (var, '95.0')] - med
+
+            bar = ax.bar(vars.index(var) + bar_width*sources.index(source),
+                         med,
+                         yerr=([neg], [pos]),
+                         label=source,
+                         width=bar_width, color=source_cols[source], alpha=1.0)
+            # ax.errorbar(vars.index(var) + bar_width*sources.index(source),
+            #             med, yerr=([neg], [pos]),
+                        # fmt='none', color='black')
+            # ax.bar_label(bar, padding=10, fmt='%.2f')
+            med_r = np.around(med, decimals=2)
+            pos_r = np.around(pos, decimals=2)
+            neg_r = np.around(neg, decimals=2)
+            str_Result = r'${%s}^{+{%s}}_{-{%s}}$' % (med_r, pos_r, neg_r)
+            ax.bar_label(bar, labels=[str_Result], padding=10)
+    
+
+    ax.set_xticks(np.arange(len(vars)), vars)
+    ax.set_ylabel(f'Contributions to {period} warming relative to 1850-1900')

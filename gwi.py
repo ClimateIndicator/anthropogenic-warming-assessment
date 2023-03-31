@@ -232,6 +232,7 @@ def GWI(model_choice, variables, inc_reg_const,
     # InternalVariability, ObservedTemperatures
     # NOTE: the order in dimension is:
     # 'GHG, NAT, OHF, CONST, ANT, TOTAL, RESIDUAL, Temp_PiC, Temp_Obs'
+    vars = ['GHG', 'Nat', 'OHF', 'Const', 'Ant', 'Tot', 'Res', 'PiC', 'Obs']
     temp_Att_Results = np.zeros(
       (173,  # years
        len(variables) + int(inc_reg_const) + 5,  # variables
@@ -372,7 +373,7 @@ def GWI(model_choice, variables, inc_reg_const,
                         )
     temp_Att_Results[:, -5, :] = _temp_Ant_Results
 
-    return temp_Att_Results, coef_Reg_Results
+    return temp_Att_Results, coef_Reg_Results, vars
 
 
 def moving_average(data, w):
@@ -582,8 +583,8 @@ if __name__ == "__main__":
             n=min(samples, df_temp_PiC.shape[1]), axis=1)
         print('Internal variability ensembles pruned: '
               f'{df_temp_PiC_subset.shape[1]}')
-        
-        temp_Att_Results, coef_Reg_Results = GWI(
+
+        temp_Att_Results, coef_Reg_Results, vars = GWI(
             model_choice,
             forc_Group_names,
             inc_reg_const,
@@ -593,320 +594,184 @@ if __name__ == "__main__":
             df_temp_Obs_subset,
             start_yr,
             end_yr)
+        n = temp_Att_Results.shape[2]
 
-        np.save('results/temp_Att_Results.npy', temp_Att_Results)
-        np.save('results/coef_Reg_Results.npy', coef_Reg_Results)
+        # FILTER RESULTS ##############################################################
+        # For diagnosing: filter out results with particular regression coefficients.
 
-    elif calc_switch == 'n':
-        temp_Att_Results = np.load('results/temp_Att_Results.npy')
-        coef_Reg_Results = np.load('results/coef_Reg_Results.npy')
+        # If you only want to study subsets of the results based on certain constraints
+        # apply a mask here. The below mask is set to look at results for different
+        # values of the coefficients.
 
-    else:
-        print(f'{calc_switch} not valid; exiting script.')
-        sys.exit()
+        # Note to self about masking: coef_Reg_Results is the array of all regression
+        # coefficients, with shape (4, n), where n is total number of samplings.
+        # We select slice indices (forcing coefficients) we're interested in basing the
+        # condition on:
+        # AER is index 0, GHGs index 1, NAT index 2, Const index 3
+        # Then choose whether you want any or all or the coefficients to meet the
+        # condition (in this case being less than zero)
+        mask_switch = False
+        if mask_switch:
+            coef_mask = np.all(coef_Reg_Results[[0, 2], :] <= 0, axis=0)
+            # mask = np.any(coef_Reg_Results[[0], :] <= 0.0, axis=0)
 
-    n = temp_Att_Results.shape[2]
+            temp_Att_Results = temp_Att_Results[:, :, coef_mask]
+            coef_Reg_Results = coef_Reg_Results[:, coef_mask]
+            print(f'Shape of masked attribution results: {temp_Att_Results.shape}')
+
+        # np.save('results/temp_Att_Results.npy', temp_Att_Results)
+        # np.save('results/coef_Reg_Results.npy', coef_Reg_Results)
+
+
+        # PRODUCE FINAL RESULTS DATASETS ##########################################
+
+        # WARNING TO SELF: multidimensional np.percentile() changes the order
+        # of the axes, so that the axis along which you took the percentiles is
+        # now the first axis, and the other axes are the remaining axes. This
+        # doesn't make any sense to me why this would be useful, but it is what
+        # it is...
+
+        # TIMESERIES RESULTS
+        gwi_timeseries_array = np.percentile(
+            temp_Att_Results, sigmas_all, axis=2)
+        dict_Results = {
+            (var, sigma):
+            gwi_timeseries_array[sigmas_all.index(sigma), :, vars.index(var)]
+            for var in vars for sigma in sigmas_all
+        }
+        df_Results = pd.DataFrame(dict_Results, index=temp_Yrs)
+        df_Results.columns.names = ['variable', 'percentile']
+        df_Results.index.name = 'Year'
+        df_Results.to_csv(f'results/GWI_results_timeseries_{n}.csv')
+
+        # HEADLINE RESULTS
+        dfs = [df_Results.loc[[2019]], df_Results.loc[[2022]]]
+        for years in [[2010, 2019], [2013, 2022]]:
+            recent_years = ((years[0] <= temp_Yrs) * (temp_Yrs <= years[1]))
+            temp_Att_Results_recent = temp_Att_Results[recent_years, :, :].mean(axis=0)
+            # Obtain statistics
+            gwi_headline_array = np.percentile(
+                temp_Att_Results_recent, sigmas_all, axis=1)
+            dict_Results = {
+                (var, sigma):
+                gwi_headline_array[sigmas_all.index(sigma), vars.index(var)]
+                for var in vars for sigma in sigmas_all
+            }
+            df_headlines_i = pd.DataFrame(
+                dict_Results, index=['-'.join([str(y) for y in years])])
+            df_headlines_i.columns.names = ['variable', 'percentile']
+            df_headlines_i.index.name = 'Year'
+            dfs.append(df_headlines_i)
+
+        df_headlines = pd.concat(dfs, axis=0)
+        df_headlines.to_csv(f'results/GWI_results_headlines_{n}.csv')
 
     t2 = dt.datetime.now()
     print(f'Total calculation took {t2-t1}')
 
-    # FILTER RESULTS ##############################################################
-    # For diagnosing: filter out results with particular regression coefficients.
-
-    # If you only want to study subsets of the results based on certain constraints
-    # apply a mask here. The below mask is set to look at results for different
-    # values of the coefficients.
-
-    # Note to self about masking: coef_Reg_Results is the array of all regression
-    # coefficients, with shape (4, n), where n is total number of samplings.
-    # We select slice indices (forcing coefficients) we're interested in basing the
-    # condition on:
-    # AER is index 0, GHGs index 1, NAT index 2, Const index 3
-    # Then choose whether you want any or all or the coefficients to meet the
-    # condition (in this case being less than zero)
-    mask_switch = False
-    if mask_switch:
-        coef_mask = np.all(coef_Reg_Results[[0, 2], :] <= 0, axis=0)
-        # mask = np.any(coef_Reg_Results[[0], :] <= 0.0, axis=0)
-
-        temp_Att_Results = temp_Att_Results[:, :, coef_mask]
-        coef_Reg_Results = coef_Reg_Results[:, coef_mask]
-        print(f'Shape of masked attribution results: {temp_Att_Results.shape}')
+    # temp_Att_Results = np.load('results/temp_Att_Results.npy')
+    # coef_Reg_Results = np.load('results/coef_Reg_Results.npy')
+    files = os.listdir('results')
+    file_ts = [f for f in files if 'GWI_results_timeseries' in f][0]
+    file_hs = [f for f in files if 'GWI_results_headlines' in f][0]
+    df_Results_ts = pd.read_csv(f'results/{file_ts}',
+                                index_col=0,  header=[0, 1])
+    df_Results_hl = pd.read_csv(f'results/{file_hs}',
+                                index_col=0,  header=[0, 1])
+    n = file_ts.split('.csv')[0].split('_')[-1]
+    print(n)
 
 
-    ###############################################################################
-    # PLOT RESULTS ################################################################
-    ###############################################################################
+    ###########################################################################
+    # PLOT RESULTS ############################################################
+    ###########################################################################
 
-    # GWI PLOT ####################################################################
-    print('Creating GWI Plot...')
-
+    # GWI MULTI PLOT ##########################################################
+    print('Creating GWI Multi Plot...')
     fig = plt.figure(figsize=(15, 10))
     ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
     ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
     ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
     ax4 = plt.subplot2grid(shape=(3, 4), loc=(2, 3), rowspan=1, colspan=1)
-
-    # Plot the dependent temperature range
-
-    temp_PiC_unique = np.unique(temp_Att_Results[:, -2, :], axis=1)
-    temp_PiC_prcntls = np.percentile(temp_PiC_unique, sigmas_all, axis=1)
-    print(temp_PiC_unique.shape)
-    # Plot the piControl temperatures as a filled area
-    for p in range(len(sigmas)):
-        ax1.fill_between(temp_Yrs,
-                        temp_PiC_prcntls[p, :],
-                        temp_PiC_prcntls[-(p+2), :],
-                        color='gray', alpha=0.1)
-    ax1.plot(temp_Yrs, temp_PiC_prcntls[-1, :],
-            color='gray', alpha=0.8,
-            label='PiC')
-
-    # Plot the observed temperatures on top as a scatter
-    err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
-            df_temp_Obs.quantile(q=0.5, axis=1))
-    err_neg = (df_temp_Obs.quantile(q=0.5, axis=1) -
-            df_temp_Obs.quantile(q=0.05, axis=1))
-    ax1.errorbar(temp_Yrs, df_temp_Obs.quantile(q=0.5, axis=1),
-                yerr=(err_neg, err_pos),
-                fmt='o', color='gray', ms=2.5, lw=1,
-                label='Reference Temp: HadCRUT5')
-    t2a = dt.datetime.now()
-    print(f'Dependent temperatures took {t2a-t2}')
-
-    # Plot the attribution results
-    # Select which components we want:
-    # gwi_component_name = ['GHG', 'Nat', 'OHF', 'Ant']
-    # gwi_component_list = [0, 1, 2, -5]
-
-
-    gwi_plot_names = ['TOT', 'Ant', 'GHG', 'Nat', 'OHF', 'Res']
-
-    gwi_plot_colours = ['xkcd:magenta', 'xkcd:crimson',
-                        'xkcd:teal', 'xkcd:azure', 'xkcd:goldenrod',
-                        'gray', 'gray']
-
-    gwi_plot_components = [-4, -5, 0, 1, 2, -3]
-
-    gwi_prcntls = np.percentile(temp_Att_Results[:, gwi_plot_components, :],
-                                sigmas_all, axis=2)
-    # WARNING TO SELF: multidimensional np.percentile() changes the order of
-    # the axes, so that the axis along which you took the percentiles is now
-    # the first axis, and the other axes are the remaining axes. This doesn't
-    # make any sense to me why this would be useful, but it is what it is...
-    for c in range(len(gwi_plot_names)):
-        if gwi_plot_names[c] in {'Ant', 'GHG', 'Nat', 'OHF'}:
-            for p in range(len(sigmas)):
-                ax1.fill_between(temp_Yrs,
-                                gwi_prcntls[p, :, c], gwi_prcntls[-(p+2), :, c],
-                                color=gwi_plot_colours[c],
-                                alpha=0.1
-                                )
-            ax1.plot(temp_Yrs, gwi_prcntls[-1, :, c],
-                    color=gwi_plot_colours[c],
-                    label=gwi_plot_names[c]
-                    )
-    ax1.set_ylabel('Warming Anomaly (°C)')
-    t2b = dt.datetime.now()
-    print(f'Independent temperatures took {t2b-t2a}')
-
-    # Residuals ###################################################################
-    Res_i = gwi_plot_names.index('Res')
-    for p in range(len(sigmas)):
-        ax3.fill_between(temp_Yrs,
-                        gwi_prcntls[p, :, Res_i], gwi_prcntls[-(p+2), :, Res_i],
-                        color='gray', alpha=0.1)
-
-    ax3.plot(temp_Yrs, gwi_prcntls[-1, :, Res_i], color='gray',)
-    ax3.plot(temp_Yrs, np.zeros(len(temp_Yrs)),
-            color='xkcd:magenta', alpha=1.0)
-    ax3.set_ylabel('Regression Residuals (°C)')
-    t2c = dt.datetime.now()
-    print(f'Residuals plot took {t2c-t2b}')
-
-
-    # Distributions ###############################################################
-    for c in range(len(gwi_plot_names)):
-        if gwi_plot_names[c] in {'Ant', 'GHG', 'Nat', 'OHF'}:
-            # binwidth = 0.01
-            # bins = np.arange(np.min(temp_Att_Results[-1, gwi_plot_components[i], :]),
-            #                  np.max(temp_Att_Results[-1, gwi_plot_components[i], :]) + binwidth,
-            #                  binwidth)
-            # ax2.hist(temp_Att_Results[-1, gwi_plot_components[i], :], bins=bins,
-            #          density=True, orientation='horizontal',
-            #          color=gwi_plot_colours[i],
-            #          alpha=0.3
-            #          )
-            density = ss.gaussian_kde(
-                temp_Att_Results[-1, gwi_plot_components[c], :])
-            x = np.linspace(
-                temp_Att_Results[-1, gwi_plot_components[c], :].min(),
-                temp_Att_Results[-1, gwi_plot_components[c], :].max(),
-                100)
-            y = density(x)
-            # ax2.plot(y, x, color=gwi_plot_colours[i], alpha=0.7)
-            ax2.fill_betweenx(x, np.zeros(len(y)), y,
-                            color=gwi_plot_colours[c], alpha=0.3)
-
-    # Add PiC PDF
-    density = ss.gaussian_kde(
-                temp_PiC_unique[-1, :])
-    x = np.linspace(
-        temp_PiC_unique[-1, :].min(),
-        temp_PiC_unique[-1, :].max(),
-        100)
-    y = density(x)
-    ax2.fill_betweenx(x, np.zeros(len(y)), y,
-                        color='gray', alpha=0.3)
-
-    # bins = np.arange(np.min(temp_Att_Results[-1, -5, :]),
-    #                  np.max(temp_Att_Results[-1, -5, :]) + binwidth,
-    #                  binwidth)
-    # ax2.hist(temp_Att_Results[-1, -5, :], bins=bins,
-    #          density=True, orientation='horizontal',
-    #          color='pink', alpha=0.3
-    #          )
-
-    # bins = np.arange(np.min(temp_Att_Results[-1, -4, :]),
-    #                  np.max(temp_Att_Results[-1, -4, :]) + binwidth,
-    #                  binwidth)
-    # ax2.hist(temp_Att_Results[-1, -4, :], bins=bins,
-    #          density=True, orientation='horizontal',
-    #          color='gray', alpha=0.3
-    #          )
-
-
-    ax2.set_title(f'PDF in {end_yr}')
     ax2.set_ylim(ax1.get_ylim())
-
-    t2d = dt.datetime.now()
-    print(f'Distributions took {t2d-t2c}')
-
-    # Plotting anthropogenic vs total warming #####################################
-    ax4.plot([-0.2, 1.5], [-0.2, 1.5], color='gray', alpha=0.7)
-
-    # for p in range(len(sigmas)):
-    #     ax4.plot(gwi_prcntls[p, :, gwi_plot_names.index('Ant')],
-    #              gwi_prcntls[p, :, gwi_plot_names.index('TOT')],
-    #              color='xkcd:magenta', alpha=0.7)
-
-    ax4.plot(gwi_prcntls[-1, :, gwi_plot_names.index('Ant')],
-            gwi_prcntls[-1, :, gwi_plot_names.index('TOT')],
-            color='xkcd:magenta', alpha=0.7)
-
-
-    ax4.set_xlabel('Ant')
-    ax4.set_ylabel('TOT')
-    ax4.set_xlim(-0.2, 1.5)
-    ax4.set_ylim(-0.2, 1.5)
-
-    # Make the headline result...
-    gwi = np.around(np.percentile(temp_Att_Results[-1, -4, :], (50)), decimals=2)
-    gwi_pls = np.around(np.percentile(temp_Att_Results[-1, -4, :], (95)) -
-                        np.percentile(temp_Att_Results[-1, -4, :], (50)),
-                        decimals=2)
-    gwi_min = np.around(np.percentile(temp_Att_Results[-1, -4, :], (50)) -
-                        np.percentile(temp_Att_Results[-1, -4, :], (5)),
-                        decimals=2)
-
-    str_GWI = r'${%s}^{+{%s}}_{-{%s}}$' % (gwi, gwi_pls, gwi_min)
-    # str_temp_Obs = r'${%s}^{+{%s}}_{-{%s}}$' % (tmp, tmp_pls, tmp_min)
-    # fig.text(s=(f'Warming in {end_yr}: ' +
-    #             f'human-induced-warming = {str_GWI} (°C)'),
-    #             # f'observed warming = {str_temp_Obs}'),
-    #          y=0.9, x=0.5, horizontalalignment='center')
-    ax1.set_title(f'Warming in {end_yr}: ' +
-                f'human-induced-warming = {str_GWI} (°C)')
-    fig.suptitle(f'Global Warming Index ({n} samplings)')
+    # vars = ['GHG', 'Nat', 'OHF', 'Const', 'Ant', 'Tot', 'Res', 'PiC', 'Obs']
+    plot_vars = ['Ant', 'GHG', 'Nat', 'OHF',]
+    plot_cols = {'Tot': 'xkcd:magenta',
+                 'Ant': 'xkcd:crimson',
+                 'GHG': 'xkcd:teal',
+                 'Nat': 'xkcd:azure',
+                 'OHF': 'xkcd:goldenrod',
+                 'Res': 'gray'}
+    gr.gwi_timeseries(ax1,
+                      df_temp_Obs, df_temp_PiC, df_Results_ts,
+                      plot_vars, plot_cols)
+    gr.gwi_residuals(ax3, df_Results_ts)
+    gr.gwi_tot_vs_ant(ax4, df_Results_ts)
     gr.overall_legend(fig, 'lower center', 6)
-    fig.savefig(f'{plot_folder}2_GWI_Ant.png')
+    fig.suptitle(f'GWI Timeseries Plot for {n} runs')
+    fig.savefig(f'{plot_folder}2_GWI_timeseries_multiplot.png')
+    
+    # GWI SIMPLE PLOT #########################################################
+    print('Creating GWI Simple Plot...')
+    fig = plt.figure(figsize=(15, 10))
+    ax1 = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
+    plot_vars = ['Ant', 'GHG', 'Nat', 'OHF',]
+    gr.gwi_timeseries(ax1,
+                      df_temp_Obs, df_temp_PiC, df_Results_ts,
+                      plot_vars, plot_cols)
+    gr.overall_legend(fig, 'lower center', 6)
+    fig.suptitle(f'GWI Timeseries Plot for {n} runs')
+    fig.savefig(f'{plot_folder}2_GWI_timeseries.png')
 
-    # Save a zoomed version from 1950 onwards
-    ax1.set_xlim(1950, end_yr)
-    ax3.set_xlim(1950, end_yr)
-    fig.savefig(f'{plot_folder}2_GWI_Ant_(1950_onwards).png')
-    t3 = dt.datetime.now()
-    print(f'... all took {t3-t2}')
 
-
-
-    ###############################################################################
+    ###########################################################################
     # Recreate IPCC AR6 SPM.2 Plot
     # https://www.ipcc.ch/report/ar6/wg1/downloads/report/IPCC_AR6_WGI_SPM.pdf
-    ###############################################################################
-    print('Creating IPCC Comparison Bar Plot...', end=' ')
-    SPM2_list = ['TOT', 'Ant', 'GHG', 'Nat', 'OHF', 'PiC']
-    # Note that the central estimate for aerosols isn't given; only the range is
-    # specified; a pixel ruler was used on the pdf to get the rough central value.
-    SPM2_med = [1.09,
-                1.07,
-                1.50,
-                0.00,
-                (-250/310)*0.5,
-                0.00]
-    SPM2_neg = [1.09-0.95,
-                1.07-0.80,
-                1.50-1.00,
-                0.00-(-0.10),
-                ((-250/310)*0.5) - (-0.80),
-                0.20]
-    SPM2_pos = [1.20-1.09,
-                1.30-1.07,
-                2.00-1.50,
-                0.10-0.00,
-                0.00-((-250/310)*0.5),
-                0.20]
+    ###########################################################################
+    print('Creating SPM.2 Plot')
+    df_IPCC = pd.DataFrame({
+        # (VARIABLE, PERCENTILE): VALUE
+        ('Tot', '50.0'): 1.09,
+        ('Tot',  '5.0'): 0.95,
+        ('Tot', '95.0'): 1.20,
+        ('Ant', '50.0'): 1.07,
+        ('Ant',  '5.0'): 0.80,
+        ('Ant', '95.0'): 1.30,
+        ('GHG', '50.0'): 1.50,
+        ('GHG',  '5.0'): 1.00,
+        ('GHG', '95.0'): 2.00,
+        ('Nat', '50.0'): 0.00,
+        ('Nat',  '5.0'): -0.10,
+        ('Nat', '95.0'): 0.10,
+        ('OHF', '50.0'): (-250/310)*0.5,
+        ('OHF',  '5.0'): -0.80,
+        ('OHF', '95.0'): 0.00,
+        ('PiC', '50.0'): 0.00,
+        ('PiC',  '5.0'): -0.20,
+        ('PiC', '95.0'): 0.20,
+    }, index=['2010-2019'])
+    df_IPCC.columns.names = ['variable', 'percentile']
+    df_IPCC.index.name = 'Year'
+    # Note that the central estimate for OHF isn't given; only the range is
+    # specified; a pixel ruler was used on the pdf to get the rough central
+    # value.
 
-    recent_years = ((2010 <= temp_Yrs) * (temp_Yrs < 2020))
-    recent_components = [-4, -5, 0, 1, 2, -2]
-    # Simultaneously index two dimensions using lists (one indices, one booleans)
-    idx = np.ix_(recent_years, recent_components)
-    temp_Att_Results_recent = temp_Att_Results[idx].mean(axis=0)
-    # Obtain statistics
-    recent_med = np.percentile(temp_Att_Results_recent[:], (50), axis=1)
-    recent_neg = recent_med - \
-        np.percentile(temp_Att_Results_recent[:], (5), axis=1)
-    recent_pos = np.percentile(temp_Att_Results_recent[:], (95), axis=1) - \
-        recent_med
+    dict_dfs_SPM2 = {'Walsh': df_Results_hl,
+                     'IPCC AR6 WG1': df_IPCC,
+                    #  'Gillett': df_IPCC
+                     }
+    source_cols = {'Walsh': '#9bd6fa',
+                   'IPCC AR6 WG1': '#4a8fcc',
+                #    'Gillett': 'orange'
+                   }
+    vars_SPM2 = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
 
-    recent_x_axis = np.arange(len(SPM2_list))
-    bar_width = 0.3
-
-    # Plot SPM2 data
     fig = plt.figure(figsize=(15, 10))
-    ax = plt.subplot2grid(
-        shape=(1, 1), loc=(0, 0),
-        # rowspan=1, colspan=3
-        )
-    bars1 = ax.bar(recent_x_axis-bar_width/2, SPM2_med,
-                yerr=(SPM2_neg, SPM2_pos),
-                label='AR6 WG1 SPM.2',
-                width=bar_width, color='#4a8fcc', alpha=1.0)
-    # ax.errorbar(recent_x_axis-bar_width/2, SPM2_med,
-    #             yerr=(SPM2_neg, SPM2_pos),
-    #             fmt='none', color='black')
-    # Plot GWI data
-    bars2 = ax.bar(recent_x_axis+bar_width/2,
-                recent_med,
-                yerr=(recent_neg, recent_pos),
-                label='GWI',
-                width=bar_width, color='xkcd:azure', alpha=0.4)
-    # ax.errorbar(recent_x_axis+bar_width/2, recent_med,
-    #             yerr=(recent_neg, recent_pos),
-    #             fmt='none', color='black')
-
-    ax.bar_label(bars1, padding=10, fmt='%.2f')
-    ax.bar_label(bars2, padding=10, fmt='%.2f')
-
-    ax.set_xticks(recent_x_axis, SPM2_list)
-    ax.set_ylabel('Contributions to 2010-2019 warming relative to 1850-1900')
-    gr.overall_legend(fig, 'lower center', 2)
+    ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=3)
+    gr.Fig_SPM2_plot(ax, '2010-2019', vars_SPM2, dict_dfs_SPM2, source_cols)
+    gr.overall_legend(fig, 'lower center', len(dict_dfs_SPM2.keys()))
     fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
     fig.savefig(f'{plot_folder}4_SPM2_Comparison.png')
-
-    t4 = dt.datetime.now()
-    print(f'took {t4-t3}')
-
 
     sys.exit()
 
@@ -969,9 +834,3 @@ if __name__ == "__main__":
         plt.show()
 
     sys.exit()
-
-
-
-    ###############################################################################
-    # Calculate the historical-only GWI ###########################################
-    ###############################################################################
