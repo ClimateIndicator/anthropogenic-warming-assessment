@@ -6,6 +6,7 @@ import glob
 
 import datetime as dt
 import functools
+import multiprocessing as mp
 
 import numpy as np
 import pandas as pd
@@ -216,9 +217,176 @@ def filter_PiControl(df, timeframes):
 
     return pd.DataFrame(dict_temp_PiC)
 
+
+def GWI_faster(
+        model_choice, inc_reg_const, inc_pi_offset,
+        df_forc, df_params, df_temp_PiC, df_temp_Obs,
+        start_yr, end_yr, start_pi, end_pi):
+    """Calculate the global warming index (GWI)."""
+    """Parallelise over FaIR parameterisations, exploit vectorisation of
+    FaIR model by running all forcings at once through it, and separate
+    regression against observations and piControl to add rather than multiply
+    linear regressions' computational time."""
+
+    variables = df_forc.columns.get_level_values('variable').unique().to_list()
+    ensembles = df_forc.columns.get_level_values("ensemble").unique().to_list()
+
+    # # Prepare results #########################################################
+    n = (df_temp_Obs.shape[1] * df_temp_PiC.shape[1] *
+         len(df_forc.columns.get_level_values("ensemble").unique()) *
+         #  len(df_params.columns.levels[0])
+         1  # only use 1 FaIR parameter set per function call in parallel method
+         )
+    # # Include residuals and totals for sum total and anthropogenic warming in
+    # # the same array as attributed results. +1 each for Ant, TOT, Res,
+    # # InternalVariability, ObservedTemperatures
+    # # NOTE: the order in dimension is:
+    # # 'GHG, NAT, OHF, CONST, ANT, TOTAL, RESIDUAL, Temp_PiC, Temp_Obs'
+    # # vars = ['GHG', 'Nat', 'OHF', 'Const', 'Ant', 'Tot', 'Res', 'PiC', 'Obs']
+    vars = ['GHG', 'Nat', 'OHF', 'Ant', 'Tot', 'Res']
+    temp_Att_Results = np.empty(
+      (end_yr - start_yr + 1,  # years
+       len(variables) + 3,  # variables
+       n),  # samples
+      dtype=np.float32  # make the array smaller in memory
+      )
+    # coef_Reg_Results = np.zeros((len(variables) + int(inc_reg_const), n))
+
+    # slice df_temp_obs dataframe to include years between start_yr and end_yr
+    df_temp_Obs = df_temp_Obs.loc[start_yr:end_yr]
+    # slice df_temp_PiC dataframe to include years between start_yr and end_yr
+    df_temp_PiC = df_temp_PiC.loc[start_yr:end_yr]
+    temp_Yrs = df_temp_Obs.index.to_numpy()
+    forc_Yrs = df_forc.index.to_numpy()
+
+    # Prepare FaIR parameters for this particular model.
+    print(model_choice)
+    params_FaIR = df_params[model_choice]
+    params_FaIR.columns = pd.MultiIndex.from_product(
+        [[model_choice], params_FaIR.columns])
+
+    # Prepare results array for temperatures.
+    temp_Mod_array = np.empty(shape=(forc_Yrs.shape[0],
+                              len(variables),
+                              len(ensembles)))
+
+    # Calculate temperatures from forcings for all ensembles at once,
+    # leveraging FaIR's vectorisation
+    for var in variables:
+        # Select forcings for the specific ensemble member
+        forc_var_All = df_forc.loc[:end_yr, (var, slice(None))]
+
+        # FaIR won't run without emissions or concentrations, so specify
+        # no zero emissions for input.
+        emis_FAIR = fair.return_empty_emissions(
+            df_to_copy=False,
+            start_year=min(forc_Yrs), end_year=end_yr, timestep=1,
+            scen_names=ensembles)
+        # Prepare a FaIR-compatible forcing dataframe
+        forc_FaIR = fair.return_empty_forcing(
+            df_to_copy=False,
+            start_year=min(forc_Yrs), end_year=end_yr, timestep=1,
+            scen_names=ensembles)
+        for ens in ensembles:
+            forc_FaIR[ens] = forc_var_All[(var, ens)].to_numpy()
+        # Run FaIR. Convert output to numpy array for later regression.
+        temp_All = fair.run_FaIR(emissions_in=emis_FAIR,
+                                 forcing_in=forc_FaIR,
+                                 thermal_parameters=params_FaIR,
+                                 show_run_info=False)['T'].to_numpy()
+        temp_Mod_array[:, variables.index(var), :] = temp_All
+
+    i = 0
+    for ens in range(len(ensembles)):
+        # Cut the full-forcing-length temperatures down to the same length as
+        # the other temperature data
+        yr_mask = ((forc_Yrs >= start_yr) & (forc_Yrs <= end_yr))
+        temp_Mod = temp_Mod_array[yr_mask, :, ens]
+
+        # Remove pre-industrial offset before regression
+        if inc_pi_offset:
+            _ofst = temp_Mod[(temp_Yrs >= start_pi) &
+                             (temp_Yrs <= end_pi), :
+                             ].mean(axis=0)
+            temp_Mod = temp_Mod - _ofst
+
+        # Decide whether to include a Constant offset term in regression
+        if inc_reg_const:
+            temp_Mod = np.append(temp_Mod,
+                                 np.ones((temp_Mod.shape[0], 1)),
+                                 axis=1)
+        n_reg_vars = temp_Mod.shape[1]
+
+        coef_Obs_Results = np.empty((temp_Mod.shape[1],
+                                     df_temp_Obs.shape[1]))
+        coef_PiC_Results = np.empty((temp_Mod.shape[1],
+                                     df_temp_PiC.shape[1]))
+
+        c_i = 0
+        for temp_Obs_Ens in df_temp_Obs.columns:
+            temp_Obs_i = df_temp_Obs[temp_Obs_Ens].to_numpy()
+            coef_Obs_i = np.linalg.lstsq(temp_Mod, temp_Obs_i, rcond=None)[0]
+            coef_Obs_Results[:, c_i] = coef_Obs_i
+            c_i += 1
+
+        c_j = 0
+        for temp_PiC_Ens in df_temp_PiC.columns:
+            temp_PiC_j = df_temp_PiC[temp_PiC_Ens].to_numpy()
+            coef_PiC_j = np.linalg.lstsq(temp_Mod, temp_PiC_j, rcond=None)[0]
+            coef_PiC_Results[:, c_j] = coef_PiC_j
+            c_j += 1
+
+        for c_k in range(coef_Obs_Results.shape[1]):
+            for c_l in range(coef_PiC_Results.shape[1]):
+                # Regression coefficients
+                coef_Reg = (coef_Obs_Results[:, c_k] +
+                            coef_PiC_Results[:, c_l])
+                # Attributed warming for each component
+                temp_Att = temp_Mod * coef_Reg
+
+                # Extract T_Obs and T_PiC data for this c_i, c_j combo.
+                temp_Obs_kl = df_temp_Obs[df_temp_Obs.columns[c_k]
+                                          ].to_numpy()
+                # temp_PiC_kl = df_temp_PiC[df_temp_PiC.columns[c_l]
+                #                           ].to_numpy()
+
+                # Save outputs from the calculation:
+                # Regression coefficients
+                # coef_Reg_Results[:, i] = coef_Reg
+
+                # Attributed warming for each component
+                temp_Att_Results[:, :(n_reg_vars-(1*inc_reg_const)), i] = \
+                    temp_Att[:, :-1]
+
+                # # Actual piControl IV sample that used for this c_k, c_l
+                # temp_Att_Results[:, -2, i] = temp_PiC_kl
+                # # The temp_Obs (dependent var) for this c_k, c_l
+                # temp_Att_Results[:, -1, i] = temp_Obs_kl
+                # TOTAL
+                temp_Tot = temp_Att.sum(axis=1)
+                temp_Att_Results[:, -2, i] = temp_Tot
+                # RESIDUAL
+                temp_Att_Results[:, -1, i] = (temp_Obs_kl - temp_Tot)
+                # ANTROPOGENIC
+                temp_Ant = (temp_Att[:, variables.index('GHG')] +
+                            temp_Att[:, variables.index('OHF')])
+                temp_Att_Results[:, -3, i] = temp_Ant
+
+                # Visual display of pregress through calculation
+                # if i % 1000 == 0:
+                #     percentage = int((i+1)/n*100)
+                #     loading_bar = (percentage // 5*'.' +
+                #                 (20 - percentage // 5)*' ')
+                #     print(f'calculating {loading_bar} {percentage}%', end='\r')
+                i += 1
+
+    # print(f"calculating {20*'.'} {100}%", end='\r')
+    return temp_Att_Results
+
+
 def GWI(
-        model_choice, variables, inc_reg_const,
-        df_forc, params, df_temp_PiC, df_temp_Obs,
+        variables, inc_reg_const,
+        df_forc, df_params, df_temp_PiC, df_temp_Obs,
         start_yr, end_yr):
     """Calculate the global warming index (GWI)."""
     # - BRING start_pi AND end_pi INSIDE THE FUNCTION
@@ -227,7 +395,7 @@ def GWI(
     # Prepare results #########################################################
     n = (df_temp_Obs.shape[1] * df_temp_PiC.shape[1] *
          len(forc_subset.columns.get_level_values("ensemble").unique()) *
-         len(params.columns.levels[0]))
+         len(df_params.columns.levels[0]))
     # Include residuals and totals for sum total and anthropogenic warming in
     # the same array as attributed results. +1 each for Ant, TOT, Res,
     # InternalVariability, ObservedTemperatures
@@ -251,9 +419,9 @@ def GWI(
 
     # Loop over all sampling combinations #####################################
     i = 0
-    for CMIP6_model in params.columns.levels[0].unique():
+    for CMIP6_model in df_params.columns.levels[0].unique():
         # Select the specific model's parameters
-        params_FaIR = params[CMIP6_model]
+        params_FaIR = df_params[CMIP6_model]
         # Since the above line seems to get rid of the top colum level (the
         # model name), and therefore reduce the level to 1, we need to re-add
         # the level=0 column name (the model name) in order for this to be
@@ -325,10 +493,6 @@ def GWI(
                 coef_PiC_Results[:, c_j] = coef_PiC_j
                 c_j += 1
 
-            # coef_Results = np.array([x + y
-            #                          for x in coef_Obs_Results.T
-            #                          for y in coef_PiC_Results.T]).T
-
             for c_k in range(coef_Obs_Results.shape[1]):
                 for c_l in range(coef_PiC_Results.shape[1]):
                     # Regression coefficients
@@ -346,11 +510,11 @@ def GWI(
                     # Save outputs from the calculation:
                     # Regression coefficients
                     coef_Reg_Results[:, i] = coef_Reg
-                    
+
                     # Attributed warming for each component
                     temp_Att_Results[:, :(n_reg_vars-(1*inc_reg_const)), i] = \
                         temp_Att[:, :-1]
-                    
+
                     # # Actual piControl IV sample that used for this c_k, c_l
                     # temp_Att_Results[:, -2, i] = temp_PiC_kl
                     # # The temp_Obs (dependent var) for this c_k, c_l
@@ -571,6 +735,7 @@ if __name__ == "__main__":
             params_subset = Geoff[:, :min(samples, Geoff.shape[1])]
         elif model_choice == 'FaIR_V2':
             params_subset = CMIP6_param_df
+            models = CMIP6_param_df.columns.levels[0].unique().to_list()
 
         # 3. Select random samples of the temperature data
         print(f'Temperature ensembles all: {df_temp_Obs.shape[1]}')
@@ -584,19 +749,46 @@ if __name__ == "__main__":
             n=min(samples, df_temp_PiC.shape[1]), axis=1)
         print('Internal variability ensembles pruned: '
               f'{df_temp_PiC_subset.shape[1]}')
+        
+        T0 = dt.datetime.now()
+        # temp_Att_Results, coef_Reg_Results, vars = GWI(
+        #     forc_Group_names,
+        #     inc_reg_const,
+        #     forc_subset,
+        #     params_subset,
+        #     df_temp_PiC_subset,
+        #     df_temp_Obs_subset,
+        #     start_yr,
+        #     end_yr)
+        T1 = dt.datetime.now()
 
-        temp_Att_Results, coef_Reg_Results, vars = GWI(
-            model_choice,
-            forc_Group_names,
-            inc_reg_const,
-            forc_subset,
-            params_subset,
-            df_temp_PiC_subset,
-            df_temp_Obs_subset,
-            start_yr,
-            end_yr)
+        with mp.Pool(os.cpu_count()) as p:
+            print('Partialising Function')
+            partial_GWI = functools.partial(
+                GWI_faster,
+                inc_reg_const=inc_reg_const,
+                inc_pi_offset=inc_pi_offset,
+                df_forc=forc_subset,
+                df_params=params_subset,
+                df_temp_PiC=df_temp_PiC_subset,
+                df_temp_Obs=df_temp_Obs_subset,
+                start_yr=start_yr,
+                end_yr=end_yr,
+                start_pi=start_pi,
+                end_pi=end_pi,
+            )
+            print('Parallelising Function')
+            results = p.map(partial_GWI, models)
+        vars = df_forc.columns.get_level_values(
+            'variable').unique().to_list()
+        vars.extend(['Ant', 'Tot', 'Res'])
+        temp_Att_Results = np.concatenate(results, axis=2)
+        T2 = dt.datetime.now()
+
+        # print(f'GWI original took {T1 - T0} seconds')
+        print(f'GWI parallel took {T2 - T1} seconds')                      
         n = temp_Att_Results.shape[2]
-        print(temp_Att_Results.dtype)
+        n_parallel = temp_Att_Results.shape[2]
 
         # FILTER RESULTS ##############################################################
         # For diagnosing: filter out results with particular regression coefficients.
