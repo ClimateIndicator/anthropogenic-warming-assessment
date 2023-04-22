@@ -125,36 +125,64 @@ df_AR6_Assessment = pd.DataFrame({
     ('Ant', '50'): 1.07,  # 3.3.1.1.2 p442, and SPM A.1.3
     ('Ant',  '5'): 0.80,  # 3.3.1.1.2 p442, and SPM A.1.3
     ('Ant', '95'): 1.30,  # 3.3.1.1.2 p442, and SPM A.1.3
-    ('GHG', '50'): 1.50,  # 3.3.1.1.2 just used midpoint of likely range
+    ('GHG', '50'): 1.40,  # We introduce multi-method assessment here # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of 1.5
     ('GHG',  '5'): 1.00,  # 3.3.1.1.2 p442, SPM A.1.3
     ('GHG', '95'): 2.00,  # 3.3.1.1.2 p442, SPM A.1.3
-    ('Nat', '50'): 0.00,  # 3.3.1.1.2 just used midpoint of likely range
+    ('Nat', '50'): 0.03,  # We introduce multi-method assessment here # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of 0.0
     ('Nat',  '5'): -0.10,  # 3.3.1.1.2 p442, SPM A.1.3
     ('Nat', '95'): 0.10,  # 3.3.1.1.2 p442, SPM A.1.3
-    ('OHF', '50'): -0.4,  # 3.3.1.1.2 just used midpoint of likely range
+    ('OHF', '50'): -0.32,  # We introduce multi-method assessment here # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of -0.4
     ('OHF',  '5'): -0.80,  # 3.3.1.1.2 p442, SPM A.1.3
     ('OHF', '95'): 0.00,  # 3.3.1.1.2 p442, SPM A.1.3
-    ('PiC', '50'): 0.00,  # 3.3.1.1.2 just used midpoint of likely range
-    ('PiC',  '5'): -0.20,  # 3.3.1.1.2 p443, SPM A.1.3
-    ('PiC', '95'): 0.20,  # 3.3.1.1.2 p443, SPM A.1.3
+    ('Int', '50'): 0.00,  # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of 0.0
+    ('Int',  '5'): -0.20,  # 3.3.1.1.2 p443, SPM A.1.3
+    ('Int', '95'): 0.20,  # 3.3.1.1.2 p443, SPM A.1.3
 }, index=['2010-2019'])
 df_AR6_Assessment.columns.names = ['variable', 'percentile']
 df_AR6_Assessment.index.name = 'Year'
 
+# RESULTS FROM AR6 METHODS ####################################################
+# Data available from https://github.com/ESMValGroup/ESMValTool-AR6-OriginalCode-FinalFigures/blob/ar6_chapter_3_nathan/esmvaltool/diag_scripts/ipcc_ar6/fig3_8.py
+
+
+
 df_AR6_Haustein = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
-    ('Ant', '50'): 1.06,
-    ('Ant',  '5'): 0.94,
-    ('Ant', '95'): 1.22,
+    ('Ant', '50'): 1.064,
+    ('Ant',  '5'): 0.941,
+    ('Ant', '95'): 1.222,
+    ('GHG', '50'): 1.259,
+    ('GHG',  '5'): 1.259,
+    ('GHG', '95'): 1.259,
+    ('Nat', '50'): 0.026,
+    ('Nat',  '5'): 0.001,
+    ('Nat', '95'): 0.069,
+    ('OHF', '50'): -0.195,
+    ('OHF',  '5'): -0.195,
+    ('OHF', '95'): -0.195,
 }, index=['2010-2019'])
 df_AR6_Haustein.columns.names = ['variable', 'percentile']
 df_AR6_Haustein.index.name = 'Year'
+
+
 
 df_AR6_Ribes = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
     ('Ant', '50'): 1.03,
     ('Ant',  '5'): 0.89,
     ('Ant', '95'): 1.17,
+    ('GHG', '50'): 1.44,
+    ('GHG',  '5'): 1.12,
+    ('GHG', '95'): 1.76,
+    ('Nat', '50'): 0.06,
+    ('Nat',  '5'): 0.04,
+    ('Nat', '95'): 0.08,
+    ('OHF', '50'): -0.40,
+    ('OHF',  '5'): -0.69,
+    ('OHF', '95'): -0.12,
+    ('Int', '50'): -0.02,
+    ('Int',  '5'): -0.18,
+    ('Int', '95'): 0.14,
 }, index=['2010-2019'])
 df_AR6_Ribes.columns.names = ['variable', 'percentile']
 df_AR6_Ribes.index.name = 'Year'
@@ -164,15 +192,44 @@ df_AR6_Gillett = pd.DataFrame({
     ('Ant', '50'): 1.11,
     ('Ant',  '5'): 0.92,
     ('Ant', '95'): 1.30,
+    ('GHG', '50'): 1.50,
+    ('GHG',  '5'): 1.06, 
+    ('GHG', '95'): 1.94, 
+    ('Nat', '50'): 0.01,
+    ('Nat',  '5'): -0.02,
+    ('Nat', '95'): 0.05,
+    ('OHF', '50'): -0.37,
+    ('OHF',  '5'): -0.71,
+    ('OHF', '95'): -0.03,
 }, index=['2010-2019'])
 df_AR6_Gillett.columns.names = ['variable', 'percentile']
 df_AR6_Gillett.index.name = 'Year'
+
+df_AR6_Smith = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Ant', '50'): 1.066304612,
+    ('Ant',  '5'): 0.823021383,
+    ('Ant', '95'): 1.353390492,
+    ('GHG', '50'): 1.341781251,
+    ('GHG',  '5'): 0.993864648,
+    ('GHG', '95'): 1.836139027,
+    ('Nat', '50'): 0.073580353,
+    ('Nat',  '5'): 0.04283156,
+    ('Nat', '95'): 0.119195551,
+    ('OHF', '50'): -0.269287921,
+    ('OHF',  '5'): -0.628487091,
+    ('OHF', '95'): -0.026618862,
+}, index=['2010-2019'])
+df_AR6_Smith.columns.names = ['variable', 'percentile']
+df_AR6_Smith.index.name = 'Year'
+
 
 dict_AR6_hl = {
     'Assessment': df_AR6_Assessment,
     'Haustein': df_AR6_Haustein,
     'Ribes': df_AR6_Ribes,
     'Gillett': df_AR6_Gillett,
+    'Smith': df_AR6_Smith,
 }
 
 # Note that the central estimate for OHF isn't given; only the range is
@@ -231,6 +288,6 @@ fig = plt.figure(figsize=(12, 8))
 ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
 gr.Fig_3_8_validation_plot(ax, bar_plot_vars, dict_AR6_hl, dict_updates_hl,
                            source_markers, var_colours)
-gr.overall_legend(fig, 'lower center', 4)
+gr.overall_legend(fig, 'lower center', 5)
 fig.suptitle('Validation of Methodological and Dataset Updates')
 fig.savefig(f'{plot_folder}/3_WG1_Ch3_Validation.png')

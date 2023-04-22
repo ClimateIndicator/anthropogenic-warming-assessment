@@ -382,6 +382,9 @@ def Fig_3_8_validation_plot(
                 alpha=0.5
                 # label=var
                 )
+            ls = (':' if (cycles.index(cycle) == 0 and
+                           var in ['GHG', 'OHF', 'Nat'])
+                  else '-')
             ax.plot(
                 [variables.index(var) + 0.45*cycles.index(cycle),
                  variables.index(var) + 0.45*cycles.index(cycle) + bar_width],
@@ -389,6 +392,8 @@ def Fig_3_8_validation_plot(
                 color=(var_colours['Obs']
                        if (var == 'Tot' and cycles.index(cycle)==0)
                        else var_colours[var]),
+                # Depict that the nest estimates are a new inclusion.
+                ls=ls,
                 lw=2)
 
             # Write str_Result in the middle of the plot
@@ -406,19 +411,23 @@ def Fig_3_8_validation_plot(
             # Plot the individual methods' results
             methods = sorted(list(cycle.keys()))[::-1]
             methods.remove('Assessment')
-
             for method in methods:
                 if var in cycle[method].columns.get_level_values('variable'):
                     med_meth = cycle[method].loc['2010-2019', (var, '50')]
                     min_meth = cycle[method].loc['2010-2019', (var, '5')]
                     max_meth = cycle[method].loc['2010-2019', (var, '95')]
-
-                    ax.errorbar(
+                    test = ax.errorbar(
                         variables.index(var) + 0.45*cycles.index(cycle) + 0.1 + methods.index(method)*(bar_width-0.2)/(len(methods)-1),
                         ([med_meth]),
                         yerr=([med_meth-min_meth], [max_meth-med_meth]),
                         color=var_colours[var], ms=7, lw=2,
-                        label=method, fmt=source_markers[method])
+                        label=method,
+                        fmt=source_markers[method],
+                        )
+                    # Chris Smith's Chapter 7 results aren't included in the
+                    # multimethod assessment, so plot with dashed line
+                    if method == 'Smith':
+                        test[-1][0].set_linestyle('--')
 
     # set the y axis label
     ax.set_ylabel('Attributable change in surface temperature\n' +
