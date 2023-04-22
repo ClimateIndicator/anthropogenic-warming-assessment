@@ -950,209 +950,15 @@ if __name__ == "__main__":
         T5 = dt.datetime.now()
         print(f'... took {T5 - T4} seconds')
 
-
-
-    ###########################################################################
-    # PLOT RESULTS ############################################################
-    ###########################################################################
-
-    # RESULTS FROM ANNUAL UPDATES #############################################
-    # WALSH
-    files = os.listdir('results')
-    file_ts = [f for f in files if 'GWI_results_timeseries' in f][0]
-    file_hs = [f for f in files if 'GWI_results_headlines' in f][0]
-    df_Walsh_ts = pd.read_csv(
-        f'results/{file_ts}', index_col=0,  header=[0, 1])
-    df_Walsh_hl = pd.read_csv(
-        f'results/{file_hs}', index_col=0,  header=[0, 1])
-    n = file_ts.split('.csv')[0].split('_')[-1]
     
-    # RIBES
-    files = os.listdir('results')
-    file_Ribes_ts = [f for f in files if 'Ribes_results_timeseries' in f][0]
-    file_Ribes_hs = [f for f in files if 'Ribes_results_headlines' in f][0]
-    df_Ribes_ts = pd.read_csv(
-        f'results/{file_Ribes_ts}', index_col=0,  header=[0, 1])
-    df_Ribes_hl = pd.read_csv(
-        f'results/{file_Ribes_hs}', index_col=0,  header=[0, 1])
-    
-    # Combine all methods into one dictionary
-    dict_updates_hl = {'Walsh': df_Walsh_hl,
-                       'Ribes': df_Ribes_hl,
-                       }
-    dict_updates_ts = {'Walsh': df_Walsh_ts,
-                       'Ribes': df_Ribes_ts,
-                       }
-
-    # MULTI-METHOD ASSESSMENT - AR6 STYLE
-    # Create a list of the variables in df_Walsh_hl
-    list_of_dfs = []
-    periods_to_assess =  ['2010-2019', '2013-2022']
-    for period in periods_to_assess:
-        dict_updates_Assessment = {}
-
-        variables = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
-
-        for var in variables:
-            print(var)
-            # Find the highest 95%, lowest 5%, and all medians
-            minimum = min([dict_updates_hl[m].loc[period, (var, '5')]
-                        for m in dict_updates_hl.keys()])
-            maximum = max([dict_updates_hl[m].loc[period, (var, '95')]
-                        for m in dict_updates_hl.keys()])
-            medians = [dict_updates_hl[m].loc[period, (var, '50')]
-                    for m in dict_updates_hl.keys()]
-            
-            # Follow AR6 assessment method of best estimate being the mean of the
-            # estimates for each method, and the likely range being the smallest
-            # 0.1C-precision range that envelops the 5-95% range for each method
-            if abs(minimum) > abs(maximum):  # ie if the variable is OHF
-                # swap the variables in order to keep working in-out
-                minimum, maximum = maximum, minimum
-            likely_min = (np.floor(np.sign(minimum) * minimum * 10) / 10 *
-                            np.sign(minimum))
-            # round maximum value in maximum up to the highest 0.1
-            likely_max = (np.ceil(np.sign(maximum) * maximum * 10) / 10 *
-                            np.sign(maximum))
-            
-            if abs(minimum) > abs(maximum):  # ie if the variable is OHF
-                # swap back for notational consistency with other variables
-                minimum, maximum = maximum, minimum
-            # calculate best estimate as mean across methods to 0.01 precision
-            best_est = np.round(np.mean(medians), 2)
-
-            dict_updates_Assessment.update(
-                {(var, '50'): best_est,
-                (var,  '5'): likely_min,
-                (var, '95'): likely_max}
-            )
-        # Create a dataframe
-        df_updates_Assessment = pd.DataFrame(
-            dict_updates_Assessment,index=[period])
-        df_updates_Assessment.columns.names = ['variable', 'percentile']
-        df_updates_Assessment.index.name = 'Year'
-        # Add it to the list
-        list_of_dfs.append(df_updates_Assessment)
-    
-    dict_updates_hl['Assessment'] = pd.concat(list_of_dfs)
-    print(dict_updates_hl['Assessment'])
-
-    # RESULTS FROM AR6 WG1 Ch.3 ###############################################
-    df_AR6_Assessment = pd.DataFrame({
-        # (VARIABLE, PERCENTILE): VALUE
-        ('Tot', '50'): 1.06,  # 3.3.1.1.2 p442 from observations
-        ('Tot',  '5'): 0.88,  # 3.3.1.1.2 p442 from observations
-        ('Tot', '95'): 1.21,  # 3.3.1.1.2 p442 from observations
-        ('Ant', '50'): 1.07,  # 3.3.1.1.2 p442, and SPM A.1.3
-        ('Ant',  '5'): 0.80,  # 3.3.1.1.2 p442, and SPM A.1.3
-        ('Ant', '95'): 1.30,  # 3.3.1.1.2 p442, and SPM A.1.3
-        ('GHG', '50'): 1.50,  # 3.3.1.1.2 just used midpoint of likely range
-        ('GHG',  '5'): 1.00,  # 3.3.1.1.2 p442, SPM A.1.3
-        ('GHG', '95'): 2.00,  # 3.3.1.1.2 p442, SPM A.1.3
-        ('Nat', '50'): 0.00,  # 3.3.1.1.2 just used midpoint of likely range
-        ('Nat',  '5'): -0.10,  # 3.3.1.1.2 p442, SPM A.1.3
-        ('Nat', '95'): 0.10,  # 3.3.1.1.2 p442, SPM A.1.3
-        ('OHF', '50'): -0.4,  # 3.3.1.1.2 just used midpoint of likely range
-        ('OHF',  '5'): -0.80,  # 3.3.1.1.2 p442, SPM A.1.3
-        ('OHF', '95'): 0.00,  # 3.3.1.1.2 p442, SPM A.1.3
-        ('PiC', '50'): 0.00,  # 3.3.1.1.2 just used midpoint of likely range
-        ('PiC',  '5'): -0.20,  # 3.3.1.1.2 p443, SPM A.1.3
-        ('PiC', '95'): 0.20,  # 3.3.1.1.2 p443, SPM A.1.3
-    }, index=['2010-2019'])
-    df_AR6_Assessment.columns.names = ['variable', 'percentile']
-    df_AR6_Assessment.index.name = 'Year'
-
-    df_AR6_Haustein = pd.DataFrame({
-        # (VARIABLE, PERCENTILE): VALUE
-        ('Ant', '50'): 1.06,
-        ('Ant',  '5'): 0.94,
-        ('Ant', '95'): 1.22,
-    }, index=['2010-2019'])
-    df_AR6_Haustein.columns.names = ['variable', 'percentile']
-    df_AR6_Haustein.index.name = 'Year'
-
-    df_AR6_Ribes = pd.DataFrame({
-        # (VARIABLE, PERCENTILE): VALUE
-        ('Ant', '50'): 1.03,
-        ('Ant',  '5'): 0.89,
-        ('Ant', '95'): 1.17,
-    }, index=['2010-2019'])
-    df_AR6_Ribes.columns.names = ['variable', 'percentile']
-    df_AR6_Ribes.index.name = 'Year'
-
-    df_AR6_Gillett = pd.DataFrame({
-        # (VARIABLE, PERCENTILE): VALUE
-        ('Ant', '50'): 1.11,
-        ('Ant',  '5'): 0.92,
-        ('Ant', '95'): 1.30,
-    }, index=['2010-2019'])
-    df_AR6_Gillett.columns.names = ['variable', 'percentile']
-    df_AR6_Gillett.index.name = 'Year'
-
-    dict_AR6_hl = {
-        'Assessment': df_AR6_Assessment,
-        'Haustein': df_AR6_Haustein,
-        'Ribes': df_AR6_Ribes,
-        'Gillett': df_AR6_Gillett,
-    }
-
-    # Note that the central estimate for OHF isn't given; only the range is
-    # specified; a pixel ruler was used on the pdf to get the rough central
-    # value.
-
     # GWI MULTI PLOT ##########################################################
-    print('Creating GWI Multi Plot...')
-    fig = plt.figure(figsize=(15, 10))
-    ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
-    ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
-    ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
-    ax4 = plt.subplot2grid(shape=(3, 4), loc=(2, 3), rowspan=1, colspan=1)
-    ax2.set_ylim(ax1.get_ylim())
-    
-    plot_vars = ['Ant', 'GHG', 'Nat', 'OHF',]
-    var_colours = {'Tot': 'xkcd:magenta',
-                   'Ant': 'xkcd:crimson',
-                   'GHG': 'xkcd:teal',
-                   'Nat': 'xkcd:azure',
-                   'OHF': 'xkcd:goldenrod',
-                   'Res': 'gray',
-                   'Obs': 'gray',
-                   'PiC': 'gray'}
-    # Rose Pine
-    var_colours = {'Tot': '#d7827e',
-                   'Ant': '#b4637a',
-                   'GHG': '#907aa9',
-                   'Nat': '#56949f',
-                   'OHF': '#ea9d34',
-                   'Res': '#9893a5',
-                   'Obs': '#797593',
-                   'PiC': '#cecacd'}
-
-    source_colours = {
-        'Walsh': '#9bd6fa',
-        'IPCC AR6 WG1': '#4a8fcc',
-        'Ribes': 'orange'
-    }
-    period_colours = {
-        '2010-2019': '#e0def4',  # '#4a8fbb',
-        '2013-2022': '#31748f',  # '#4a8fcc',
-        '2022': '#9ccfd8',  # '#9bd6fa'
-        '2017': 'red',
-        '2022 (SR15 definition)': 'orange',
-        '2017 (SR1.5 definition)': 'green',
-    }
-
-    source_markers = {
-        'Haustein': 'o',
-        'Walsh': 'o',
-        'Ribes': 'v',
-        'Gillett': 's',
-        'Smith': 'D'
-    }
-
-
-    bar_plot_vars = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
-
+    # print('Creating GWI Multi Plot...')
+    # fig = plt.figure(figsize=(15, 10))
+    # ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
+    # ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
+    # ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
+    # ax4 = plt.subplot2grid(shape=(3, 4), loc=(2, 3), rowspan=1, colspan=1)
+    # ax2.set_ylim(ax1.get_ylim())
     # gr.gwi_timeseries(ax1,
     #                   df_temp_Obs, df_temp_PiC, df_Walsh_ts,
     #                   plot_vars, var_colours)
@@ -1162,29 +968,6 @@ if __name__ == "__main__":
     # fig.suptitle(f'GWI Timeseries Plot for {n} runs')
     # fig.savefig(f'{plot_folder}2_GWI_timeseries_multiplot.png')
 
-    # PLOT TIMESERIES FOR EACH METHOD #########################################
-    for method in dict_updates_ts.keys():
-        print(f'Creating {method} Simple Plot...')
-        fig = plt.figure(figsize=(12, 8))
-        ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
-        plot_vars = ['Ant', 'GHG', 'Nat', 'OHF',]
-        gr.gwi_timeseries(ax,
-                          df_temp_Obs, df_temp_PiC, dict_updates_ts[method],
-                          plot_vars, var_colours)
-        gr.overall_legend(fig, 'lower center', 6)
-        fig.suptitle(f'{method} Timeseries Plot')
-        fig.savefig(f'{plot_folder}2_{method}_timeseries.png')
-
-    # PLOT THE VALIDATION PLOT
-    print('Creating Fig 3.8 Validation Plot')
-    fig = plt.figure(figsize=(12, 8))
-    ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
-    gr.Fig_3_8_validation_plot(
-        ax, bar_plot_vars, dict_AR6_hl, dict_updates_hl,
-        source_markers, var_colours)
-    gr.overall_legend(fig, 'lower center', 4)
-    fig.suptitle('Validation of Methodological and Dataset Updates')
-    fig.savefig(f'{plot_folder}3_WG1_Ch3_Validation.png')
 
     ###########################################################################
     # Recreate IPCC AR6 SPM.2 Plot
@@ -1220,62 +1003,62 @@ if __name__ == "__main__":
 
     sys.exit()
 
-    # # Plot coefficients #########################################################
-    print('Creating Coefficient Plot...', end=' ')
-    fig = plt.figure(figsize=(15, 10))
-    ax = plt.subplot2grid(
-        shape=(1, 1), loc=(0, 0),
-        # rowspan=1, colspan=3
-        )
+    # # # Plot coefficients #########################################################
+    # print('Creating Coefficient Plot...', end=' ')
+    # fig = plt.figure(figsize=(15, 10))
+    # ax = plt.subplot2grid(
+    #     shape=(1, 1), loc=(0, 0),
+    #     # rowspan=1, colspan=3
+    #     )
 
-    ax.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :],
-            #    color=use_colours,
-            color='xkcd:teal',
-            alpha=0.01, edgecolors='none', s=20)
-    ax.set_xlabel('OHF')
-    ax.set_ylabel('GHG')
-    # plt.ylim(bottom=0)
-    fig.suptitle(f'Coefficients from {n} Samplings')
-    fig.savefig(f'{plot_folder}3_Coefficients.png')
-    t5 = dt.datetime.now()
-    print(f'took {t5-t4}')
+    # ax.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :],
+    #         #    color=use_colours,
+    #         color='xkcd:teal',
+    #         alpha=0.01, edgecolors='none', s=20)
+    # ax.set_xlabel('OHF')
+    # ax.set_ylabel('GHG')
+    # # plt.ylim(bottom=0)
+    # fig.suptitle(f'Coefficients from {n} Samplings')
+    # fig.savefig(f'{plot_folder}3_Coefficients.png')
+    # t5 = dt.datetime.now()
+    # print(f'took {t5-t4}')
 
-    ########### TEST SEABORN
-    plt.close()
+    # ########### TEST SEABORN
+    # plt.close()
 
-    coef_df = pd.DataFrame(coef_Reg_Results.T,
-                        columns=['GHG', 'Nat', 'OHF', 'Const'])
-    # print(coef_df.head())
-    g = sns.PairGrid(coef_df.sample(5000))
-    g.map_upper(sns.scatterplot)
-    g.map_lower(sns.kdeplot)
-    g.map_diag(sns.kdeplot, lw=3, legend=False)
-    g.fig.suptitle('Regression Coefficient Distributions')
-    plt.savefig(f'{plot_folder}SNS_TEST.png')
+    # coef_df = pd.DataFrame(coef_Reg_Results.T,
+    #                     columns=['GHG', 'Nat', 'OHF', 'Const'])
+    # # print(coef_df.head())
+    # g = sns.PairGrid(coef_df.sample(5000))
+    # g.map_upper(sns.scatterplot)
+    # g.map_lower(sns.kdeplot)
+    # g.map_diag(sns.kdeplot, lw=3, legend=False)
+    # g.fig.suptitle('Regression Coefficient Distributions')
+    # plt.savefig(f'{plot_folder}SNS_TEST.png')
 
 
 
-    ############### WHAT IS UP WITH THE NEGATIVE COEFFICIENT FITS...
+    # ############### WHAT IS UP WITH THE NEGATIVE COEFFICIENT FITS...
 
-    for example in range(temp_Att_Results.shape[2]):
-        plt.plot(temp_Yrs, temp_TEST_Sig_Results[:, example],
-            color='black',
-            label='Temp Observation Signal')
-        plt.plot(temp_Yrs, temp_TEST_Ens_Results[:, example],
-            color='black',
-            label='Temp Observation Signal + Internal Variability')
+    # for example in range(temp_Att_Results.shape[2]):
+    #     plt.plot(temp_Yrs, temp_TEST_Sig_Results[:, example],
+    #         color='black',
+    #         label='Temp Observation Signal')
+    #     plt.plot(temp_Yrs, temp_TEST_Ens_Results[:, example],
+    #         color='black',
+    #         label='Temp Observation Signal + Internal Variability')
         
-        for i in range(len(forc_Group_names)):
-            plt.plot(temp_Yrs, temp_Att_Results[:, i, example],
-                color=forc_Group[forc_Group_names[i]]['Colour'],
-                label=str(forc_Group_names[i])
-                )
-        plt.plot(temp_Yrs, temp_TOT_Results[:, example],
-                    color='purple',
-                    label='TOT')
-        plt.title(coef_Reg_Results[:, i])
+    #     for i in range(len(forc_Group_names)):
+    #         plt.plot(temp_Yrs, temp_Att_Results[:, i, example],
+    #             color=forc_Group[forc_Group_names[i]]['Colour'],
+    #             label=str(forc_Group_names[i])
+    #             )
+    #     plt.plot(temp_Yrs, temp_TOT_Results[:, example],
+    #                 color='purple',
+    #                 label='TOT')
+    #     plt.title(coef_Reg_Results[:, i])
 
-        plt.legend()
-        plt.show()
+    #     plt.legend()
+    #     plt.show()
 
-    sys.exit()
+    # sys.exit()
