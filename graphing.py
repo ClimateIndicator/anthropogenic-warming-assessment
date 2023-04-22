@@ -269,22 +269,22 @@ def gwi_pdf(ax):
     #          )
 
 
-def Fig_SPM2_validation_plot(ax, period, vars, dict_dfs, source_cols):
+def Fig_SPM2_validation_plot(ax, period, variables, dict_updates_hl, source_cols):
     """Plot the SPM2 figure."""
-    bar_width = (1.0-0.4)/len(dict_dfs.keys())
-    sources = sorted(list(dict_dfs.keys()))
-    for var in vars:
-        for source in sources:
-            med = dict_dfs[source].loc[period, (var, '50')]
-            neg = med - dict_dfs[source].loc[period, (var, '5')]
-            pos = dict_dfs[source].loc[period, (var, '95')] - med
+    bar_width = (1.0-0.4)/len(dict_updates_hl.keys())
+    methods = sorted(list(dict_updates_hl.keys()))
+    for var in variables:
+        for source in methods:
+            med = dict_updates_hl[source].loc[period, (var, '50')]
+            neg = med - dict_updates_hl[source].loc[period, (var, '5')]
+            pos = dict_updates_hl[source].loc[period, (var, '95')] - med
 
-            bar = ax.bar(vars.index(var) + bar_width*sources.index(source),
+            bar = ax.bar(variables.index(var) + bar_width*methods.index(source),
                          med,
                          yerr=([neg], [pos]),
                          label=source,
                          width=bar_width, color=source_cols[source], alpha=1.0)
-            # ax.errorbar(vars.index(var) + bar_width*sources.index(source),
+            # ax.errorbar(variables.index(var) + bar_width*methods.index(source),
             #             med, yerr=([neg], [pos]),
                         # fmt='none', color='black')
             # ax.bar_label(bar, padding=10, fmt='%.2f')
@@ -294,24 +294,24 @@ def Fig_SPM2_validation_plot(ax, period, vars, dict_dfs, source_cols):
             str_Result = r'${%s}^{+{%s}}_{-{%s}}$' % (med_r, pos_r, neg_r)
             # if med >= 0:
             #     # Automatically place the label above the bar
-            #     padding = 10 + 15*(sources.index(source))
+            #     padding = 10 + 15*(methods.index(source))
             # else:
             #     # Manually set the padding for negative values to put them
             #     # above the x axis
-            #     padding = -80 - 15*(sources.index(source))
-            ax.bar_label(bar, labels=[str_Result], padding=10 + 15*(sources.index(source)))
+            #     padding = -80 - 15*(methods.index(source))
+            ax.bar_label(bar, labels=[str_Result], padding=10 + 15*(methods.index(source)))
             ax.set_ylim(-1.5, 2.5)
 
-    ax.set_xticks(np.arange(len(vars)), vars)
+    ax.set_xticks(np.arange(len(variables)), variables)
     ax.set_ylabel(f'Contributions to {period} warming relative to 1850-1900')
     ax.xaxis.grid(False)
     ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
 
 
-def Fig_SPM2_results_plot(ax, periods, vars, dict_dfs, period_cols):
+def Fig_SPM2_results_plot(ax, periods, variables, dict_updates_hl, period_cols):
     """Plot the SPM2 figure."""
-    bar_width = (1.0-0.4)/(len(dict_dfs.keys())*len(periods))
-    sources = sorted(list(dict_dfs.keys()))
+    bar_width = (1.0-0.4)/(len(dict_updates_hl.keys())*len(periods))
+    methods = sorted(list(dict_updates_hl.keys()))
     labels = {
         '2010-2019': '2010-2019 (AR6 definition)',
         '2013-2022': '2013-2022 (AR6 definition)',
@@ -320,15 +320,15 @@ def Fig_SPM2_results_plot(ax, periods, vars, dict_dfs, period_cols):
         '2017': '2017',
         '2022': '2022',
     }
-    for var in vars:
+    for var in variables:
         for period in periods:
-            for source in sources:
-                med = dict_dfs[source].loc[period, (var, '50')]
-                neg = med - dict_dfs[source].loc[period, (var, '5')]
-                pos = dict_dfs[source].loc[period, (var, '95')] - med
-                bar_loc_offset = bar_width * (sources.index(source) +
+            for source in methods:
+                med = dict_updates_hl[source].loc[period, (var, '50')]
+                neg = med - dict_updates_hl[source].loc[period, (var, '5')]
+                pos = dict_updates_hl[source].loc[period, (var, '95')] - med
+                bar_loc_offset = bar_width * (methods.index(source) +
                                               periods.index(period))
-                bar = ax.bar(vars.index(var) + bar_loc_offset,
+                bar = ax.bar(variables.index(var) + bar_loc_offset,
                              med,
                              yerr=([neg], [pos]),
                              label=labels[period],
@@ -353,23 +353,72 @@ def Fig_SPM2_results_plot(ax, periods, vars, dict_dfs, period_cols):
     # add grid line for x axis
     ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
 
-    ax.set_xticks(np.arange(len(vars)), vars)
+    ax.set_xticks(np.arange(len(variables)), variables)
     ax.set_ylabel(f'Warming contribution (°C)')
     ax.set_ylim(-0.75, 2.0)
 
 
 def Fig_3_8_validation_plot(
-        ax, vars, dict_dfs, source_colours, var_colours):
+        ax, variables, dict_AR6_hl, dict_updates_hl, source_markers, var_colours):
     """Plot AR6 WG1 Ch.3 Fig.3.8"""
 
-    vars = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
-
     bar_width = 0.4
-    sources = sorted(list(dict_dfs.keys()))[::-1]
-    sources.remove('IPCC AR6 WG1')
-    markers = {'Walsh': 'o', 'Ribes': 'v', 'Gillett': 's', 'Smith': 'D',
-               'Haustein': 'o'}
 
+    cycles = [dict_AR6_hl, dict_updates_hl]
+    for var in variables:
+        for cycle in cycles:
+            # Plot the multi-method assessed results for the 2010-2019 period
+            med_assess = cycle['Assessment'].loc['2010-2019', (var, '50')]
+            min_assess = cycle['Assessment'].loc['2010-2019', (var, '5')]
+            max_assess = cycle['Assessment'].loc['2010-2019', (var, '95')]
+
+            ax.fill_between(
+                [variables.index(var) + 0.45*cycles.index(cycle),
+                 variables.index(var) + 0.45*cycles.index(cycle) + bar_width],
+                min_assess, max_assess,
+                color=(var_colours['Obs']
+                       if (var == 'Tot' and cycles.index(cycle)==0)
+                       else var_colours[var]),
+                alpha=0.5
+                # label=var
+                )
+            ax.plot(
+                [variables.index(var) + 0.45*cycles.index(cycle),
+                 variables.index(var) + 0.45*cycles.index(cycle) + bar_width],
+                [med_assess, med_assess],
+                color=(var_colours['Obs']
+                       if (var == 'Tot' and cycles.index(cycle)==0)
+                       else var_colours[var]),
+                lw=2)
+
+            # Write str_Result in the middle of the plot
+            str_Result = r'${%s}^{{%s}}_{{%s}}$' % \
+                (med_assess, max_assess, min_assess)
+            if (var == 'Tot' and cycles.index(cycle) == 0):
+                str_Result = str_Result + '\n(Obs)'
+            ax.text(
+                (variables.index(var) + cycles.index(cycle) * 0.45
+                 + bar_width / 2),
+                0.6,
+                str_Result,
+                ha='center', va='center', color='black')
+
+            # Plot the individual methods' results
+            methods = sorted(list(cycle.keys()))[::-1]
+            methods.remove('Assessment')
+
+            for method in methods:
+                if var in cycle[method].columns.get_level_values('variable'):
+                    med_meth = cycle[method].loc['2010-2019', (var, '50')]
+                    min_meth = cycle[method].loc['2010-2019', (var, '5')]
+                    max_meth = cycle[method].loc['2010-2019', (var, '95')]
+
+                    ax.errorbar(
+                        variables.index(var) + 0.45*cycles.index(cycle) + 0.1 + methods.index(method)*(bar_width-0.2)/(len(methods)-1),
+                        ([med_meth]),
+                        yerr=([med_meth-min_meth], [max_meth-med_meth]),
+                        color=var_colours[var], ms=7, lw=2,
+                        label=method, fmt=source_markers[method])
 
     # set the y axis label
     ax.set_ylabel('Attributable change in surface temperature\n' +
@@ -377,9 +426,9 @@ def Fig_3_8_validation_plot(
     # Remove the ticks from the x axis
     ax.xaxis.grid(False)
     # Set new custom x ticks
-    ax.set_xticks(np.arange(len(vars)) + 0.425)
+    ax.set_xticks(np.arange(len(variables)) + 0.425)
     # Set the x tick labels
-    ax.set_xticklabels(vars)
+    ax.set_xticklabels(variables)
     # Create a title for the plot
     ax.set_title(
         'Results from AR6 WG1 Ch.3 (left) vs Repeat using updates (right)')
@@ -388,97 +437,3 @@ def Fig_3_8_validation_plot(
     ax.axhline(y=0, color='gray', linestyle='-',
             #    linewidth=0.5, alpha=0.7
                )
-
-    for var in vars:
-        # Plot the IPCC AR6 WG1 results for the 2010-2019 period
-        med_IPCC = dict_dfs['IPCC AR6 WG1'].loc['2010-2019', (var, '50')]
-        min_IPCC = dict_dfs['IPCC AR6 WG1'].loc['2010-2019', (var, '5')]
-        max_IPCC = dict_dfs['IPCC AR6 WG1'].loc['2010-2019', (var, '95')]
-
-        ax.fill_between(
-            [vars.index(var), vars.index(var)+bar_width],
-            min_IPCC, max_IPCC,
-            color=var_colours['Obs'] if var == 'Tot' else var_colours[var],
-            alpha=0.5
-            # label=var
-            )
-        ax.plot(
-            [vars.index(var), vars.index(var)+bar_width],
-            [med_IPCC, med_IPCC],
-            color=var_colours['Obs'] if var == 'Tot' else var_colours[var],
-            lw=2)
-
-        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med_IPCC, max_IPCC, min_IPCC)
-        # Write str_Result in the middle of the bar
-        ax.text(
-            vars.index(var) + bar_width/2, 0.6, str_Result,
-            ha='center', va='center', color='black')
-        
-        ###############
-        # Manually add the Table 3.1 values from AR6 for now...
-        dict_Ant_Table_3_1 = {
-            'Haustein': [01.06, 0.94, 1.22],
-            'Ribes': [1.03, 0.89, 1.17],
-            'Gillett': [1.11, 0.92, 1.30],
-        }
-        methods = ['Haustein', 'Ribes', 'Gillett']
-        if var == 'Ant':
-            for s in methods:
-                s_med = dict_Ant_Table_3_1[s][0]
-                s_min = dict_Ant_Table_3_1[s][1]
-                s_max = dict_Ant_Table_3_1[s][2]
-                ax.errorbar(
-                    vars.index(var) + 0.1 + methods.index(s)*(bar_width-0.2)/(len(methods)-1),
-                    ([s_med]),
-                    yerr=([s_med-s_min], [s_max-s_med]),
-                    color=var_colours[var], ms=7, lw=2,
-                    label=s, fmt=markers[s])
-        ###############
-
-
-        # Find the "assessed range" for updated range for each method. 
-        mins = min([dict_dfs[s].loc['2010-2019', (var, '5')] for s in sources])
-        maxs = max([dict_dfs[s].loc['2010-2019', (var, '95')] for s in sources])
-        meds = [dict_dfs[s].loc['2010-2019', (var, '50')] for s in sources]
-        # Follow AR6 assessment method of best estimate being the mean of the
-        # estimates for each method, and the likely range being the smallest
-        # 0.1C-precision range that envelops the 5-95% range for each method
-        if abs(mins) > abs(maxs):  # ie if the variable is OHF
-            # swap the variables in order to keep working in-out
-            mins, maxs = maxs, mins
-        likely_min = (np.floor(np.sign(mins) * mins * 10) / 10 *
-                      np.sign(mins))
-        # round maximum value in maxs up to the highest 0.1
-        likely_max = (np.ceil(np.sign(maxs) * maxs * 10) / 10 *
-                      np.sign(maxs))
-        
-        # calculate best estimate as mean across methods to 0.01 precision
-        best_est = np.round(np.mean(meds), 2)
-        
-        # Plot these
-        ax.fill_between(
-            [vars.index(var)+0.45, vars.index(var)+0.45+bar_width],
-            likely_min, likely_max,
-            color=var_colours[var], alpha=0.5)
-        ax.plot(
-            [vars.index(var)+0.45, vars.index(var)+0.45+bar_width],
-            [best_est, best_est],
-            color=var_colours[var], lw=2)
-
-        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (best_est, likely_max, likely_min)
-        # Write str_Result in the middle of the bar
-        ax.text(
-            vars.index(var) + 0.45 + bar_width/2, 0.6, str_Result,
-            ha='center', va='center', color='black')
-
-        for s in sources:
-            s_med = dict_dfs[s].loc['2010-2019', (var, '50')]
-            s_min = dict_dfs[s].loc['2010-2019', (var, '5')]
-            s_max = dict_dfs[s].loc['2010-2019', (var, '95')]
-
-            ax.errorbar(
-                vars.index(var) + 0.45 + 0.1 + sources.index(s)*(bar_width-0.2)/(len(sources)-1),
-                ([s_med]),
-                yerr=([s_med-s_min], [s_max-s_med]),
-                color=var_colours[var], ms=7, lw=2,
-                label=s, fmt=markers[s])
