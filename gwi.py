@@ -974,16 +974,16 @@ if __name__ == "__main__":
     files = os.listdir('results')
     file_Ribes_ts = [f for f in files if 'Ribes_results_timeseries' in f][0]
     file_Ribes_hs = [f for f in files if 'Ribes_results_headlines' in f][0]
-    df_Ribes_ts = pd.read_csv(f'results/{file_ts}',
+    df_Ribes_ts = pd.read_csv(f'results/{file_Ribes_ts}',
                               index_col=0,  header=[0, 1])
-    df_Ribes_hl = pd.read_csv(f'results/{file_hs}',
+    df_Ribes_hl = pd.read_csv(f'results/{file_Ribes_hs}',
                               index_col=0,  header=[0, 1])
     
     df_IPCC = pd.DataFrame({
         # (VARIABLE, PERCENTILE): VALUE
-        ('Tot', '50'): 1.09,
-        ('Tot',  '5'): 0.95,
-        ('Tot', '95'): 1.20,
+        ('Tot', '50'): 1.06,  # p442, or 1.09 for later period
+        ('Tot',  '5'): 0.88,  # p442 or 0.95
+        ('Tot', '95'): 1.21,  # p442 or 1.20
         ('Ant', '50'): 1.07,
         ('Ant',  '5'): 0.80,
         ('Ant', '95'): 1.30,
@@ -993,7 +993,7 @@ if __name__ == "__main__":
         ('Nat', '50'): 0.00,
         ('Nat',  '5'): -0.10,
         ('Nat', '95'): 0.10,
-        ('OHF', '50'): (-250/310)*0.5,  # or just -0.4...?
+        ('OHF', '50'): -0.4,  # (-250/310)*0.5
         ('OHF',  '5'): -0.80,
         ('OHF', '95'): 0.00,
         ('PiC', '50'): 0.00,
@@ -1055,6 +1055,17 @@ if __name__ == "__main__":
     fig.suptitle(f'GWI Timeseries Plot for {n} runs')
     fig.savefig(f'{plot_folder}2_GWI_timeseries.png')
 
+    # RIBES SIMPLE PLOT #######################################################
+    print('Creating Ribes Simple Plot...')
+    fig = plt.figure(figsize=(12, 8))
+    ax1 = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
+    plot_vars = ['Ant', 'GHG', 'Nat', 'OHF']
+    gr.gwi_timeseries(ax1,
+                      df_temp_Obs, df_temp_PiC, df_Ribes_ts,
+                      plot_vars, plot_cols)
+    gr.overall_legend(fig, 'lower center', 6)
+    fig.suptitle(f'Ribes Timeseries Plot')
+    fig.savefig(f'{plot_folder}2_Ribes_timeseries.png')
 
     ###########################################################################
     # Recreate IPCC AR6 SPM.2 Plot
@@ -1063,18 +1074,21 @@ if __name__ == "__main__":
     print('Creating SPM.2 Plot')
 
     dict_dfs_SPM2 = {'Walsh': df_Walsh_hl,
-                    #  'Ribes': df_Ribes_hl,
+                     'Ribes': df_Ribes_hl,
                      'IPCC AR6 WG1': df_IPCC,
                      }
     source_colours = {
         'Walsh': '#9bd6fa',
         'IPCC AR6 WG1': '#4a8fcc',
-        # 'Ribes': 'orange'
+        'Ribes': 'orange'
     }
     period_colours = {
         '2010-2019': '#e0def4',  # '#4a8fbb',
         '2013-2022': '#31748f',  # '#4a8fcc',
-        '2022': '#9ccfd8'  # '#9bd6fa'
+        '2022': '#9ccfd8',  # '#9bd6fa'
+        '2017': 'red',
+        '2022 (SR15 definition)': 'orange',
+        '2017 (SR1.5 definition)': 'green',
     }
     vars_SPM2 = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
 
@@ -1094,14 +1108,25 @@ if __name__ == "__main__":
     # ax2 = plt.subplot2grid(shape=(1, 4), loc=(0, 1), rowspan=1, colspan=3)
     gr.Fig_SPM2_results_plot(
         ax=ax,
-        periods=['2013-2022', '2022 (SR15 definition)'],
+        periods=['2013-2022', '2022'],
         vars=vars_SPM2,
-        dict_dfs={'Walsh': df_Results_hl},
+        dict_dfs={'Walsh': df_Walsh_hl, 'Ribes': df_Ribes_hl, },
         period_cols=period_colours
         )
     gr.overall_legend(fig, 'lower center', 3)
     fig.suptitle('Assessed contributions to warming relative to 1850–1900')
     fig.savefig(f'{plot_folder}4-1_SPM2_Update_2022.png')
+
+
+    # PLOT THE VALIDATION PLOT
+    fig = plt.figure(figsize=(12, 8))
+    ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
+    gr.Fig_3_8_validation_plot(
+        ax, vars_SPM2, dict_dfs_SPM2, source_colours, plot_cols)
+    gr.overall_legend(fig, 'lower center', len(dict_dfs_SPM2.keys())-1)
+    fig.suptitle('Validation of Methodological and Dataset Updates')
+    fig.savefig(f'{plot_folder}3_WG1_Ch3_Validation.png')
+
 
     sys.exit()
 
