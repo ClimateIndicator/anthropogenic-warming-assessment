@@ -639,7 +639,7 @@ if __name__ == "__main__":
                                      axis=0))
 
     # plot_folder = 'plots/'
-    plot_folder = 'plots/development/'
+    plot_folder = 'plots/gwi/'
 
 
     ###########################################################################

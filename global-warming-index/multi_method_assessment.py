@@ -211,6 +211,7 @@ source_markers = {
 }
 
 
+plot_folder = 'plots/assessment/'
 # PLOT TIMESERIES FOR EACH METHOD #########################################
 for method in dict_updates_ts.keys():
     print(f'Creating {method} Simple Plot...')
@@ -221,7 +222,7 @@ for method in dict_updates_ts.keys():
                       plot_vars, var_colours)
     gr.overall_legend(fig, 'lower center', 6)
     fig.suptitle(f'{method} Timeseries Plot')
-    fig.savefig(f'plots/2_{method}_timeseries.png')
+    fig.savefig(f'{plot_folder}/2_{method}_timeseries.png')
 
 # PLOT THE VALIDATION PLOT
 print('Creating Fig 3.8 Validation Plot')
@@ -232,4 +233,4 @@ gr.Fig_3_8_validation_plot(ax, bar_plot_vars, dict_AR6_hl, dict_updates_hl,
                            source_markers, var_colours)
 gr.overall_legend(fig, 'lower center', 4)
 fig.suptitle('Validation of Methodological and Dataset Updates')
-fig.savefig('plots/3_WG1_Ch3_Validation.png')
+fig.savefig(f'{plot_folder}/3_WG1_Ch3_Validation.png')
