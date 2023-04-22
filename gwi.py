@@ -728,7 +728,7 @@ if __name__ == "__main__":
     calc_switch = input('Recalculate? y/n: ')
 
     if calc_switch == 'y':
-        samples = int(input('numer of samples (0-200): '))
+        samples = int(input('Number of samples for each source (0-200): '))
         # Select random sub-set sampling of all ensemble members:
 
         # 1. Select random samples of the forcing data
@@ -965,61 +965,20 @@ if __name__ == "__main__":
     # PLOT RESULTS ############################################################
     ###########################################################################
 
-    # GWI MULTI PLOT ##########################################################
-    print('Creating GWI Multi Plot...')
-    fig = plt.figure(figsize=(15, 10))
-    ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
-    ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
-    ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
-    ax4 = plt.subplot2grid(shape=(3, 4), loc=(2, 3), rowspan=1, colspan=1)
-    ax2.set_ylim(ax1.get_ylim())
-    
-    plot_vars = ['Ant', 'GHG', 'Nat', 'OHF',]
-    plot_cols = {'Tot': 'xkcd:magenta',
-                 'Ant': 'xkcd:crimson',
-                 'GHG': 'xkcd:teal',
-                 'Nat': 'xkcd:azure',
-                 'OHF': 'xkcd:goldenrod',
-                 'Res': 'gray',
-                 'Obs': 'gray',
-                 'PiC': 'gray'}
-    # Rose Pine
-    plot_cols = {'Tot': '#d7827e',
-                 'Ant': '#b4637a',
-                 'GHG': '#907aa9',
-                 'Nat': '#56949f',
-                 'OHF': '#ea9d34',
-                 'Res': '#9893a5',
-                 'Obs': '#797593',
-                 'PiC': '#cecacd'}
-    
-    gr.gwi_timeseries(ax1,
-                      df_temp_Obs, df_temp_PiC, df_Results_ts,
-                      plot_vars, plot_cols)
-    gr.gwi_residuals(ax3, df_Results_ts)
-    gr.gwi_tot_vs_ant(ax4, df_Results_ts)
-    gr.overall_legend(fig, 'lower center', 6)
-    fig.suptitle(f'GWI Timeseries Plot for {n} runs')
-    fig.savefig(f'{plot_folder}2_GWI_timeseries_multiplot.png')
-    
-    # GWI SIMPLE PLOT #########################################################
-    print('Creating GWI Simple Plot...')
-    fig = plt.figure(figsize=(12, 8))
-    ax1 = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
-    plot_vars = ['Ant', 'GHG', 'Nat', 'OHF',]
-    gr.gwi_timeseries(ax1,
-                      df_temp_Obs, df_temp_PiC, df_Results_ts,
-                      plot_vars, plot_cols)
-    gr.overall_legend(fig, 'lower center', 6)
-    fig.suptitle(f'GWI Timeseries Plot for {n} runs')
-    fig.savefig(f'{plot_folder}2_GWI_timeseries.png')
+    # GATHER ALL RESULTS ######################################################
+    # WALSH
+    df_Walsh_hl = df_Results_hl
+    df_Walsh_ts = df_Results_ts
 
-
-    ###########################################################################
-    # Recreate IPCC AR6 SPM.2 Plot
-    # https://www.ipcc.ch/report/ar6/wg1/downloads/report/IPCC_AR6_WGI_SPM.pdf
-    ###########################################################################
-    print('Creating SPM.2 Plot')
+    # RIBES
+    files = os.listdir('results')
+    file_Ribes_ts = [f for f in files if 'Ribes_results_timeseries' in f][0]
+    file_Ribes_hs = [f for f in files if 'Ribes_results_headlines' in f][0]
+    df_Ribes_ts = pd.read_csv(f'results/{file_ts}',
+                              index_col=0,  header=[0, 1])
+    df_Ribes_hl = pd.read_csv(f'results/{file_hs}',
+                              index_col=0,  header=[0, 1])
+    
     df_IPCC = pd.DataFrame({
         # (VARIABLE, PERCENTILE): VALUE
         ('Tot', '50'): 1.09,
@@ -1047,39 +1006,102 @@ if __name__ == "__main__":
     # specified; a pixel ruler was used on the pdf to get the rough central
     # value.
 
-    dict_dfs_SPM2 = {'Walsh': df_Results_hl,
+    # GWI MULTI PLOT ##########################################################
+    print('Creating GWI Multi Plot...')
+    fig = plt.figure(figsize=(15, 10))
+    ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
+    ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
+    ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
+    ax4 = plt.subplot2grid(shape=(3, 4), loc=(2, 3), rowspan=1, colspan=1)
+    ax2.set_ylim(ax1.get_ylim())
+    
+    plot_vars = ['Ant', 'GHG', 'Nat', 'OHF',]
+    plot_cols = {'Tot': 'xkcd:magenta',
+                 'Ant': 'xkcd:crimson',
+                 'GHG': 'xkcd:teal',
+                 'Nat': 'xkcd:azure',
+                 'OHF': 'xkcd:goldenrod',
+                 'Res': 'gray',
+                 'Obs': 'gray',
+                 'PiC': 'gray'}
+    # Rose Pine
+    plot_cols = {'Tot': '#d7827e',
+                 'Ant': '#b4637a',
+                 'GHG': '#907aa9',
+                 'Nat': '#56949f',
+                 'OHF': '#ea9d34',
+                 'Res': '#9893a5',
+                 'Obs': '#797593',
+                 'PiC': '#cecacd'}
+
+    gr.gwi_timeseries(ax1,
+                      df_temp_Obs, df_temp_PiC, df_Results_ts,
+                      plot_vars, plot_cols)
+    gr.gwi_residuals(ax3, df_Results_ts)
+    gr.gwi_tot_vs_ant(ax4, df_Results_ts)
+    gr.overall_legend(fig, 'lower center', 6)
+    fig.suptitle(f'GWI Timeseries Plot for {n} runs')
+    fig.savefig(f'{plot_folder}2_GWI_timeseries_multiplot.png')
+
+    # GWI SIMPLE PLOT #########################################################
+    print('Creating GWI Simple Plot...')
+    fig = plt.figure(figsize=(12, 8))
+    ax1 = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
+    plot_vars = ['Ant', 'GHG', 'Nat', 'OHF',]
+    gr.gwi_timeseries(ax1,
+                      df_temp_Obs, df_temp_PiC, df_Results_ts,
+                      plot_vars, plot_cols)
+    gr.overall_legend(fig, 'lower center', 6)
+    fig.suptitle(f'GWI Timeseries Plot for {n} runs')
+    fig.savefig(f'{plot_folder}2_GWI_timeseries.png')
+
+
+    ###########################################################################
+    # Recreate IPCC AR6 SPM.2 Plot
+    # https://www.ipcc.ch/report/ar6/wg1/downloads/report/IPCC_AR6_WGI_SPM.pdf
+    ###########################################################################
+    print('Creating SPM.2 Plot')
+
+    dict_dfs_SPM2 = {'Walsh': df_Walsh_hl,
+                    #  'Ribes': df_Ribes_hl,
                      'IPCC AR6 WG1': df_IPCC,
-                    #  'Gillett': df_IPCC
                      }
-    source_cols = {'Walsh': '#9bd6fa',
-                   'IPCC AR6 WG1': '#4a8fcc',
-                #    'Gillett': 'orange'
-                   }
+    source_colours = {
+        'Walsh': '#9bd6fa',
+        'IPCC AR6 WG1': '#4a8fcc',
+        # 'Ribes': 'orange'
+    }
+    period_colours = {
+        '2010-2019': '#e0def4',  # '#4a8fbb',
+        '2013-2022': '#31748f',  # '#4a8fcc',
+        '2022': '#9ccfd8'  # '#9bd6fa'
+    }
     vars_SPM2 = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
 
     # Create AR5 SPM2-esque comparison for the same data
     fig = plt.figure(figsize=(12, 8))
     ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=3)
-    gr.Fig_SPM2_plot(ax, '2010-2019', vars_SPM2, dict_dfs_SPM2, source_cols)
+    gr.Fig_SPM2_validation_plot(
+        ax, '2010-2019', vars_SPM2, dict_dfs_SPM2, source_colours)
     gr.overall_legend(fig, 'lower center', len(dict_dfs_SPM2.keys()))
     fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
     fig.savefig(f'{plot_folder}4-0_SPM2_Comparison_2010-2019.png')
 
-    # # Create updated AR6 SPM2-esque plot
-    # fig = plt.figure(figsize=(12, 8))
-    # ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=3)
-    # gr.Fig_SPM2_plot(ax, '2013-2022', vars_SPM2, dict_dfs_SPM2['Walsh'], source_cols)
-    # gr.overall_legend(fig, 'lower center', len(dict_dfs_SPM2.keys()))
-    # fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
-    # fig.savefig(f'{plot_folder}4-1_SPM2_Re-made_2010-2019.png')
-
-    # # Create SRT15-esque bar plot
-    # fig = plt.figure(figsize=(12, 8))
-    # ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=3)
-    # gr.Fig_SPM2_plot(ax, '2022', vars_SPM2, dict_dfs_SPM2['Walsh'], source_cols)
-    # gr.overall_legend(fig, 'lower center', len(dict_dfs_SPM2.keys()))
-    # fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
-    # fig.savefig(f'{plot_folder}4-2_SPM2_Comparison_2022.png')
+    # Create updated AR6 SPM2-esque plot containing results for both
+    # AR6 and SR15 definitions for present-day warming
+    fig = plt.figure(figsize=(12, 8))
+    ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
+    # ax2 = plt.subplot2grid(shape=(1, 4), loc=(0, 1), rowspan=1, colspan=3)
+    gr.Fig_SPM2_results_plot(
+        ax=ax,
+        periods=['2013-2022', '2022 (SR15 definition)'],
+        vars=vars_SPM2,
+        dict_dfs={'Walsh': df_Results_hl},
+        period_cols=period_colours
+        )
+    gr.overall_legend(fig, 'lower center', 3)
+    fig.suptitle('Assessed contributions to warming relative to 1850–1900')
+    fig.savefig(f'{plot_folder}4-1_SPM2_Update_2022.png')
 
     sys.exit()
 

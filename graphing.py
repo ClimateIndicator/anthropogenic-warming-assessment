@@ -269,7 +269,7 @@ def gwi_pdf(ax):
     #          )
 
 
-def Fig_SPM2_plot(ax, period, vars, dict_dfs, source_cols):
+def Fig_SPM2_validation_plot(ax, period, vars, dict_dfs, source_cols):
     """Plot the SPM2 figure."""
     bar_width = (1.0-0.4)/len(dict_dfs.keys())
     sources = sorted(list(dict_dfs.keys()))
@@ -292,7 +292,66 @@ def Fig_SPM2_plot(ax, period, vars, dict_dfs, source_cols):
             pos_r = np.around(pos, decimals=2)
             neg_r = np.around(neg, decimals=2)
             str_Result = r'${%s}^{+{%s}}_{-{%s}}$' % (med_r, pos_r, neg_r)
-            ax.bar_label(bar, labels=[str_Result], padding=10)
+            # if med >= 0:
+            #     # Automatically place the label above the bar
+            #     padding = 10 + 15*(sources.index(source))
+            # else:
+            #     # Manually set the padding for negative values to put them
+            #     # above the x axis
+            #     padding = -80 - 15*(sources.index(source))
+            ax.bar_label(bar, labels=[str_Result], padding=10 + 15*(sources.index(source)))
+            ax.set_ylim(-1.5, 2.5)
 
     ax.set_xticks(np.arange(len(vars)), vars)
     ax.set_ylabel(f'Contributions to {period} warming relative to 1850-1900')
+    ax.xaxis.grid(False)
+    ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+
+
+
+def Fig_SPM2_results_plot(ax, periods, vars, dict_dfs, period_cols):
+    """Plot the SPM2 figure."""
+    bar_width = (1.0-0.4)/(len(dict_dfs.keys())*len(periods))
+    sources = sorted(list(dict_dfs.keys()))
+    labels = {
+        '2010-2019': '2010-2019 (AR6 definition)',
+        '2013-2022': '2013-2022 (AR6 definition)',
+        '2022 (SR15 definition)': '2022 (SR15 definition)',
+        '2017 (SR15 definition)': '2017 (SR15 definition)',
+    }
+    for var in vars:
+        for period in periods:
+            for source in sources:
+                med = dict_dfs[source].loc[period, (var, '50')]
+                neg = med - dict_dfs[source].loc[period, (var, '5')]
+                pos = dict_dfs[source].loc[period, (var, '95')] - med
+                bar_loc_offset = bar_width * (sources.index(source) +
+                                              periods.index(period))
+                bar = ax.bar(vars.index(var) + bar_loc_offset,
+                             med,
+                             yerr=([neg], [pos]),
+                             label=labels[period],
+                             width=bar_width,
+                             color=period_cols[period],
+                             alpha=0.9)
+                med_r = np.around(med, decimals=2)
+                pos_r = np.around(pos, decimals=2)
+                neg_r = np.around(neg, decimals=2)
+                str_Result = r'${%s}^{+{%s}}_{-{%s}}$' % (med_r, pos_r, neg_r)
+                if med > 0:
+                    # Automatically place the label above the bar
+                    padding = 10 + 15*(periods.index(period))
+                else:
+                    # Manually set the padding for negative values to put them
+                    # above the x axis
+                    padding = -80 - 15*(periods.index(period))
+                ax.bar_label(bar, labels=[str_Result], padding=padding)
+
+    # remove the vertical guidelines in the plot
+    ax.xaxis.grid(False)
+    # add grid line for x axis
+    ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+
+    ax.set_xticks(np.arange(len(vars)), vars)
+    ax.set_ylabel(f'Warming contribution (°C)')
+    ax.set_ylim(-0.75, 2.0)
