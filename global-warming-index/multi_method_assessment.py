@@ -65,7 +65,7 @@ dict_updates_ts = {'Walsh': df_Walsh_ts,
 # MULTI-METHOD ASSESSMENT - AR6 STYLE
 # Create a list of the variables in df_Walsh_hl
 list_of_dfs = []
-periods_to_assess = ['2010-2019', '2013-2022']
+periods_to_assess = ['2010-2019', '2013-2022', '2017', '2022']
 for period in periods_to_assess:
     dict_updates_Assessment = {}
 
@@ -117,33 +117,43 @@ for period in periods_to_assess:
 dict_updates_hl['Assessment'] = pd.concat(list_of_dfs)
 
 # RESULTS FROM AR6 WG1 Ch.3 ###################################################
-df_AR6_Assessment = pd.DataFrame({
+df_AR6_assessment = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
-    ('Tot', '50'): 1.06,  # 3.3.1.1.2 p442 from observations
-    ('Tot',  '5'): 0.88,  # 3.3.1.1.2 p442 from observations
-    ('Tot', '95'): 1.21,  # 3.3.1.1.2 p442 from observations
-    ('Ant', '50'): 1.07,  # 3.3.1.1.2 p442, and SPM A.1.3
-    ('Ant',  '5'): 0.80,  # 3.3.1.1.2 p442, and SPM A.1.3
-    ('Ant', '95'): 1.30,  # 3.3.1.1.2 p442, and SPM A.1.3
-    ('GHG', '50'): 1.40,  # We introduce multi-method assessment here # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of 1.5
-    ('GHG',  '5'): 1.00,  # 3.3.1.1.2 p442, SPM A.1.3
-    ('GHG', '95'): 2.00,  # 3.3.1.1.2 p442, SPM A.1.3
+    ('Tot', '50'): 1.06,  # AR6 3.3.1.1.2 p442 from observations
+    ('Tot',  '5'): 0.88,  # AR6 3.3.1.1.2 p442 from observations
+    ('Tot', '95'): 1.21,  # AR6 3.3.1.1.2 p442 from observations
+    ('Ant', '50'): 1.07, # AR6 3.3.1.1.2 p442, and SPM A.1.3
+    ('Ant',  '5'): 0.80,  # AR6 3.3.1.1.2 p442, and SPM A.1.3
+    ('Ant', '95'): 1.30,  # AR6 3.3.1.1.2 p442, and SPM A.1.3
+    ('GHG', '50'): 1.40,  # AR6 We introduce multi-method assessment here # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of 1.5
+    ('GHG',  '5'): 1.00,  # AR6 3.3.1.1.2 p442, SPM A.1.3
+    ('GHG', '95'): 2.00,  # AR6 3.3.1.1.2 p442, SPM A.1.3
     ('Nat', '50'): 0.03,  # We introduce multi-method assessment here # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of 0.0
-    ('Nat',  '5'): -0.10,  # 3.3.1.1.2 p442, SPM A.1.3
-    ('Nat', '95'): 0.10,  # 3.3.1.1.2 p442, SPM A.1.3
+    ('Nat',  '5'): -0.10,  # AR6 3.3.1.1.2 p442, SPM A.1.3
+    ('Nat', '95'): 0.10,  # AR6 3.3.1.1.2 p442, SPM A.1.3
     ('OHF', '50'): -0.32,  # We introduce multi-method assessment here # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of -0.4
-    ('OHF',  '5'): -0.80,  # 3.3.1.1.2 p442, SPM A.1.3
-    ('OHF', '95'): 0.00,  # 3.3.1.1.2 p442, SPM A.1.3
-    ('Int', '50'): 0.00,  # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of 0.0
-    ('Int',  '5'): -0.20,  # 3.3.1.1.2 p443, SPM A.1.3
-    ('Int', '95'): 0.20,  # 3.3.1.1.2 p443, SPM A.1.3
+    ('OHF',  '5'): -0.80,  # AR6 3.3.1.1.2 p442, SPM A.1.3
+    ('OHF', '95'): 0.00,  # AR6 3.3.1.1.2 p442, SPM A.1.3
+    ('Int', '50'): 0.00,  # AR6 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of 0.0
+    ('Int',  '5'): -0.20,  # AR6 3.3.1.1.2 p443, SPM A.1.3
+    ('Int', '95'): 0.20,  # AR6 3.3.1.1.2 p443, SPM A.1.3
 }, index=['2010-2019'])
-df_AR6_Assessment.columns.names = ['variable', 'percentile']
-df_AR6_Assessment.index.name = 'Year'
+df_AR6_assessment.columns.names = ['variable', 'percentile']
+df_AR6_assessment.index.name = 'Year'
+
+df_SR15_assessment = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Ant', '50'): 1.0,  # SR15 1.2.1.3
+    ('Ant',  '5'): 0.8,  # SR15 1.2.1.3
+    ('Ant', '95'): 1.2,  # SR15 1.2.1.3
+}, index=['2017'])
+df_SR15_assessment.columns.names = ['variable', 'percentile']
+df_SR15_assessment.index.name = 'Year'
+
+df_IPCC_assessment = pd.concat([df_AR6_assessment, df_SR15_assessment])
 
 # RESULTS FROM AR6 METHODS ####################################################
 # Data available from https://github.com/ESMValGroup/ESMValTool-AR6-OriginalCode-FinalFigures/blob/ar6_chapter_3_nathan/esmvaltool/diag_scripts/ipcc_ar6/fig3_8.py
-
 
 
 df_AR6_Haustein = pd.DataFrame({
@@ -164,6 +174,16 @@ df_AR6_Haustein = pd.DataFrame({
 df_AR6_Haustein.columns.names = ['variable', 'percentile']
 df_AR6_Haustein.index.name = 'Year'
 
+df_SR15_Haustein = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Ant', '50'): 1.02,  # SR15 1.2.1.3
+    ('Ant',  '5'): 0.87,  # SR15 1.2.1.3
+    ('Ant', '95'): 1.22,  # SR15 1.2.1.3
+}, index=['2017'])
+df_SR15_Haustein.columns.names = ['variable', 'percentile']
+df_SR15_Haustein.index.name = 'Year'
+
+df_IPCC_Haustein = pd.concat([df_AR6_Haustein, df_SR15_Haustein])
 
 
 df_AR6_Ribes = pd.DataFrame({
@@ -186,6 +206,7 @@ df_AR6_Ribes = pd.DataFrame({
 }, index=['2010-2019'])
 df_AR6_Ribes.columns.names = ['variable', 'percentile']
 df_AR6_Ribes.index.name = 'Year'
+df_IPCC_Ribes = df_AR6_Ribes
 
 df_AR6_Gillett = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
@@ -204,6 +225,7 @@ df_AR6_Gillett = pd.DataFrame({
 }, index=['2010-2019'])
 df_AR6_Gillett.columns.names = ['variable', 'percentile']
 df_AR6_Gillett.index.name = 'Year'
+df_IPCC_Gillett = df_AR6_Gillett
 
 df_AR6_Smith = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
@@ -222,14 +244,14 @@ df_AR6_Smith = pd.DataFrame({
 }, index=['2010-2019'])
 df_AR6_Smith.columns.names = ['variable', 'percentile']
 df_AR6_Smith.index.name = 'Year'
+df_IPCC_Smith = df_AR6_Smith
 
-
-dict_AR6_hl = {
-    'Assessment': df_AR6_Assessment,
-    'Haustein': df_AR6_Haustein,
-    'Ribes': df_AR6_Ribes,
-    'Gillett': df_AR6_Gillett,
-    'Smith': df_AR6_Smith,
+dict_IPCC_hl = {
+    'Assessment': df_IPCC_assessment,
+    'Haustein': df_IPCC_Haustein,
+    'Ribes': df_IPCC_Ribes,
+    'Gillett': df_IPCC_Gillett,
+    'Smith': df_IPCC_Smith,
 }
 
 # Note that the central estimate for OHF isn't given; only the range is
@@ -285,9 +307,26 @@ for method in dict_updates_ts.keys():
 print('Creating Fig 3.8 Validation Plot')
 bar_plot_vars = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
 fig = plt.figure(figsize=(12, 8))
-ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
-gr.Fig_3_8_validation_plot(ax, bar_plot_vars, dict_AR6_hl, dict_updates_hl,
+ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 0), rowspan=1, colspan=4)
+ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 4), rowspan=1, colspan=1)
+
+gr.Fig_3_8_validation_plot(ax2, ['Ant'], '2017',
+                           dict_IPCC_hl, dict_updates_hl,
                            source_markers, var_colours)
+gr.Fig_3_8_validation_plot(ax1, bar_plot_vars, '2010-2019',
+                           dict_IPCC_hl, dict_updates_hl,
+                           source_markers, var_colours)
+
+# set the ax2 ylims to be equal to the ax1 ylims
+ax2.set_ylim(ax1.get_ylim())
+ax2.set_xlim(-0.2, 1.1)
+# Hide the labels on the y axis of ax2
+ax2.set_yticklabels([])
+
+# set the y axis label
+ax1.set_ylabel('Attributable change in surface temperature since 1850-1900 (°C)')
+
 gr.overall_legend(fig, 'lower center', 5)
-fig.suptitle('Validation of Methodological and Dataset Updates')
+fig.suptitle('Validation of updates (right bar)' +
+             'vs Results from IPCC (left bar)')
 fig.savefig(f'{plot_folder}/3_WG1_Ch3_Validation.png')

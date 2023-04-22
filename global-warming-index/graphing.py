@@ -359,7 +359,9 @@ def Fig_SPM2_results_plot(ax, periods, variables, dict_updates_hl, period_cols):
 
 
 def Fig_3_8_validation_plot(
-        ax, variables, dict_AR6_hl, dict_updates_hl, source_markers, var_colours):
+        ax, variables, period,
+        dict_AR6_hl, dict_updates_hl,
+        source_markers, var_colours):
     """Plot AR6 WG1 Ch.3 Fig.3.8"""
 
     bar_width = 0.4
@@ -368,9 +370,9 @@ def Fig_3_8_validation_plot(
     for var in variables:
         for cycle in cycles:
             # Plot the multi-method assessed results for the 2010-2019 period
-            med_assess = cycle['Assessment'].loc['2010-2019', (var, '50')]
-            min_assess = cycle['Assessment'].loc['2010-2019', (var, '5')]
-            max_assess = cycle['Assessment'].loc['2010-2019', (var, '95')]
+            med_assess = cycle['Assessment'].loc[period, (var, '50')]
+            min_assess = cycle['Assessment'].loc[period, (var, '5')]
+            max_assess = cycle['Assessment'].loc[period, (var, '95')]
 
             ax.fill_between(
                 [variables.index(var) + 0.45*cycles.index(cycle),
@@ -383,7 +385,7 @@ def Fig_3_8_validation_plot(
                 # label=var
                 )
             ls = (':' if (cycles.index(cycle) == 0 and
-                           var in ['GHG', 'OHF', 'Nat'])
+                          var in ['GHG', 'OHF', 'Nat'])
                   else '-')
             ax.plot(
                 [variables.index(var) + 0.45*cycles.index(cycle),
@@ -412,10 +414,12 @@ def Fig_3_8_validation_plot(
             methods = sorted(list(cycle.keys()))[::-1]
             methods.remove('Assessment')
             for method in methods:
-                if var in cycle[method].columns.get_level_values('variable'):
-                    med_meth = cycle[method].loc['2010-2019', (var, '50')]
-                    min_meth = cycle[method].loc['2010-2019', (var, '5')]
-                    max_meth = cycle[method].loc['2010-2019', (var, '95')]
+                vt = var in cycle[method].columns.get_level_values('variable')
+                pt = period in cycle[method].index
+                if vt and pt:
+                    med_meth = cycle[method].loc[period, (var, '50')]
+                    min_meth = cycle[method].loc[period, (var, '5')]
+                    max_meth = cycle[method].loc[period, (var, '95')]
                     test = ax.errorbar(
                         variables.index(var) + 0.45*cycles.index(cycle) + 0.1 + methods.index(method)*(bar_width-0.2)/(len(methods)-1),
                         ([med_meth]),
@@ -429,9 +433,7 @@ def Fig_3_8_validation_plot(
                     if method == 'Smith':
                         test[-1][0].set_linestyle('--')
 
-    # set the y axis label
-    ax.set_ylabel('Attributable change in surface temperature\n' +
-                  '2010-2019 vs 1850-1900 (°C)')
+    
     # Remove the ticks from the x axis
     ax.xaxis.grid(False)
     # Set new custom x ticks
@@ -439,10 +441,12 @@ def Fig_3_8_validation_plot(
     # Set the x tick labels
     ax.set_xticklabels(variables)
     # Create a title for the plot
-    ax.set_title(
-        'Results from AR6 WG1 Ch.3 (left) vs Repeat using updates (right)')
-
     # Plot a middle-line
     ax.axhline(y=0, color='gray', linestyle='-',
             #    linewidth=0.5, alpha=0.7
                )
+
+    if period == '2010-2019':
+        ax.set_title(f'AR6 WG1 Ch.3\n({period} warming)')
+    elif period == '2017':
+        ax.set_title(f'SR1.5 Ch.1\n({period} warming)')
