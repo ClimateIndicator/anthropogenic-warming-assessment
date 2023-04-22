@@ -12,9 +12,9 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-import matplotlib
+# import matplotlib
 import matplotlib.pyplot as plt
-import scipy.stats as ss
+# import scipy.stats as ss
 import seaborn as sns
 
 import graphing as gr
@@ -578,6 +578,28 @@ def temp_signal(data, w, method):
     return np.convolve(data_padded, np.ones(w), 'valid') / w
 
 
+def final_value_of_trend(temp):
+    """Used for calculating the SR15 definition of present-day warming."""
+    
+    """Pass a 15-year long timeseries to this function and it will compute
+    a linear trend through it, and return the final value of it. This
+    corresponds to the SR15 definition of warming, if the 'present-day' in
+    consideration is the final observable year; the SR15 definition would
+    extrapolate this linear trend for 15 more years and take the mid-value,
+    which is simply the end value of the first 15 years."""
+
+    """SR15 definition: 'warming at a given point in time is defined as the global average
+    temperatures for a 30-year period centred on that time, extrapolating into
+    the future if necessary'. For these calculations, therefore, we take the 
+    final 15 years of the timeseries, take the trend through it, and then
+    warming is given by the value of the trend in the final (present-day)
+    year."""
+
+    time = np.arange(temp.shape[0])
+    fit = np.poly1d(np.polyfit(time, temp, 1))
+    return fit(time)[-1]
+
+
 ###############################################################################
 # MAIN CODE BODY ##############################################################
 ###############################################################################
@@ -637,7 +659,7 @@ if __name__ == "__main__":
     df_temp_Obs = load_HadCRUT(start_pi, end_pi)
     n_yrs = df_temp_Obs.shape[0]
 
-    # CMIP5 PI-CONTROL
+    # CMIP6 PI-CONTROL
     timeframes = [1, 3, 30]
     # df_temp_PiC = load_PiC_Stuart(n_yrs)
     df_temp_PiC = load_PiC_CMIP6(n_yrs, start_pi, end_pi)
@@ -731,7 +753,7 @@ if __name__ == "__main__":
         _nf = len(forc_subset.columns.get_level_values("ensemble").unique())
         print(f'Forcing ensemble pruned: {_nf}')
 
-        # 2. Select random samples of the model parameters
+        # 2. Select all samples of the model parameters
         print('FaIR Parameters: '
               f'{len(CMIP6_param_df.columns.levels[0].unique())}')
         if model_choice == 'AR5_IR':
@@ -855,15 +877,63 @@ if __name__ == "__main__":
         print(f'... took {T3 - T2} seconds')
 
         # HEADLINE RESULTS
-        print('Calculating headlines', end=' ')
-        dfs = [df_Results.loc[[2019]], df_Results.loc[[2022]]]
+        print('Calculating headlines')
+
+        # GWI-ANNUAL DEFINITION (SIMPLE VALUE IN A GIVEN YEAR)
+        dfs = [df_Results.loc[[2017]], df_Results.loc[[2022]]]
+
+        # SR15 DEFINITION (CENTRE OF 30-YEAR TREND)
+        # Calculate the linear trend of the final 15 years of the timeseries
+        # and use this to calculate the present-day warming
+        print('Calculating SR15-definition temps', end=' ')
+
+        for year in [2017, 2022]:
+            years_SR15 = ((year-15 <= temp_Yrs) * (temp_Yrs <= year))
+            temp_Att_Results_SR15_recent = temp_Att_Results[years_SR15, :, :]
+
+            # Calculate SR15-definition warming for each var-ens combination
+            # See SR15 Ch1 1.2.1
+            # temp_Att_Results_SR15 = np.apply_along_axis(
+            #     final_value_of_trend, 0, temp_Att_Results_SR15_recent)
+
+            temp_Att_Results_SR15 = np.empty(
+                temp_Att_Results_SR15_recent.shape[1:])
+            for vv in range(temp_Att_Results_SR15_recent.shape[1]):
+                print(vv)
+                with mp.Pool(os.cpu_count()) as p:
+                    times = [temp_Att_Results_SR15_recent[:, vv, ii]
+                             for ii
+                             in range(temp_Att_Results_SR15_recent.shape[2])]
+                    results = p.map(final_value_of_trend, times)
+                temp_Att_Results_SR15[vv, :] = np.array(results)
+
+            # Obtain statistics
+            gwi_headline_array = np.percentile(
+                temp_Att_Results_SR15, sigmas_all, axis=1)
+            dict_Results = {
+                (var, sigma):
+                gwi_headline_array[sigmas_all.index(sigma), vars.index(var)]
+                for var in vars for sigma in sigmas_all
+            }
+            df_headlines_i = pd.DataFrame(
+                dict_Results, index=[f'{year} (SR15 definition)'])
+            df_headlines_i.columns.names = ['variable', 'percentile']
+            df_headlines_i.index.name = 'Year'
+            dfs.append(df_headlines_i)
+
+        T4 = dt.datetime.now()
+        print('... took', T4 - T3, 'seconds')
+
+
+        # AR6 DEFINITION (DECADE MEAN)
+        print('Calculating AR6-definition temps', end=' ')
         for years in [[2010, 2019], [2013, 2022]]:
             recent_years = ((years[0] <= temp_Yrs) * (temp_Yrs <= years[1]))
-            temp_Att_Results_recent = \
+            temp_Att_Results_AR6 = \
                 temp_Att_Results[recent_years, :, :].mean(axis=0)
             # Obtain statistics
             gwi_headline_array = np.percentile(
-                temp_Att_Results_recent, sigmas_all, axis=1)
+                temp_Att_Results_AR6, sigmas_all, axis=1)
             dict_Results = {
                 (var, sigma):
                 gwi_headline_array[sigmas_all.index(sigma), vars.index(var)]
@@ -877,11 +947,9 @@ if __name__ == "__main__":
 
         df_headlines = pd.concat(dfs, axis=0)
         df_headlines.to_csv(f'results/GWI_results_headlines_{n}.csv')
-        T4 = dt.datetime.now()
-        print(f'... took {T4 - T3} seconds')
+        T5 = dt.datetime.now()
+        print(f'... took {T5 - T4} seconds')
 
-    # temp_Att_Results = np.load('results/temp_Att_Results.npy')
-    # coef_Reg_Results = np.load('results/coef_Reg_Results.npy')
     files = os.listdir('results')
     file_ts = [f for f in files if 'GWI_results_timeseries' in f][0]
     file_hs = [f for f in files if 'GWI_results_headlines' in f][0]
@@ -890,7 +958,7 @@ if __name__ == "__main__":
     df_Results_hl = pd.read_csv(f'results/{file_hs}',
                                 index_col=0,  header=[0, 1])
     n = file_ts.split('.csv')[0].split('_')[-1]
-    print(n)
+    print(f'Results based on an {n}-member sampling of the ensemble.')
 
 
     ###########################################################################
@@ -905,14 +973,26 @@ if __name__ == "__main__":
     ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
     ax4 = plt.subplot2grid(shape=(3, 4), loc=(2, 3), rowspan=1, colspan=1)
     ax2.set_ylim(ax1.get_ylim())
-    # vars = ['GHG', 'Nat', 'OHF', 'Const', 'Ant', 'Tot', 'Res', 'PiC', 'Obs']
+    
     plot_vars = ['Ant', 'GHG', 'Nat', 'OHF',]
     plot_cols = {'Tot': 'xkcd:magenta',
                  'Ant': 'xkcd:crimson',
                  'GHG': 'xkcd:teal',
                  'Nat': 'xkcd:azure',
                  'OHF': 'xkcd:goldenrod',
-                 'Res': 'gray'}
+                 'Res': 'gray',
+                 'Obs': 'gray',
+                 'PiC': 'gray'}
+    # Rose Pine
+    plot_cols = {'Tot': '#d7827e',
+                 'Ant': '#b4637a',
+                 'GHG': '#907aa9',
+                 'Nat': '#56949f',
+                 'OHF': '#ea9d34',
+                 'Res': '#9893a5',
+                 'Obs': '#797593',
+                 'PiC': '#cecacd'}
+    
     gr.gwi_timeseries(ax1,
                       df_temp_Obs, df_temp_PiC, df_Results_ts,
                       plot_vars, plot_cols)
@@ -924,7 +1004,7 @@ if __name__ == "__main__":
     
     # GWI SIMPLE PLOT #########################################################
     print('Creating GWI Simple Plot...')
-    fig = plt.figure(figsize=(15, 10))
+    fig = plt.figure(figsize=(12, 8))
     ax1 = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
     plot_vars = ['Ant', 'GHG', 'Nat', 'OHF',]
     gr.gwi_timeseries(ax1,
@@ -942,24 +1022,24 @@ if __name__ == "__main__":
     print('Creating SPM.2 Plot')
     df_IPCC = pd.DataFrame({
         # (VARIABLE, PERCENTILE): VALUE
-        ('Tot', '50.0'): 1.09,
-        ('Tot',  '5.0'): 0.95,
-        ('Tot', '95.0'): 1.20,
-        ('Ant', '50.0'): 1.07,
-        ('Ant',  '5.0'): 0.80,
-        ('Ant', '95.0'): 1.30,
-        ('GHG', '50.0'): 1.50,
-        ('GHG',  '5.0'): 1.00,
-        ('GHG', '95.0'): 2.00,
-        ('Nat', '50.0'): 0.00,
-        ('Nat',  '5.0'): -0.10,
-        ('Nat', '95.0'): 0.10,
-        ('OHF', '50.0'): (-250/310)*0.5,
-        ('OHF',  '5.0'): -0.80,
-        ('OHF', '95.0'): 0.00,
-        ('PiC', '50.0'): 0.00,
-        ('PiC',  '5.0'): -0.20,
-        ('PiC', '95.0'): 0.20,
+        ('Tot', '50'): 1.09,
+        ('Tot',  '5'): 0.95,
+        ('Tot', '95'): 1.20,
+        ('Ant', '50'): 1.07,
+        ('Ant',  '5'): 0.80,
+        ('Ant', '95'): 1.30,
+        ('GHG', '50'): 1.50,
+        ('GHG',  '5'): 1.00,
+        ('GHG', '95'): 2.00,
+        ('Nat', '50'): 0.00,
+        ('Nat',  '5'): -0.10,
+        ('Nat', '95'): 0.10,
+        ('OHF', '50'): (-250/310)*0.5,  # or just -0.4...?
+        ('OHF',  '5'): -0.80,
+        ('OHF', '95'): 0.00,
+        ('PiC', '50'): 0.00,
+        ('PiC',  '5'): -0.20,
+        ('PiC', '95'): 0.20,
     }, index=['2010-2019'])
     df_IPCC.columns.names = ['variable', 'percentile']
     df_IPCC.index.name = 'Year'
@@ -977,12 +1057,29 @@ if __name__ == "__main__":
                    }
     vars_SPM2 = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
 
-    fig = plt.figure(figsize=(15, 10))
+    # Create AR5 SPM2-esque comparison for the same data
+    fig = plt.figure(figsize=(12, 8))
     ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=3)
     gr.Fig_SPM2_plot(ax, '2010-2019', vars_SPM2, dict_dfs_SPM2, source_cols)
     gr.overall_legend(fig, 'lower center', len(dict_dfs_SPM2.keys()))
     fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
-    fig.savefig(f'{plot_folder}4_SPM2_Comparison.png')
+    fig.savefig(f'{plot_folder}4-0_SPM2_Comparison_2010-2019.png')
+
+    # # Create updated AR6 SPM2-esque plot
+    # fig = plt.figure(figsize=(12, 8))
+    # ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=3)
+    # gr.Fig_SPM2_plot(ax, '2013-2022', vars_SPM2, dict_dfs_SPM2['Walsh'], source_cols)
+    # gr.overall_legend(fig, 'lower center', len(dict_dfs_SPM2.keys()))
+    # fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
+    # fig.savefig(f'{plot_folder}4-1_SPM2_Re-made_2010-2019.png')
+
+    # # Create SRT15-esque bar plot
+    # fig = plt.figure(figsize=(12, 8))
+    # ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=3)
+    # gr.Fig_SPM2_plot(ax, '2022', vars_SPM2, dict_dfs_SPM2['Walsh'], source_cols)
+    # gr.overall_legend(fig, 'lower center', len(dict_dfs_SPM2.keys()))
+    # fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
+    # fig.savefig(f'{plot_folder}4-2_SPM2_Comparison_2022.png')
 
     sys.exit()
 

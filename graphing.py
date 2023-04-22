@@ -145,7 +145,7 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
                    plot_vars, plot_cols):
     """Plot the GWI timeseries for the given variables."""
     ax.set_ylabel('Warming Anomaly (°C)')
-    fill_alpha = 0.1
+    fill_alpha = 0.2
     line_alpha = 0.7
     sigmas = df_Results_ts.columns.get_level_values('percentile').unique()
     # Plot the observations
@@ -155,7 +155,7 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
                df_temp_Obs.quantile(q=0.05, axis=1))
     ax.errorbar(df_temp_Obs.index, df_temp_Obs.quantile(q=0.5, axis=1),
                 yerr=(err_neg, err_pos),
-                fmt='o', color='gray', ms=2.5, lw=1,
+                fmt='o', color=plot_cols['Obs'], ms=2.5, lw=1,
                 label='Reference Temp: HadCRUT5')
     for s in range(len(sigmas)//2):
         # Plot the PiControl ensemble
@@ -163,9 +163,10 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
             df_temp_PiC.index,
             df_temp_PiC.quantile(q=float(sigmas[s])/100, axis=1),
             df_temp_PiC.quantile(q=float(sigmas[-(s+2)])/100, axis=1),
-            color='gray', alpha=fill_alpha)
+            color=plot_cols['PiC'], alpha=fill_alpha)
         ax.plot(df_temp_PiC.index, df_temp_PiC.quantile(q=0.5, axis=1),
-                 color='gray', alpha=line_alpha, label='CMIP6 piControl')
+                color=plot_cols['PiC'], alpha=line_alpha,
+                label='CMIP6 piControl')
 
         # Plot the GWI timeseries
         for var in plot_vars:
@@ -182,7 +183,7 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
 def gwi_residuals(ax, df_Results_ts):
     """Plot the regression residuals of the GWI timeseries."""
     ax.set_ylabel('Regression Residuals (°C)')
-    fill_alpha = 0.1
+    fill_alpha = 0.2
     line_alpha = 0.7
     sigmas = df_Results_ts.columns.get_level_values('percentile').unique()
     for s in range(len(sigmas)//2):
@@ -204,8 +205,8 @@ def gwi_residuals(ax, df_Results_ts):
 def gwi_tot_vs_ant(ax, df_Results_ts):
     """Plot the TOT vs. ANT timeseries."""
     ax.plot([-0.2, 1.5], [-0.2, 1.5], color='gray', alpha=0.7)
-    ax.plot(df_Results_ts.loc[:, ('Ant', '50.0')].values,
-            df_Results_ts.loc[:, ('Tot', '50.0')].values,
+    ax.plot(df_Results_ts.loc[:, ('Ant', '50')].values,
+            df_Results_ts.loc[:, ('Tot', '50')].values,
             color='xkcd:teal', alpha=0.7,)
     ax.set_xlabel('Ant')
     ax.set_ylabel('TOT')
@@ -274,9 +275,9 @@ def Fig_SPM2_plot(ax, period, vars, dict_dfs, source_cols):
     sources = sorted(list(dict_dfs.keys()))
     for var in vars:
         for source in sources:
-            med = dict_dfs[source].loc[period, (var, '50.0')]
-            neg = med - dict_dfs[source].loc[period, (var, '5.0')]
-            pos = dict_dfs[source].loc[period, (var, '95.0')] - med
+            med = dict_dfs[source].loc[period, (var, '50')]
+            neg = med - dict_dfs[source].loc[period, (var, '5')]
+            pos = dict_dfs[source].loc[period, (var, '95')] - med
 
             bar = ax.bar(vars.index(var) + bar_width*sources.index(source),
                          med,
@@ -292,7 +293,6 @@ def Fig_SPM2_plot(ax, period, vars, dict_dfs, source_cols):
             neg_r = np.around(neg, decimals=2)
             str_Result = r'${%s}^{+{%s}}_{-{%s}}$' % (med_r, pos_r, neg_r)
             ax.bar_label(bar, labels=[str_Result], padding=10)
-    
 
     ax.set_xticks(np.arange(len(vars)), vars)
     ax.set_ylabel(f'Contributions to {period} warming relative to 1850-1900')
