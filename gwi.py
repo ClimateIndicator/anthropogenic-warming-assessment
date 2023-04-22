@@ -148,15 +148,14 @@ def load_PiC_CMIP6(n_yrs, start_pi, end_pi):
     # (ie a CMIP6 archive for pre-meaned data, saving data/time.)
     mag_files = sorted(glob.glob('data/piControl/CMIP6/**/*.MAG',
                                  recursive=True))
-
     dict_temp = {}
     for file in mag_files:
         # Adopt nomenclature format that matches earlier csv from Stuart
-        group = file.split('\\')[4]
-        model = file.split('\\')[-1].split('_')[3]
-        member = file.split('\\')[-1].split('_')[5]
-        var = file.split('\\')[-1].split('_')[1]
-        experiment = file.split('\\')[-1].split('_')[4]
+        group = file.split('/')[6]
+        model = file.split('/')[-1].split('_')[3]
+        member = file.split('/')[-1].split('_')[5]
+        var = file.split('/')[-1].split('_')[1]
+        experiment = file.split('/')[-1].split('_')[4]
         model_name = '_'.join([group, model, member, var, experiment])
 
         # use pymagicc to read the .MAG file
@@ -260,7 +259,7 @@ def GWI_faster(
     forc_Yrs = df_forc.index.to_numpy()
 
     # Prepare FaIR parameters for this particular model.
-    print(model_choice)
+    # print(model_choice)
     params_FaIR = df_params[model_choice]
     params_FaIR.columns = pd.MultiIndex.from_product(
         [[model_choice], params_FaIR.columns])
@@ -373,11 +372,11 @@ def GWI_faster(
                 temp_Att_Results[:, -3, i] = temp_Ant
 
                 # Visual display of pregress through calculation
-                # if i % 1000 == 0:
-                #     percentage = int((i+1)/n*100)
-                #     loading_bar = (percentage // 5*'.' +
-                #                 (20 - percentage // 5)*' ')
-                #     print(f'calculating {loading_bar} {percentage}%', end='\r')
+                if i % 1000 == 0:
+                    percentage = int((i+1)/n*100)
+                    loading_bar = (percentage // 5*'.' +
+                                (20 - percentage // 5)*' ')
+                    print(f'calculating {loading_bar} {percentage}%', end='\r')
                 i += 1
 
     # print(f"calculating {20*'.'} {100}%", end='\r')
@@ -612,7 +611,8 @@ if __name__ == "__main__":
     start_yr, end_yr = 1850, 2022
     start_pi, end_pi = 1850, 1900  # As in IPCC AR6 Ch-3 Fig-3.4
 
-    sigmas = [[32, 68], [5, 95], [0.3, 99.7]]
+    # sigmas = [[32, 68], [5, 95], [0.3, 99.7]]
+    sigmas = [[17, 83], [5, 95]]
     sigmas_all = list(np.concatenate((np.sort(np.ravel(sigmas)), [50]),
                                      axis=0))
 
@@ -689,8 +689,12 @@ if __name__ == "__main__":
                            184, 280, 698, 286, 285, 164, 150, 218]])
 
     elif model_choice == 'FaIR_V2':
-        CMIP6_param_csv = ('models/FaIR_V2/FaIRv2_0_0_alpha1/fair/util/' +
-                           'parameter-sets/CMIP6_climresp.csv')
+        # The original location of the FaIR tunings is here
+        # CMIP6_param_csv = ('models/FaIR_V2/FaIRv2_0_0_alpha1/fair/util/' +
+        #                    'parameter-sets/CMIP6_climresp.csv')
+        # Which is simply copied to the following location for transparency
+        # and convenience.
+        CMIP6_param_csv = ('models/FaIR_CMIP6_climresp.csv')
         CMIP6_param_df = pd.read_csv(
             CMIP6_param_csv, index_col=[0], header=[0, 1])
 
@@ -702,8 +706,7 @@ if __name__ == "__main__":
     calc_switch = input('Recalculate? y/n: ')
 
     if calc_switch == 'y':
-        samples = int(input('numer of samples (0-200): '))  # for temperature, and ERF
-
+        samples = int(input('numer of samples (0-200): '))
         # Select random sub-set sampling of all ensemble members:
 
         # 1. Select random samples of the forcing data
@@ -777,33 +780,38 @@ if __name__ == "__main__":
                 start_pi=start_pi,
                 end_pi=end_pi,
             )
-            print('Parallelising Function')
+            print('Calculating GWI (parallelised)', end=' ')
             results = p.map(partial_GWI, models)
         vars = df_forc.columns.get_level_values(
             'variable').unique().to_list()
         vars.extend(['Ant', 'Tot', 'Res'])
+
+        T1_1 = dt.datetime.now()
+        print(f'... took {T1_1 - T1} seconds')  
+        print('Concatenating Results', end=' ')
         temp_Att_Results = np.concatenate(results, axis=2)
         T2 = dt.datetime.now()
+        print(f'... took {T2 - T1_1} seconds')
 
-        # print(f'GWI original took {T1 - T0} seconds')
-        print(f'GWI parallel took {T2 - T1} seconds')                      
+        # print(f'GWI original took {T1 - T0} seconds')                    
         n = temp_Att_Results.shape[2]
         n_parallel = temp_Att_Results.shape[2]
 
-        # FILTER RESULTS ##############################################################
-        # For diagnosing: filter out results with particular regression coefficients.
+        # FILTER RESULTS ######################################################
+        # For diagnosing: filter out results with particular regression
+        # coefficients.
 
-        # If you only want to study subsets of the results based on certain constraints
-        # apply a mask here. The below mask is set to look at results for different
-        # values of the coefficients.
+        # If you only want to study subsets of the results based on certain
+        # constraints apply a mask here. The below mask is set to look at
+        # results for different values of the coefficients.
 
-        # Note to self about masking: coef_Reg_Results is the array of all regression
-        # coefficients, with shape (4, n), where n is total number of samplings.
-        # We select slice indices (forcing coefficients) we're interested in basing the
-        # condition on:
+        # Note to self about masking: coef_Reg_Results is the array of all
+        # regression coefficients, with shape (4, n), where n is total number
+        # of samplings. We select slice indices (forcing coefficients) we're
+        # interested in basing the condition on:
         # AER is index 0, GHGs index 1, NAT index 2, Const index 3
-        # Then choose whether you want any or all or the coefficients to meet the
-        # condition (in this case being less than zero)
+        # Then choose whether you want any or all or the coefficients to meet
+        # the condition (in this case being less than zero)
         mask_switch = False
         if mask_switch:
             coef_mask = np.all(coef_Reg_Results[[0, 2], :] <= 0, axis=0)
@@ -811,13 +819,13 @@ if __name__ == "__main__":
 
             temp_Att_Results = temp_Att_Results[:, :, coef_mask]
             coef_Reg_Results = coef_Reg_Results[:, coef_mask]
-            print(f'Shape of masked attribution results: {temp_Att_Results.shape}')
+            print('Shape of masked attribution results:',
+                  temp_Att_Results.shape)
 
         # np.save('results/temp_Att_Results.npy', temp_Att_Results)
         # np.save('results/coef_Reg_Results.npy', coef_Reg_Results)
 
-
-        # PRODUCE FINAL RESULTS DATASETS ##########################################
+        # PRODUCE FINAL RESULTS DATASETS ######################################
         # Remove old results first
         files = os.listdir('results')
         csvs = [f for f in files if f.endswith('.csv')]
@@ -831,6 +839,7 @@ if __name__ == "__main__":
         # it is...
 
         # TIMESERIES RESULTS
+        print('Calculating percentiles', end=' ')
         gwi_timeseries_array = np.percentile(
             temp_Att_Results, sigmas_all, axis=2)
         dict_Results = {
@@ -842,12 +851,16 @@ if __name__ == "__main__":
         df_Results.columns.names = ['variable', 'percentile']
         df_Results.index.name = 'Year'
         df_Results.to_csv(f'results/GWI_results_timeseries_{n}.csv')
+        T3 = dt.datetime.now()
+        print(f'... took {T3 - T2} seconds')
 
         # HEADLINE RESULTS
+        print('Calculating headlines', end=' ')
         dfs = [df_Results.loc[[2019]], df_Results.loc[[2022]]]
         for years in [[2010, 2019], [2013, 2022]]:
             recent_years = ((years[0] <= temp_Yrs) * (temp_Yrs <= years[1]))
-            temp_Att_Results_recent = temp_Att_Results[recent_years, :, :].mean(axis=0)
+            temp_Att_Results_recent = \
+                temp_Att_Results[recent_years, :, :].mean(axis=0)
             # Obtain statistics
             gwi_headline_array = np.percentile(
                 temp_Att_Results_recent, sigmas_all, axis=1)
@@ -864,9 +877,8 @@ if __name__ == "__main__":
 
         df_headlines = pd.concat(dfs, axis=0)
         df_headlines.to_csv(f'results/GWI_results_headlines_{n}.csv')
-
-    t2 = dt.datetime.now()
-    print(f'Total calculation took {t2-t1}')
+        T4 = dt.datetime.now()
+        print(f'... took {T4 - T3} seconds')
 
     # temp_Att_Results = np.load('results/temp_Att_Results.npy')
     # coef_Reg_Results = np.load('results/coef_Reg_Results.npy')
