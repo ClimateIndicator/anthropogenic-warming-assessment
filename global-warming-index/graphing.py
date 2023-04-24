@@ -9,18 +9,39 @@ import seaborn as sns
 from gwi import moving_average
 
 
-matplotlib.rcParams.update(
-    {'font.size': 11,
-     'font.family': 'Roboto',
-     'font.weight': 'light',
-     'axes.linewidth': 0.5, 'axes.titleweight': 'regular',
-     'axes.grid': True, 'grid.linewidth': 0.5,
-     'grid.color': 'gainsboro',
-     'figure.dpi': 200, 'figure.figsize': (15, 10),
-     'figure.titlesize': 17,
-     'figure.titleweight': 'light',
-     'legend.frameon': False}
-)
+matplotlib.rcParams.update({
+    # General figure
+    'figure.dpi': 200,
+    'figure.figsize': (15, 10),
+    'figure.titlesize': 17,
+    'figure.titleweight': 'light',
+    'legend.frameon': False,
+    # General fonts
+    'font.size': 11,
+    'font.family': 'Roboto',
+    'font.weight': 'light',
+    # Axis box
+    'axes.spines.bottom': True,
+    'axes.spines.left': False,
+    'axes.spines.right': False,
+    'axes.spines.top': False,
+    'axes.linewidth': 0.5,
+    'axes.facecolor': '#f9f8f7',  # AR6 at 50% opacity.
+    # 'axes.facecolor': 'white',
+    # Axis labels
+    'axes.titleweight': 'regular',
+    # 'axes.labelcolor': 'gray',
+    # Axis grid
+    'axes.grid': True,
+    'axes.grid.axis': 'y',
+    'grid.color': '#cfd1d0',  # AR6
+    'grid.linewidth': 0.5,
+    # 'axes.axisbelow': True,
+    # Axis  ticks
+    'ytick.major.size': 0,
+    'ytick.major.width': 0,
+    # 'ytick.color': 'gray',
+})
 # Fontweights~: light, regular, normal,
 
 
@@ -144,10 +165,16 @@ def plot_internal_variability_sample(
 def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
                    plot_vars, plot_cols):
     """Plot the GWI timeseries for the given variables."""
-    ax.set_ylabel('Warming Anomaly (°C)')
-    fill_alpha = 0.2
+    ax.set_ylabel(
+        'Attributable change in surface temperature since 1850-1900 (°C)'
+        )
+    fill_alpha = 0.3
     line_alpha = 0.7
     sigmas = df_Results_ts.columns.get_level_values('percentile').unique()
+    # Shade the pre-industrial period
+    ax.fill_between([1850, 1900], [-5, -5], [+5, +5],
+                    color='#f4f2f1')
+
     # Plot the observations
     err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
                df_temp_Obs.quantile(q=0.5, axis=1))
@@ -178,6 +205,10 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
             ax.plot(df_Results_ts.index,
                     df_Results_ts.loc[:, (var, sigmas[-1])].values,
                     color=plot_cols[var], alpha=line_alpha, label=var)
+
+    ax.set_xticks([1850, 1900, 1950, 2000, 2022],
+                  [1850, 1900, 1950, 2000, 2022])
+    ax.text(1875, -0.85, '1850-1900\nPreindustrial Baseline', ha='center')
 
 
 def gwi_residuals(ax, df_Results_ts):
@@ -308,65 +339,15 @@ def Fig_SPM2_validation_plot(ax, period, variables, dict_updates_hl, source_cols
     ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
 
 
-def Fig_SPM2_results_plot(ax, periods, variables, dict_updates_hl, period_cols):
-    """Plot the SPM2 figure."""
-    bar_width = (1.0-0.4)/(len(dict_updates_hl.keys())*len(periods))
-    methods = sorted(list(dict_updates_hl.keys()))
-    labels = {
-        '2010-2019': '2010-2019 (AR6 definition)',
-        '2013-2022': '2013-2022 (AR6 definition)',
-        '2022 (SR15 definition)': '2022 (SR15 definition)',
-        '2017 (SR15 definition)': '2017 (SR15 definition)',
-        '2017': '2017',
-        '2022': '2022',
-    }
-    for var in variables:
-        for period in periods:
-            for source in methods:
-                med = dict_updates_hl[source].loc[period, (var, '50')]
-                neg = med - dict_updates_hl[source].loc[period, (var, '5')]
-                pos = dict_updates_hl[source].loc[period, (var, '95')] - med
-                bar_loc_offset = bar_width * (methods.index(source) +
-                                              periods.index(period))
-                bar = ax.bar(variables.index(var) + bar_loc_offset,
-                             med,
-                             yerr=([neg], [pos]),
-                             label=labels[period],
-                             width=bar_width,
-                             color=period_cols[period],
-                             alpha=0.9)
-                med_r = np.around(med, decimals=2)
-                pos_r = np.around(pos, decimals=2)
-                neg_r = np.around(neg, decimals=2)
-                str_Result = r'${%s}^{+{%s}}_{-{%s}}$' % (med_r, pos_r, neg_r)
-                if med > 0:
-                    # Automatically place the label above the bar
-                    padding = 10 + 15*(periods.index(period))
-                else:
-                    # Manually set the padding for negative values to put them
-                    # above the x axis
-                    padding = -80 - 15*(periods.index(period))
-                ax.bar_label(bar, labels=[str_Result], padding=padding)
-
-    # remove the vertical guidelines in the plot
-    ax.xaxis.grid(False)
-    # add grid line for x axis
-    ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-
-    ax.set_xticks(np.arange(len(variables)), variables)
-    ax.set_ylabel(f'Warming contribution (°C)')
-    ax.set_ylim(-0.75, 2.0)
-
-
 def Fig_3_8_validation_plot(
         ax, variables, period,
-        dict_AR6_hl, dict_updates_hl,
+        dict_IPCC_hl, dict_updates_hl,
         source_markers, var_colours):
     """Plot AR6 WG1 Ch.3 Fig.3.8"""
 
     bar_width = 0.4
 
-    cycles = [dict_AR6_hl, dict_updates_hl]
+    cycles = [dict_IPCC_hl, dict_updates_hl]
     for var in variables:
         for cycle in cycles:
             # Plot the multi-method assessed results for the 2010-2019 period
@@ -381,7 +362,7 @@ def Fig_3_8_validation_plot(
                 color=(var_colours['Obs']
                        if (var == 'Tot' and cycles.index(cycle)==0)
                        else var_colours[var]),
-                alpha=0.5
+                alpha=0.4 if cycles.index(cycle) == 0 else 0.6,
                 # label=var
                 )
             ls = (':' if (cycles.index(cycle) == 0 and
@@ -450,3 +431,74 @@ def Fig_3_8_validation_plot(
         ax.set_title(f'AR6 WG1 Ch.3\n({period} warming)')
     elif period == '2017':
         ax.set_title(f'SR1.5 Ch.1\n({period} warming)')
+
+
+def Fig_SPM2_plot(
+    ax, variables, periods,
+    dict_IPCC_hl, dict_updates_hl,
+    var_colours):
+    """Plot AR6 WG1 SPM Fig.2-esque figure summarising assessed results."""
+    # bar_width = (1.0-0.4)/(len(periods))
+    bar_width = 0.3
+
+    labels = {
+        '2010-2019': '2010-2019 (AR6 Results)',
+        '2013-2022': '2013-2022 (AR6-style Update)',
+        '2022 (SR1.5 definition)': '2022 (SR1.5-style Update)',
+        '2017 (SR1.5 definition)': '2017 (SR1.5 Results)',
+        '2017': '2017 (SR1.5 Results)',
+        '2022': '2022 (SR1.5-style Update)',
+    }
+
+    for var in variables:
+        for period in periods:
+            med = dict_updates_hl['Assessment'].loc[period, (var, '50')]
+            neg = dict_updates_hl['Assessment'].loc[period, (var, '5')]
+            pos = dict_updates_hl['Assessment'].loc[period, (var, '95')]
+
+            bar_loc_offset = bar_width * periods.index(period)
+
+            if var == 'Obs':
+                colour = var_colours[var]
+            elif med > 0:
+                colour = '#d06e75'
+                # colour = '#d7827e'
+            elif med < 0:
+                colour = '#7dbfd9'
+                # colour = '#56949f'
+
+            ax.bar(variables.index(var) + bar_loc_offset,
+                   med,
+                   yerr=([med-neg], [pos-med]),
+                   error_kw=dict(lw=0.8, capsize=2, capthick=0.8),
+                   label=labels[period],
+                   width=bar_width,
+                #    color=period_colours[period],
+                #    color=var_colours[var],
+                   color=colour,
+                   alpha=1.0 if '2022' in period else 0.7)
+
+            str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med, pos, neg)
+            ax.text(
+                variables.index(var) + bar_loc_offset,
+                -1.1,
+                str_Result,
+                ha='center', va='bottom', color='black',
+                rotation=90,
+                # fontsize=8
+                )
+            if variables.index(var) == 0:
+                ax.text(
+                    variables.index(var) + bar_loc_offset,
+                    0.05,
+                    period,
+                    ha='center', va='bottom', color='white',
+                    rotation=90,
+                    weight='normal'
+                    # fontsize=8
+                    )
+
+    # add grid line for x axis
+    ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+    ax.set_xticks(np.arange(len(variables))+(bar_width/2)*(len(periods)-1),
+                  variables)

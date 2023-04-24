@@ -4,6 +4,7 @@ import glob
 
 import numpy as np
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
 
 import pymagicc
@@ -254,10 +255,30 @@ dict_IPCC_hl = {
     'Smith': df_IPCC_Smith,
 }
 
-# Note that the central estimate for OHF isn't given; only the range is
-# specified; a pixel ruler was used on the pdf to get the rough central
-# value.
 
+# Observations
+df_AR6_Obs = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Obs', '50'): 1.06,  # AR6 3.3.1.1.2 p442 from observations
+    ('Obs',  '5'): 0.88,  # AR6 3.3.1.1.2 p442 from observations
+    ('Obs', '95'): 1.21,  # AR6 3.3.1.1.2 p442 from observations
+}, index=['2010-2019'])
+df_AR6_Obs.columns.names = ['variable', 'percentile']
+df_AR6_Obs.index.name = 'Year'
+
+df_update_Obs = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Obs', '50'): 1.15,  # from annual updates paper section 4 
+    ('Obs',  '5'): 1.00,  # from annual updates paper section 4 
+    ('Obs', '95'): 1.25,  # from annual updates paper section 4 
+}, index=['2013-2022'])
+df_update_Obs.columns.names = ['variable', 'percentile']
+df_update_Obs.index.name = 'Year'
+
+df_All_Obs = pd.concat([df_AR6_Obs, df_update_Obs])
+dict_All_Obs = {'Assessment': df_All_Obs}
+
+# Plotting colours
 var_colours = {'Tot': '#d7827e',
                'Ant': '#b4637a',
                'GHG': '#907aa9',
@@ -267,19 +288,14 @@ var_colours = {'Tot': '#d7827e',
                'Obs': '#797593',
                'PiC': '#cecacd'}
 
-source_colours = {
-    'Walsh': '#9bd6fa',
-    'IPCC AR6 WG1': '#4a8fcc',
-    'Ribes': 'orange'
-}
-period_colours = {
-    '2010-2019': '#e0def4',  # '#4a8fbb',
-    '2013-2022': '#31748f',  # '#4a8fcc',
-    '2022': '#9ccfd8',  # '#9bd6fa'
-    '2017': 'red',
-    '2022 (SR15 definition)': 'orange',
-    '2017 (SR1.5 definition)': 'green',
-}
+# period_colours = {
+#     '2010-2019': '#e0def4',  # '#4a8fbb',
+#     '2013-2022': '#31748f',  # '#4a8fcc',
+#     '2022': '#9ccfd8',  # '#9bd6fa'
+#     '2017': 'red',
+#     '2022 (SR15 definition)': 'orange',
+#     '2017 (SR1.5 definition)': 'green',
+# }
 
 source_markers = {
     'Haustein': 'o',
@@ -289,9 +305,8 @@ source_markers = {
     'Smith': 'D'
 }
 
-
 plot_folder = 'plots/assessment/'
-# PLOT TIMESERIES FOR EACH METHOD #########################################
+# PLOT TIMESERIES FOR EACH METHOD ############################################
 for method in dict_updates_ts.keys():
     print(f'Creating {method} Simple Plot...')
     plot_vars = ['Ant', 'GHG', 'Nat', 'OHF']
@@ -299,11 +314,20 @@ for method in dict_updates_ts.keys():
     ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
     gr.gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, dict_updates_ts[method],
                       plot_vars, var_colours)
+    ax.set_ylim(-1, 2)
+    ax.set_xlim(1850, 2022)
     gr.overall_legend(fig, 'lower center', 6)
     fig.suptitle(f'{method} Timeseries Plot')
     fig.savefig(f'{plot_folder}/2_{method}_timeseries.png')
 
+###############################################################################
+# PLOT THE NULTI-METHOD TIMESERIES
+###############################################################################
+# tbc
+
+###############################################################################
 # PLOT THE VALIDATION PLOT
+###############################################################################
 print('Creating Fig 3.8 Validation Plot')
 bar_plot_vars = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
 fig = plt.figure(figsize=(12, 8))
@@ -318,6 +342,7 @@ gr.Fig_3_8_validation_plot(ax1, bar_plot_vars, '2010-2019',
                            source_markers, var_colours)
 
 # set the ax2 ylims to be equal to the ax1 ylims
+ax1.set_ylim(-1.0, 2.0)
 ax2.set_ylim(ax1.get_ylim())
 ax2.set_xlim(-0.2, 1.1)
 # Hide the labels on the y axis of ax2
@@ -330,3 +355,65 @@ gr.overall_legend(fig, 'lower center', 5)
 fig.suptitle('Validation of updates (right bar)' +
              'vs Results from IPCC (left bar)')
 fig.savefig(f'{plot_folder}/3_WG1_Ch3_Validation.png')
+
+###############################################################################
+# Plot the headline SPM2-esque figure
+###############################################################################
+print('Creating SPM.2-esque figure')
+fig = plt.figure(figsize=(12, 8))
+ax0 = plt.subplot2grid(shape=(1, 5), loc=(0, 0), rowspan=1, colspan=1)
+ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
+ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
+gr.Fig_SPM2_plot(ax0, ['Obs'], ['2010-2019', '2013-2022'],
+                 dict_IPCC_hl, dict_All_Obs, var_colours)
+gr.Fig_SPM2_plot(ax1, ['Ant', 'GHG', 'OHF', 'Nat'], ['2010-2019', '2013-2022'],
+                 dict_IPCC_hl, dict_updates_hl, var_colours)
+gr.Fig_SPM2_plot(ax2, ['Ant', 'GHG', 'OHF', 'Nat'], ['2017', '2022'],
+                 dict_IPCC_hl, dict_updates_hl, var_colours)
+
+# Plot the text
+fig.text(ax0.get_position().x0, ax0.get_position().y1+0.08,
+         'Observed Warming',
+         fontsize=matplotlib.rcParams['axes.titlesize'],
+         fontweight='bold'
+         )
+fig.text(ax0.get_position().x0, ax0.get_position().y1+0.02,
+         '(a) Observed warming\naveraged over 10-years',
+         ha='left',
+         fontsize=matplotlib.rcParams['font.size'],
+         fontweight='regular',
+        #  fontstyle='italic'
+)
+fig.text(ax1.get_position().x0, ax1.get_position().y1+0.08,
+         ('Contributions to warming expressed in terms of two IPCC definitions'),
+         fontsize=matplotlib.rcParams['axes.titlesize'],
+         fontweight='bold'
+         )
+fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
+         ('(b) Average warming across 10-years (AR6 Definition)'
+         '\nassessed from attribution studies'),
+         fontsize=matplotlib.rcParams['font.size'],
+         fontweight='regular'
+         )
+fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
+         ('(c) Present-day warming (SR1.5 Definition)'
+          '\nassessed from attribution studies'),
+         fontsize=matplotlib.rcParams['font.size'],
+         fontweight='regular'
+         )
+# Set the grid to the back for the fig
+ax0.set_axisbelow(True);
+ax1.set_axisbelow(True)
+ax2.set_axisbelow(True)
+
+
+ax0.set_ylabel('Attributable change in surface temperature since 1850-1900 (°C)')
+ax0.set_xlim(-0.7, 1.1)
+# set the ax1 ylims to be equal to the ax2 ylims    
+ax1.set_ylim(-1.2, 2.0)
+ax2.set_ylim(ax1.get_ylim())
+ax0.set_ylim(ax1.get_ylim())
+ax1.set_yticklabels([])
+ax2.set_yticklabels([])
+# fig.suptitle('Assessed contributions to observed warming')  # SPM2 title
+fig.savefig(f'{plot_folder}/4_SPM2_Results.png')
