@@ -62,7 +62,6 @@ df_Gillett_ts = pd.read_csv(
 df_Gillett_hl = pd.read_csv(
     f'results/{file_Gillett_hs}', index_col=0,  header=[0, 1], skiprows=1)
 
-print(df_Gillett_hl)
 # Combine all methods into one dictionary
 dict_updates_hl = {'Walsh': df_Walsh_hl,
                    'Ribes': df_Ribes_hl,
@@ -129,8 +128,13 @@ for period in periods_to_assess:
     df_updates_Assessment.index.name = 'Year'
     # Add it to the list
     list_of_dfs.append(df_updates_Assessment)
+    # save it
+
 
 dict_updates_hl['Assessment'] = pd.concat(list_of_dfs)
+dict_updates_hl['Assessment'].to_csv(
+        'results/Assessment-Update-2022_GMST_headlines.csv')
+
 
 # RESULTS FROM AR6 WG1 Ch.3 ###################################################
 df_AR6_assessment = pd.DataFrame({
@@ -167,6 +171,7 @@ df_SR15_assessment.columns.names = ['variable', 'percentile']
 df_SR15_assessment.index.name = 'Year'
 
 df_IPCC_assessment = pd.concat([df_AR6_assessment, df_SR15_assessment])
+df_IPCC_assessment.to_csv('results/Assessment-6thIPCC_headlines.csv')
 
 # RESULTS FROM AR6 METHODS ####################################################
 # Data available from https://github.com/ESMValGroup/ESMValTool-AR6-OriginalCode-FinalFigures/blob/ar6_chapter_3_nathan/esmvaltool/diag_scripts/ipcc_ar6/fig3_8.py
