@@ -191,17 +191,18 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
             df_temp_PiC.quantile(q=float(sigmas[s])/100, axis=1),
             df_temp_PiC.quantile(q=float(sigmas[-(s+2)])/100, axis=1),
             color=plot_cols['PiC'], alpha=fill_alpha)
-        ax.plot(df_temp_PiC.index, df_temp_PiC.quantile(q=0.5, axis=1),
-                color=plot_cols['PiC'], alpha=line_alpha,
-                label='CMIP6 piControl')
-
+    ax.plot(df_temp_PiC.index, df_temp_PiC.quantile(q=0.5, axis=1),
+            color=plot_cols['PiC'], alpha=line_alpha,
+            label='CMIP6 piControl')
+    for s in range(max(len(sigmas)//2, 1)):  # max to enable 50% only
         # Plot the GWI timeseries
         for var in plot_vars:
-            ax.fill_between(
-                df_Results_ts.index,
-                df_Results_ts.loc[:, (var, sigmas[s])].values,
-                df_Results_ts.loc[:, (var, sigmas[-(s+2)])].values,
-                color=plot_cols[var], alpha=fill_alpha)
+            if len(sigmas) > 1:
+                ax.fill_between(
+                    df_Results_ts.index,
+                    df_Results_ts.loc[:, (var, sigmas[s])].values,
+                    df_Results_ts.loc[:, (var, sigmas[-(s+2)])].values,
+                    color=plot_cols[var], alpha=fill_alpha)
             ax.plot(df_Results_ts.index,
                     df_Results_ts.loc[:, (var, sigmas[-1])].values,
                     color=plot_cols[var], alpha=line_alpha, label=var)
@@ -345,6 +346,14 @@ def Fig_3_8_validation_plot(
         source_markers, var_colours):
     """Plot AR6 WG1 Ch.3 Fig.3.8"""
 
+    labels = {
+        'Haustein': 'Global Warming Index',
+        'Walsh': 'Global Warming Index',
+        'Ribes': 'Kriging for Climate Change',
+        'Gillett': 'Regularised Optimal Fingerprinting',
+        'Smith': 'AR6 WG1 Chapter 7'
+    }
+
     bar_width = 0.4
 
     cycles = [dict_IPCC_hl, dict_updates_hl]
@@ -406,7 +415,7 @@ def Fig_3_8_validation_plot(
                         ([med_meth]),
                         yerr=([med_meth-min_meth], [max_meth-med_meth]),
                         color=var_colours[var], ms=7, lw=2,
-                        label=method,
+                        label=labels[method],
                         fmt=source_markers[method],
                         )
                     # Chris Smith's Chapter 7 results aren't included in the
@@ -444,8 +453,8 @@ def Fig_SPM2_plot(
     labels = {
         '2010-2019': '2010-2019 (AR6 Results)',
         '2013-2022': '2013-2022 (AR6-style Update)',
-        '2022 (SR1.5 definition)': '2022 (SR1.5-style Update)',
-        '2017 (SR1.5 definition)': '2017 (SR1.5 Results)',
+        '2022 (SR15 definition)': '2022 (SR1.5-style Update)',
+        '2017 (SR15 definition)': '2017 (SR1.5 Results)',
         '2017': '2017 (SR1.5 Results)',
         '2022': '2022 (SR1.5-style Update)',
     }

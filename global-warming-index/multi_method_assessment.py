@@ -38,8 +38,8 @@ df_temp_PiC.set_index(np.arange(end_yr-start_yr+1)+1850, inplace=True)
 # RESULTS FROM ANNUAL UPDATES #################################################
 # WALSH
 files = os.listdir('results')
-file_ts = [f for f in files if 'GWI_results_timeseries' in f][0]
-file_hs = [f for f in files if 'GWI_results_headlines' in f][0]
+file_ts = [f for f in files if 'Walsh_GMST_timeseries' in f][0]
+file_hs = [f for f in files if 'Walsh_GMST_headlines' in f][0]
 df_Walsh_ts = pd.read_csv(
     f'results/{file_ts}', index_col=0,  header=[0, 1])
 df_Walsh_hl = pd.read_csv(
@@ -47,30 +47,45 @@ df_Walsh_hl = pd.read_csv(
 n = file_ts.split('.csv')[0].split('_')[-1]
 
 # RIBES
-files = os.listdir('results')
-file_Ribes_ts = [f for f in files if 'Ribes_results_timeseries' in f][0]
-file_Ribes_hs = [f for f in files if 'Ribes_results_headlines' in f][0]
+file_Ribes_ts = [f for f in files if 'Ribes_GMST_timeseries' in f][0]
+file_Ribes_hs = [f for f in files if 'Ribes_GMST_headlines' in f][0]
 df_Ribes_ts = pd.read_csv(
     f'results/{file_Ribes_ts}', index_col=0,  header=[0, 1])
 df_Ribes_hl = pd.read_csv(
     f'results/{file_Ribes_hs}', index_col=0,  header=[0, 1])
 
+# GILLETT
+file_Gillett_ts = [f for f in files if 'Gillett_GMST_timeseries' in f][0]
+file_Gillett_hs = [f for f in files if 'Gillett_GMST_headlines' in f][0]
+df_Gillett_ts = pd.read_csv(
+    f'results/{file_Gillett_ts}', index_col=0,  header=[0, 1], skiprows=1)
+df_Gillett_hl = pd.read_csv(
+    f'results/{file_Gillett_hs}', index_col=0,  header=[0, 1], skiprows=1)
+
+print(df_Gillett_hl)
 # Combine all methods into one dictionary
 dict_updates_hl = {'Walsh': df_Walsh_hl,
                    'Ribes': df_Ribes_hl,
+                   'Gillett': df_Gillett_hl
                    }
 dict_updates_ts = {'Walsh': df_Walsh_ts,
                    'Ribes': df_Ribes_ts,
-                    }
+                   'Gillett': df_Gillett_ts
+                   }
 
-# MULTI-METHOD ASSESSMENT - AR6 STYLE
+# (ish) MULTI-METHOD ASSESSMENT - AR6 STYLE - TIMESERIES
+
+
+# MULTI-METHOD ASSESSMENT - AR6 STYLE - HEADLINES
 # Create a list of the variables in df_Walsh_hl
 list_of_dfs = []
-periods_to_assess = ['2010-2019', '2013-2022', '2017', '2022']
+periods_to_assess = ['2010-2019', '2013-2022',
+                     '2017', '2022',
+                     '2017 (SR15 definition)', '2022 (SR15 definition)']
 for period in periods_to_assess:
     dict_updates_Assessment = {}
 
-    variables = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
+    variables = ['Ant', 'GHG', 'OHF', 'Nat']
 
     for var in variables:
         # Find the highest 95%, lowest 5%, and all medians
@@ -265,18 +280,32 @@ df_AR6_Obs = pd.DataFrame({
 }, index=['2010-2019'])
 df_AR6_Obs.columns.names = ['variable', 'percentile']
 df_AR6_Obs.index.name = 'Year'
-
-df_update_Obs = pd.DataFrame({
+df_update_Obs_repeat = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
-    ('Obs', '50'): 1.15,  # from annual updates paper section 4 
-    ('Obs',  '5'): 1.00,  # from annual updates paper section 4 
-    ('Obs', '95'): 1.25,  # from annual updates paper section 4 
-}, index=['2013-2022'])
-df_update_Obs.columns.names = ['variable', 'percentile']
-df_update_Obs.index.name = 'Year'
+    ('Obs', '50'): 1.07,  # from annual updates paper section 4
+    ('Obs',  '5'): 0.89,  # from annual updates paper section 4
+    ('Obs', '95'): 1.22,  # from annual updates paper section 4
+}, index=['2010-2019'])
+df_update_Obs_repeat.columns.names = ['variable', 'percentile']
+df_update_Obs_repeat.index.name = 'Year'
 
-df_All_Obs = pd.concat([df_AR6_Obs, df_update_Obs])
-dict_All_Obs = {'Assessment': df_All_Obs}
+df_update_Obs_update = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Obs', '50'): 1.15,  # from annual updates paper section 4
+    ('Obs',  '5'): 1.00,  # from annual updates paper section 4
+    ('Obs', '95'): 1.25,  # from annual updates paper section 4
+}, index=['2013-2022'])
+df_update_Obs_update.columns.names = ['variable', 'percentile']
+df_update_Obs_update.index.name = 'Year'
+
+df_All_Obs = pd.concat([
+                        # df_AR6_Obs,
+                        df_update_Obs_repeat,
+                        df_update_Obs_update
+                        ])
+dict_updates_Obs_hl = {'Assessment': df_All_Obs}
+
+# dict_IPCC_hl['Obs']
 
 # Plotting colours
 var_colours = {'Tot': '#d7827e',
@@ -306,6 +335,7 @@ source_markers = {
 }
 
 plot_folder = 'plots/assessment/'
+
 # PLOT TIMESERIES FOR EACH METHOD ############################################
 for method in dict_updates_ts.keys():
     print(f'Creating {method} Simple Plot...')
@@ -329,7 +359,7 @@ for method in dict_updates_ts.keys():
 # PLOT THE VALIDATION PLOT
 ###############################################################################
 print('Creating Fig 3.8 Validation Plot')
-bar_plot_vars = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
+bar_plot_vars = ['Ant', 'GHG', 'OHF', 'Nat']
 fig = plt.figure(figsize=(12, 8))
 ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 0), rowspan=1, colspan=4)
 ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 4), rowspan=1, colspan=1)
@@ -365,7 +395,7 @@ ax0 = plt.subplot2grid(shape=(1, 5), loc=(0, 0), rowspan=1, colspan=1)
 ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
 ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
 gr.Fig_SPM2_plot(ax0, ['Obs'], ['2010-2019', '2013-2022'],
-                 dict_IPCC_hl, dict_All_Obs, var_colours)
+                 dict_IPCC_hl, dict_updates_Obs_hl, var_colours)
 gr.Fig_SPM2_plot(ax1, ['Ant', 'GHG', 'OHF', 'Nat'], ['2010-2019', '2013-2022'],
                  dict_IPCC_hl, dict_updates_hl, var_colours)
 gr.Fig_SPM2_plot(ax2, ['Ant', 'GHG', 'OHF', 'Nat'], ['2017', '2022'],
@@ -402,7 +432,7 @@ fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
          fontweight='regular'
          )
 # Set the grid to the back for the fig
-ax0.set_axisbelow(True);
+ax0.set_axisbelow(True)
 ax1.set_axisbelow(True)
 ax2.set_axisbelow(True)
 
