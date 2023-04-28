@@ -37,45 +37,35 @@ df_temp_PiC.set_index(np.arange(end_yr-start_yr+1)+1850, inplace=True)
 
 # RESULTS FROM ANNUAL UPDATES #################################################
 # WALSH
+dict_updates_hl = {}
+dict_updates_ts = {}
 files = os.listdir('results')
-file_ts = [f for f in files if 'Walsh_GMST_timeseries' in f][0]
-file_hs = [f for f in files if 'Walsh_GMST_headlines' in f][0]
-df_Walsh_ts = pd.read_csv(
-    f'results/{file_ts}', index_col=0,  header=[0, 1])
-df_Walsh_hl = pd.read_csv(
-    f'results/{file_hs}', index_col=0,  header=[0, 1])
-n = file_ts.split('.csv')[0].split('_')[-1]
-
-# RIBES
-file_Ribes_ts = [f for f in files if 'Ribes_GMST_timeseries' in f][0]
-file_Ribes_hs = [f for f in files if 'Ribes_GMST_headlines' in f][0]
-df_Ribes_ts = pd.read_csv(
-    f'results/{file_Ribes_ts}', index_col=0,  header=[0, 1])
-df_Ribes_hl = pd.read_csv(
-    f'results/{file_Ribes_hs}', index_col=0,  header=[0, 1])
-
-# GILLETT
-file_Gillett_ts = [f for f in files if 'Gillett_GMST_timeseries' in f][0]
-file_Gillett_hs = [f for f in files if 'Gillett_GMST_headlines' in f][0]
-df_Gillett_ts = pd.read_csv(
-    f'results/{file_Gillett_ts}', index_col=0,  header=[0, 1], skiprows=1)
-df_Gillett_hl = pd.read_csv(
-    f'results/{file_Gillett_hs}', index_col=0,  header=[0, 1], skiprows=1)
-
-# Combine all methods into one dictionary
-dict_updates_hl = {'Walsh': df_Walsh_hl,
-                   'Ribes': df_Ribes_hl,
-                   'Gillett': df_Gillett_hl
-                   }
-dict_updates_ts = {'Walsh': df_Walsh_ts,
-                   'Ribes': df_Ribes_ts,
-                   'Gillett': df_Gillett_ts
-                   }
-
-# (ish) MULTI-METHOD ASSESSMENT - AR6 STYLE - TIMESERIES
+for method in ['Walsh', 'Ribes', 'Gillett']:
+    file_ts = [f for f in files if f'{method}_GMST_timeseries' in f][0]
+    file_hs = [f for f in files if f'{method}_GMST_headlines' in f][0]
+    skiprows = 1 if method == 'Gillett' else 0
+    df_method_ts = pd.read_csv(
+        f'results/{file_ts}', index_col=0,  header=[0, 1], skiprows=skiprows)
+    df_method_hl = pd.read_csv(
+        f'results/{file_hs}', index_col=0,  header=[0, 1], skiprows=skiprows)
+    if method == 'Walsh':
+        n = file_ts.split('.csv')[0].split('_')[-1]
+    dict_updates_hl[method] = df_method_hl
+    dict_updates_ts[method] = df_method_ts
 
 
-# MULTI-METHOD ASSESSMENT - AR6 STYLE - HEADLINES
+# Nathan Gillett's timeseries results aren't PI-baselined, so do this now
+df_ts = dict_updates_ts['Gillett']
+ofst_ts = df_ts.loc[(df_ts.index >= start_pi) & (df_ts.index <= end_pi)
+                    ].mean(axis=0)
+dict_updates_ts['Gillett'] = df_ts - ofst_ts
+
+# (ish) MULTI-METHOD ASSESSMENT - AR6 STYLE - TIMESERIES ######################
+# Conclusion: no uncertainty plumes available at time of writing ROF method,
+# "Gillett", so this a multi-method timeseries is not created.
+# Instead, we plot individual methods separately as an indicative alternative.
+
+# MULTI-METHOD ASSESSMENT - AR6 STYLE - HEADLINES #############################
 # Create a list of the variables in df_Walsh_hl
 list_of_dfs = []
 periods_to_assess = ['2010-2019', '2013-2022',
