@@ -85,12 +85,13 @@ for period in periods_to_assess:
         medians = [dict_updates_hl[m].loc[period, (var, '50')]
                    for m in dict_updates_hl.keys()]
 
-        # Follow AR6 assessment method of best estimate being the mean of the
-        # estimates for each method, and the likely range being the smallest
-        # 0.1C-precision range that envelops the 5-95% range for each method
+        # Follow AR6 assessment method of best estimate being the
+        # 0.01C-prevision mean of the central estimates for each method, and
+        # the likely range being the smallest 0.1C-precision range that
+        # envelops the 5-95% range for each method.
 
         # The simplest way to handle the multiple cases of some or all values
-        # being negative is just to simply translate them all to be posisitve
+        # being negative is to translate them all to being posisitve.
         minimum, maximum = minimum + 10, maximum + 10
 
         likely_min = (np.floor(np.sign(minimum) * minimum * 10) / 10 *
@@ -118,8 +119,6 @@ for period in periods_to_assess:
     df_updates_Assessment.index.name = 'Year'
     # Add it to the list
     list_of_dfs.append(df_updates_Assessment)
-    # save it
-
 
 dict_updates_hl['Assessment'] = pd.concat(list_of_dfs)
 dict_updates_hl['Assessment'].to_csv(
@@ -132,19 +131,19 @@ df_AR6_assessment = pd.DataFrame({
     ('Tot', '50'): 1.06,  # AR6 3.3.1.1.2 p442 from observations
     ('Tot',  '5'): 0.88,  # AR6 3.3.1.1.2 p442 from observations
     ('Tot', '95'): 1.21,  # AR6 3.3.1.1.2 p442 from observations
-    ('Ant', '50'): 1.07, # AR6 3.3.1.1.2 p442, and SPM A.1.3
+    ('Ant', '50'): 1.07,  # AR6 3.3.1.1.2 p442, and SPM A.1.3
     ('Ant',  '5'): 0.80,  # AR6 3.3.1.1.2 p442, and SPM A.1.3
     ('Ant', '95'): 1.30,  # AR6 3.3.1.1.2 p442, and SPM A.1.3
-    ('GHG', '50'): 1.40,  # AR6 We introduce multi-method assessment here # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of 1.5
+    ('GHG', '50'): 1.40,  # AR6 We introduce multi-method assessment here - 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range to give 1.5
     ('GHG',  '5'): 1.00,  # AR6 3.3.1.1.2 p442, SPM A.1.3
     ('GHG', '95'): 2.00,  # AR6 3.3.1.1.2 p442, SPM A.1.3
-    ('Nat', '50'): 0.03,  # We introduce multi-method assessment here # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of 0.0
+    ('Nat', '50'): 0.03,  # We introduce multi-method assessment here - 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range to give 0.0
     ('Nat',  '5'): -0.10,  # AR6 3.3.1.1.2 p442, SPM A.1.3
     ('Nat', '95'): 0.10,  # AR6 3.3.1.1.2 p442, SPM A.1.3
-    ('OHF', '50'): -0.32,  # We introduce multi-method assessment here # 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of -0.4
+    ('OHF', '50'): -0.32,  # We introduce multi-method assessment here - 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range to give -0.4
     ('OHF',  '5'): -0.80,  # AR6 3.3.1.1.2 p442, SPM A.1.3
     ('OHF', '95'): 0.00,  # AR6 3.3.1.1.2 p442, SPM A.1.3
-    ('Int', '50'): 0.00,  # AR6 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range of 0.0
+    ('Int', '50'): 0.00,  # AR6 3.3.1.1.2 had no value for this, and SPM2 just plotted midpoint of likely range to give 0.0, which is still used here.
     ('Int',  '5'): -0.20,  # AR6 3.3.1.1.2 p443, SPM A.1.3
     ('Int', '95'): 0.20,  # AR6 3.3.1.1.2 p443, SPM A.1.3
 }, index=['2010-2019'])
@@ -165,8 +164,6 @@ df_IPCC_assessment.to_csv('results/Assessment-6thIPCC_headlines.csv')
 
 # RESULTS FROM AR6 METHODS ####################################################
 # Data available from https://github.com/ESMValGroup/ESMValTool-AR6-OriginalCode-FinalFigures/blob/ar6_chapter_3_nathan/esmvaltool/diag_scripts/ipcc_ar6/fig3_8.py
-
-
 df_AR6_Haustein = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
     ('Ant', '50'): 1.064,
@@ -225,8 +222,8 @@ df_AR6_Gillett = pd.DataFrame({
     ('Ant',  '5'): 0.92,
     ('Ant', '95'): 1.30,
     ('GHG', '50'): 1.50,
-    ('GHG',  '5'): 1.06, 
-    ('GHG', '95'): 1.94, 
+    ('GHG',  '5'): 1.06,
+    ('GHG', '95'): 1.94,
     ('Nat', '50'): 0.01,
     ('Nat',  '5'): -0.02,
     ('Nat', '95'): 0.05,
@@ -300,7 +297,6 @@ df_All_Obs = pd.concat([
                         ])
 dict_updates_Obs_hl = {'Assessment': df_All_Obs}
 
-# dict_IPCC_hl['Obs']
 
 # Plotting colours
 var_colours = {'Tot': '#d7827e',
@@ -312,22 +308,12 @@ var_colours = {'Tot': '#d7827e',
                'Obs': '#797593',
                'PiC': '#cecacd'}
 
-# period_colours = {
-#     '2010-2019': '#e0def4',  # '#4a8fbb',
-#     '2013-2022': '#31748f',  # '#4a8fcc',
-#     '2022': '#9ccfd8',  # '#9bd6fa'
-#     '2017': 'red',
-#     '2022 (SR15 definition)': 'orange',
-#     '2017 (SR1.5 definition)': 'green',
-# }
-
 source_markers = {
-    'Haustein': 'o',
+    'Haustein': 'o',  # Walsh and Haustein are both GWI so get same symbol.
     'Walsh': 'o',
     'Ribes': 'v',
     'Gillett': 's',
-    'Smith': 'D'
-}
+    'Smith': 'D'}
 
 plot_folder = 'plots/assessment/'
 
@@ -346,7 +332,7 @@ for method in dict_updates_ts.keys():
     fig.savefig(f'{plot_folder}/2_{method}_timeseries.png')
 
 ###############################################################################
-# PLOT THE NULTI-METHOD TIMESERIES
+# PLOT THE MULTI-METHOD TIMESERIES
 ###############################################################################
 # tbc
 
