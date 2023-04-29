@@ -59,6 +59,10 @@ df_ts = dict_updates_ts['Gillett']
 ofst_ts = df_ts.loc[(df_ts.index >= start_pi) & (df_ts.index <= end_pi)
                     ].mean(axis=0)
 dict_updates_ts['Gillett'] = df_ts - ofst_ts
+dict_updates_ts['Gillett'].loc[:, ('Tot', '50')] = (
+    dict_updates_ts['Gillett'].loc[:, ('Ant', '50')] +
+    dict_updates_ts['Gillett'].loc[:, ('Nat', '50')]
+)
 
 # (ish) MULTI-METHOD ASSESSMENT - AR6 STYLE - TIMESERIES ######################
 # Conclusion: no uncertainty plumes available at time of writing ROF method,
@@ -315,6 +319,15 @@ source_markers = {
     'Gillett': 's',
     'Smith': 'D'}
 
+labels = {
+    'Haustein': 'Global Warming Index',
+    'Walsh': 'Global Warming Index',
+    'Ribes': 'Kriging for Climate Change',
+    'Gillett': 'Regularised Optimal Fingerprinting',
+    'Smith': 'AR6 WG1 Chapter 7',
+    }
+
+
 plot_folder = 'plots/assessment/'
 
 # PLOT TIMESERIES FOR EACH METHOD ############################################
@@ -327,14 +340,72 @@ for method in dict_updates_ts.keys():
                       plot_vars, var_colours)
     ax.set_ylim(-1, 2)
     ax.set_xlim(1850, 2022)
+    ax.text(1875, -0.85, '1850-1900\nPreindustrial Baseline', ha='center')
     gr.overall_legend(fig, 'lower center', 6)
     fig.suptitle(f'{method} Timeseries Plot')
     fig.savefig(f'{plot_folder}/2_{method}_timeseries.png')
+    fig.savefig(f'{plot_folder}/2_{method}_timeseries.svg')
+
 
 ###############################################################################
-# PLOT THE MULTI-METHOD TIMESERIES
+# PLOT THE MULTI-METHOD TIMESERIES IN SINGLE FIGURE
 ###############################################################################
-# tbc
+print('Creating Multi-Method Stacked Plot...')
+fig = plt.figure(figsize=(12, 8))
+ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
+
+gr.gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, dict_updates_ts['Walsh'],
+                  plot_vars, var_colours, sigmas=['5', '95', '50'],
+                  labels=True)
+for m, l in zip(['Walsh', 'Ribes', 'Gillett'], ['-', '--', ':']):
+    for v in plot_vars:
+        ax.plot(
+            dict_updates_ts[m].index,
+            dict_updates_ts[m].loc[:, (v, '50')].values,
+            color=var_colours[v],
+            ls=l, lw=2, alpha=0.7)
+    ax.plot([100, 100], [100, 100], color='black', lw=2, alpha=0.7, ls=l,
+            label=f'{m}: {labels[m]}')
+
+ax.set_ylim(-1, 2)
+ax.set_xlim(1850, 2022)
+ax.text(1875, -0.85, '1850-1900\nPreindustrial Baseline', ha='center')
+fig.suptitle('Timeseries for each attribution method used '
+             'in the assessment of contributions to observed warming')
+fig.tight_layout(rect=(0.02, 0.08, 0.98, 0.98))
+
+gr.overall_legend(fig, 'lower center', 3, reorder=[8, 0, 1, 2, 3, 4, 5, 6, 7])
+fig.savefig(f'{plot_folder}/2_stacked-multi_method_timeseries.png')
+fig.savefig(f'{plot_folder}/2_stacked-multi_method_timeseries.svg')
+
+###############################################################################
+# PLOT THE MULTI-METHOD TIMESERIES IN MULTI-FIGURE
+###############################################################################
+print('Creating Multi-Method Aligned Plot...')
+fig = plt.figure(figsize=(16, 6))
+methods = ['Walsh', 'Ribes', 'Gillett']
+subs = ['(a)', '(b)', '(c)']
+
+for m in methods:
+    ax = plt.subplot2grid(shape=(1, 3), loc=(0, methods.index(m)),
+                          rowspan=1, colspan=1)
+    PiC = df_temp_PiC if m == 'Walsh' else None
+    gr.gwi_timeseries(ax, df_temp_Obs, PiC, dict_updates_ts[m],
+                      ['Tot', 'GHG', 'Nat', 'OHF'], var_colours)
+    ax.set_ylim(-1, 2)
+    ax.set_xlim(1900, 2022)
+    if methods.index(m) > 0:
+        ax.set_ylabel('')
+        ax.set_yticklabels([])
+    ax.set_title(f'{subs[methods.index(m)]} {m}: {labels[m]}')
+gr.overall_legend(fig, 'lower center', 6)
+# fig.suptitle('Testing one two three how do we think this looks?')
+fig.tight_layout(rect=(0.02, 0.08, 0.98, 0.94))
+fig.suptitle('Timeseries for each attribution method used '
+             'in the assessment of contributions to observed warming')
+fig.savefig(f'{plot_folder}/2_aligned-multi_method_timeseries.png')
+fig.savefig(f'{plot_folder}/2_aligned-multi_method_timeseries.svg')
+
 
 ###############################################################################
 # PLOT THE VALIDATION PLOT
@@ -347,10 +418,10 @@ ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 4), rowspan=1, colspan=1)
 
 gr.Fig_3_8_validation_plot(ax2, ['Ant'], '2017',
                            dict_IPCC_hl, dict_updates_hl,
-                           source_markers, var_colours)
+                           source_markers, var_colours, labels)
 gr.Fig_3_8_validation_plot(ax1, bar_plot_vars, '2010-2019',
                            dict_IPCC_hl, dict_updates_hl,
-                           source_markers, var_colours)
+                           source_markers, var_colours, labels)
 
 # set the ax2 ylims to be equal to the ax1 ylims
 ax1.set_ylim(-1.0, 2.0)
@@ -360,27 +431,80 @@ ax2.set_xlim(-0.2, 1.1)
 ax2.set_yticklabels([])
 
 # set the y axis label
-ax1.set_ylabel('Attributable change in surface temperature since 1850-1900 (°C)')
+ax1.set_ylabel('Attributable change in surface temperature '
+               'since 1850-1900 (°C)')
 
-gr.overall_legend(fig, 'lower center', 5)
-fig.suptitle('Validation of updates (right bar)' +
-             'vs Results from IPCC (left bar)')
+
+# create a one datapoint at 100, 100 for each method:
+for m in sorted(labels.keys()):
+    ax2.errorbar(2., 1., yerr=0.1, xerr=None,
+                 label=labels[m], fmt=source_markers[m],
+                 color='gray', ms=7, lw=2,
+                 )
+gr.overall_legend(fig, 'lower center', 4)
+fig.tight_layout(rect=(0.02, 0.08, 0.98, 0.88))
+
+fig.suptitle('Validation of updated lines of evidence for assessing '
+             'contributions to observed warming')
+# fig.suptitle('Validation of updates (right bar)' +
+#              'vs Results from IPCC (left bar)')
+# fig.text(ax1.get_position().x0, ax1.get_position().y1+0.08,
+#          ('Validation of updated lines of evidence for assessing '
+#           'contributions to observed warming - cf. AR6 WG1 Fig.3.8'),
+#          fontsize=matplotlib.rcParams['axes.titlesize'],
+#          fontweight='bold'
+#          )
+fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
+         '(a) 2010-2019 AR6 WG1 Ch.3 (left)\nvs 2010-2019 repeat (right)',
+         ha='left', fontsize=matplotlib.rcParams['axes.titlesize'],
+         fontweight='regular',
+        #  fontstyle='italic'
+        )
+fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
+         '(b) 2017 SR1.5 Ch.1 (left)\nvs 2017 repeat (right)',
+         ha='left', fontsize=matplotlib.rcParams['axes.titlesize'],
+         fontweight='regular',
+        #  fontstyle='italic'
+        )
 fig.savefig(f'{plot_folder}/3_WG1_Ch3_Validation.png')
+fig.savefig(f'{plot_folder}/3_WG1_Ch3_Validation.svg')
 
 ###############################################################################
 # Plot the headline SPM2-esque figure
 ###############################################################################
 print('Creating SPM.2-esque figure')
-fig = plt.figure(figsize=(12, 8))
+text_toggle = False
+fig = plt.figure(figsize=(12, 10))
 ax0 = plt.subplot2grid(shape=(1, 5), loc=(0, 0), rowspan=1, colspan=1)
 ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
 ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
 gr.Fig_SPM2_plot(ax0, ['Obs'], ['2010-2019', '2013-2022'],
-                 dict_IPCC_hl, dict_updates_Obs_hl, var_colours)
+                 dict_IPCC_hl, dict_updates_Obs_hl,
+                 var_colours, labels,text_toggle)
 gr.Fig_SPM2_plot(ax1, ['Ant', 'GHG', 'OHF', 'Nat'], ['2010-2019', '2013-2022'],
-                 dict_IPCC_hl, dict_updates_hl, var_colours)
+                 dict_IPCC_hl, dict_updates_hl,
+                 var_colours, labels,text_toggle)
 gr.Fig_SPM2_plot(ax2, ['Ant', 'GHG', 'OHF', 'Nat'], ['2017', '2022'],
-                 dict_IPCC_hl, dict_updates_hl, var_colours)
+                 dict_IPCC_hl, dict_updates_hl,
+                 var_colours, labels,text_toggle)
+
+
+# Set the grid to the back for the fig
+ax0.set_axisbelow(True)
+ax1.set_axisbelow(True)
+ax2.set_axisbelow(True)
+
+ax0.set_ylabel('Attributable change in global mean surface temperature '
+               'since 1850-1900 (°C)')
+ax0.set_xlim(-0.7, 1.1)
+# set the ax1 ylims to be equal to the ax2 ylims    
+ax1.set_ylim(-1.0 - text_toggle * 0.2, 2.0)
+ax2.set_ylim(ax1.get_ylim())
+ax0.set_ylim(ax1.get_ylim())
+ax1.set_yticklabels([])
+ax2.set_yticklabels([])
+
+fig.tight_layout(rect=(0.02, 0.04, 0.98, 0.88))
 
 # Plot the text
 fig.text(ax0.get_position().x0, ax0.get_position().y1+0.08,
@@ -389,42 +513,54 @@ fig.text(ax0.get_position().x0, ax0.get_position().y1+0.08,
          fontweight='bold'
          )
 fig.text(ax0.get_position().x0, ax0.get_position().y1+0.02,
-         '(a) Observed warming\naveraged over 10-years',
+         '(a) Decade-average warming\ngiven by observations',
          ha='left',
          fontsize=matplotlib.rcParams['font.size'],
          fontweight='regular',
         #  fontstyle='italic'
 )
 fig.text(ax1.get_position().x0, ax1.get_position().y1+0.08,
-         ('Contributions to warming expressed in terms of two IPCC definitions'),
+         ('Contributions to observed warming '
+          'expressed in terms of two IPCC warming definitions'),
          fontsize=matplotlib.rcParams['axes.titlesize'],
          fontweight='bold'
          )
 fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
-         ('(b) Average warming across 10-years (AR6 Definition)'
+         ('(b) AR6 Update: Decade-average warming contributions'
          '\nassessed from attribution studies'),
          fontsize=matplotlib.rcParams['font.size'],
          fontweight='regular'
          )
 fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
-         ('(c) Present-day warming (SR1.5 Definition)'
+         ('(c) SR1.5 Update: Present-day warming contributions'
           '\nassessed from attribution studies'),
          fontsize=matplotlib.rcParams['font.size'],
          fontweight='regular'
          )
-# Set the grid to the back for the fig
-ax0.set_axisbelow(True)
-ax1.set_axisbelow(True)
-ax2.set_axisbelow(True)
+
+# Add arrow from Other Human Forcing to Total Human-induced Warming
+for ax in [ax1, ax2]:
+    # get bounds of ax1
+    x0 = ax.get_position().x0
+    y0 = ax.get_position().y0
+    wi = ax.get_position().width
+    xcoords = [[wi/8, wi/8], [3*wi/8, 3*wi/8],
+               [5*wi/8, 5*wi/8], [wi/8, 5*wi/8]]
+    ycoords = [[y0-0.225, y0-0.26], [y0-0.225, y0-0.26],
+               [y0-0.171, y0-0.26], [y0-0.26, y0-0.26]]
+    arrow = ['<-', ']-', ']-', '-']
+    for i in range(4):
+        plt.annotate('',
+                     arrowprops=dict(arrowstyle=arrow[i],
+                                     shrinkA=0, shrinkB=0, 
+                                     color='gainsboro',
+                                     lw=1),
+                     xy=(xcoords[i][1]+x0, ycoords[i][1]),
+                     xycoords='figure fraction',
+                     xytext=(xcoords[i][0]+x0, ycoords[i][0]),
+                     textcoords='figure fraction')
 
 
-ax0.set_ylabel('Attributable change in surface temperature since 1850-1900 (°C)')
-ax0.set_xlim(-0.7, 1.1)
-# set the ax1 ylims to be equal to the ax2 ylims    
-ax1.set_ylim(-1.2, 2.0)
-ax2.set_ylim(ax1.get_ylim())
-ax0.set_ylim(ax1.get_ylim())
-ax1.set_yticklabels([])
-ax2.set_yticklabels([])
 # fig.suptitle('Assessed contributions to observed warming')  # SPM2 title
 fig.savefig(f'{plot_folder}/4_SPM2_Results.png')
+fig.savefig(f'{plot_folder}/4_SPM2_Results.svg')

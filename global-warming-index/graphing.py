@@ -7,11 +7,12 @@ import matplotlib.pyplot as plt
 import scipy.stats as ss
 import seaborn as sns
 from gwi import moving_average
+import sys
 
 
 matplotlib.rcParams.update({
     # General figure
-    'figure.dpi': 200,
+    'figure.dpi': 300,
     'figure.figsize': (15, 10),
     'figure.titlesize': 17,
     'figure.titleweight': 'light',
@@ -45,7 +46,7 @@ matplotlib.rcParams.update({
 # Fontweights~: light, regular, normal,
 
 
-def overall_legend(fig, loc, ncol, nrow=False):
+def overall_legend(fig, loc, ncol, nrow=False, reorder=None):
     """Add a clean legend to a figure with multiple subplots."""
     handles, labels = [], []
 
@@ -57,8 +58,14 @@ def overall_legend(fig, loc, ncol, nrow=False):
             labels.extend(ls)
 
     by_label = dict(zip(labels, handles))
+    if reorder is None:
+        order = np.arange(len(by_label))
+    else:
+        order = reorder
+    
 
-    fig.legend(by_label.values(), by_label.keys(),
+    fig.legend([list(by_label.values())[i] for i in order],
+               [list(by_label.keys())[i] for i in order],
                loc=loc, ncol=ncol)
 
     ## rect = (left, bottom, right, top)
@@ -163,14 +170,15 @@ def plot_internal_variability_sample(
 
 
 def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
-                   plot_vars, plot_cols):
+                   plot_vars, plot_cols, sigmas='all', labels=True):
     """Plot the GWI timeseries for the given variables."""
     ax.set_ylabel(
         'Attributable change in surface temperature since 1850-1900 (°C)'
         )
-    fill_alpha = 0.3
+    fill_alpha = 0.25
     line_alpha = 0.7
-    sigmas = df_Results_ts.columns.get_level_values('percentile').unique()
+    if sigmas == 'all':
+        sigmas = df_Results_ts.columns.get_level_values('percentile').unique()
     # Shade the pre-industrial period
     ax.fill_between([1850, 1900], [-5, -5], [+5, +5],
                     color='#f4f2f1')
@@ -183,17 +191,20 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
     ax.errorbar(df_temp_Obs.index, df_temp_Obs.quantile(q=0.5, axis=1),
                 yerr=(err_neg, err_pos),
                 fmt='o', color=plot_cols['Obs'], ms=2.5, lw=1,
-                label='Reference Temp: HadCRUT5')
-    for s in range(len(sigmas)//2):
-        # Plot the PiControl ensemble
-        ax.fill_between(
-            df_temp_PiC.index,
-            df_temp_PiC.quantile(q=float(sigmas[s])/100, axis=1),
-            df_temp_PiC.quantile(q=float(sigmas[-(s+2)])/100, axis=1),
-            color=plot_cols['PiC'], alpha=fill_alpha)
-    ax.plot(df_temp_PiC.index, df_temp_PiC.quantile(q=0.5, axis=1),
-            color=plot_cols['PiC'], alpha=line_alpha,
-            label='CMIP6 piControl')
+                label=labels*'Reference Temp: HadCRUT5')
+    if df_temp_PiC is not None:
+        if len(sigmas) > 1:
+            for s in range(len(sigmas)//2):
+                # Plot the PiControl ensemble
+                    ax.fill_between(
+                        df_temp_PiC.index,
+                        df_temp_PiC.quantile(q=float(sigmas[s])/100, axis=1),
+                        df_temp_PiC.quantile(q=float(sigmas[-(s+2)])/100, axis=1),
+                        color=plot_cols['PiC'], alpha=fill_alpha, linewidth=0.0)
+        ax.plot(df_temp_PiC.index, df_temp_PiC.quantile(q=0.5, axis=1),
+                color=plot_cols['PiC'], alpha=line_alpha,
+                label=labels*'CMIP6 piControl')
+
     for s in range(max(len(sigmas)//2, 1)):  # max to enable 50% only
         # Plot the GWI timeseries
         for var in plot_vars:
@@ -202,14 +213,13 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
                     df_Results_ts.index,
                     df_Results_ts.loc[:, (var, sigmas[s])].values,
                     df_Results_ts.loc[:, (var, sigmas[-(s+2)])].values,
-                    color=plot_cols[var], alpha=fill_alpha)
+                    color=plot_cols[var], alpha=fill_alpha, linewidth=0.0)
             ax.plot(df_Results_ts.index,
                     df_Results_ts.loc[:, (var, sigmas[-1])].values,
-                    color=plot_cols[var], alpha=line_alpha, label=var)
+                    color=plot_cols[var], alpha=line_alpha, label=labels*var)
 
     ax.set_xticks([1850, 1900, 1950, 2000, 2022],
                   [1850, 1900, 1950, 2000, 2022])
-    ax.text(1875, -0.85, '1850-1900\nPreindustrial Baseline', ha='center')
 
 
 def gwi_residuals(ax, df_Results_ts):
@@ -343,18 +353,37 @@ def Fig_SPM2_validation_plot(ax, period, variables, dict_updates_hl, source_cols
 def Fig_3_8_validation_plot(
         ax, variables, period,
         dict_IPCC_hl, dict_updates_hl,
-        source_markers, var_colours):
+        source_markers, var_colours, labels):
     """Plot AR6 WG1 Ch.3 Fig.3.8"""
 
-    labels = {
-        'Haustein': 'Global Warming Index',
-        'Walsh': 'Global Warming Index',
-        'Ribes': 'Kriging for Climate Change',
-        'Gillett': 'Regularised Optimal Fingerprinting',
-        'Smith': 'AR6 WG1 Chapter 7'
-    }
-
     bar_width = 0.4
+
+    # Manually add observations...
+    if period == '2010-2019':
+        ax.fill_between(
+            [-1 + 0 * 0.45, -1 + 0 + bar_width], 0.88, 1.21,
+            color=var_colours['Obs'], alpha=0.4,)
+        ax.plot(
+            [-1 + 0 * 0.45, -1 + 0 + bar_width], [1.06, 1.06],
+            color=var_colours['Obs'], lw=2)
+        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (1.06, 1.21, 0.88)
+        ax.text(
+            (-1 + 0 * 0.45 + bar_width / 2), 0.6,
+            str_Result,
+            ha='center', va='center', color='black')
+        ax.fill_between(
+            [-1 + 1 * 0.45, -1 + 0.45 + bar_width], 0.89, 1.22,
+            color=var_colours['Obs'], alpha=0.6,)
+        ax.plot(
+            [-1 + 1 * 0.45, -1 + 0.45 + bar_width], [1.07, 1.07],
+            color=var_colours['Obs'], lw=2)
+        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (1.07, 1.22, 0.89)
+        ax.text(
+            (-1 + 1 * 0.45 + bar_width / 2), 0.6,
+            str_Result,
+            ha='center', va='center', color='black')
+        
+       
 
     cycles = [dict_IPCC_hl, dict_updates_hl]
     for var in variables:
@@ -384,80 +413,91 @@ def Fig_3_8_validation_plot(
                 color=(var_colours['Obs']
                        if (var == 'Tot' and cycles.index(cycle)==0)
                        else var_colours[var]),
-                # Depict that the nest estimates are a new inclusion.
+                # Depict that the best estimates are a new inclusion.
                 ls=ls,
                 lw=2)
 
             # Write str_Result in the middle of the plot
             str_Result = r'${%s}^{{%s}}_{{%s}}$' % \
                 (med_assess, max_assess, min_assess)
-            if (var == 'Tot' and cycles.index(cycle) == 0):
-                str_Result = str_Result + '\n(Obs)'
             ax.text(
-                (variables.index(var) + cycles.index(cycle) * 0.45
+                (variables.index(var)
+                 + cycles.index(cycle) * 0.45
                  + bar_width / 2),
                 0.6,
                 str_Result,
                 ha='center', va='center', color='black')
 
             # Plot the individual methods' results
-            methods = sorted(list(cycle.keys()))[::-1]
-            methods.remove('Assessment')
-            for method in methods:
-                vt = var in cycle[method].columns.get_level_values('variable')
-                pt = period in cycle[method].index
+
+            # A little footwork to plot the methods in the alphabetical order
+            # of their method names, not authors...
+            inv_labels = {val: key for key, val in labels.items()
+                                   if key in cycle.keys()}
+            usable_authors = set.intersection(set(labels.keys()),
+                                              set(cycle.keys()))
+            usable_methods = sorted([labels[m] for m in usable_authors])
+            for method in usable_methods:
+                author = inv_labels[method]
+                vt = var in cycle[author].columns.get_level_values('variable')
+                pt = period in cycle[author].index
                 if vt and pt:
-                    med_meth = cycle[method].loc[period, (var, '50')]
-                    min_meth = cycle[method].loc[period, (var, '5')]
-                    max_meth = cycle[method].loc[period, (var, '95')]
-                    test = ax.errorbar(
-                        variables.index(var) + 0.45*cycles.index(cycle) + 0.1 + methods.index(method)*(bar_width-0.2)/(len(methods)-1),
+                    med_meth = cycle[author].loc[period, (var, '50')]
+                    min_meth = cycle[author].loc[period, (var, '5')]
+                    max_meth = cycle[author].loc[period, (var, '95')]
+                    erbr = ax.errorbar(
+                        (variables.index(var)
+                         + 0.45*cycles.index(cycle)
+                         + 0.1
+                         + (usable_methods.index(method)
+                            * (bar_width-0.2)
+                            / (len(usable_methods)-1))
+                         ),
                         ([med_meth]),
                         yerr=([med_meth-min_meth], [max_meth-med_meth]),
                         color=var_colours[var], ms=7, lw=2,
-                        label=labels[method],
-                        fmt=source_markers[method],
+                        label=labels[author],
+                        fmt=source_markers[author],
                         )
                     # Chris Smith's Chapter 7 results aren't included in the
                     # multimethod assessment, so plot with dashed line
-                    if method == 'Smith':
-                        test[-1][0].set_linestyle('--')
+                    if author == 'Smith':
+                        erbr[-1][0].set_linestyle('--')
 
-    
     # Remove the ticks from the x axis
     ax.xaxis.grid(False)
     # Set new custom x ticks
-    ax.set_xticks(np.arange(len(variables)) + 0.425)
+    ax.set_xticks(np.arange(len(variables) + 1) - 1 + 0.425)
     # Set the x tick labels
-    ax.set_xticklabels(variables)
-    # Create a title for the plot
+    ax.set_xticklabels(['Obs'] + variables)
     # Plot a middle-line
     ax.axhline(y=0, color='gray', linestyle='-',
             #    linewidth=0.5, alpha=0.7
                )
 
-    if period == '2010-2019':
-        ax.set_title(f'AR6 WG1 Ch.3\n({period} warming)')
-    elif period == '2017':
-        ax.set_title(f'SR1.5 Ch.1\n({period} warming)')
+    # if period == '2010-2019':
+    #     ax.set_title(f'AR6 WG1 Ch.3\n({period} warming)')
+    # elif period == '2017':
+    #     ax.set_title(f'SR1.5 Ch.1\n({period} warming)')
 
 
 def Fig_SPM2_plot(
     ax, variables, periods,
     dict_IPCC_hl, dict_updates_hl,
-    var_colours):
+    var_colours, labels,
+    text_toggle):
     """Plot AR6 WG1 SPM Fig.2-esque figure summarising assessed results."""
     # bar_width = (1.0-0.4)/(len(periods))
     bar_width = 0.3
 
-    labels = {
-        '2010-2019': '2010-2019 (AR6 Results)',
-        '2013-2022': '2013-2022 (AR6-style Update)',
-        '2022 (SR15 definition)': '2022 (SR1.5-style Update)',
-        '2017 (SR15 definition)': '2017 (SR1.5 Results)',
-        '2017': '2017 (SR1.5 Results)',
-        '2022': '2022 (SR1.5-style Update)',
-    }
+
+    names = {
+        'Obs': 'Observed Warming',
+        'Ant': 'Total Human-induced Warming',
+        'GHG': 'Well-mixed Greenhouse Gases',
+        'OHF': 'Other Human Forcings',
+        'Nat': 'Natural Forcings',
+        }
 
     for var in variables:
         for period in periods:
@@ -480,22 +520,19 @@ def Fig_SPM2_plot(
                    med,
                    yerr=([med-neg], [pos-med]),
                    error_kw=dict(lw=0.8, capsize=2, capthick=0.8),
-                   label=labels[period],
                    width=bar_width,
-                #    color=period_colours[period],
-                #    color=var_colours[var],
                    color=colour,
                    alpha=1.0 if '2022' in period else 0.7)
-
-            str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med, pos, neg)
-            ax.text(
-                variables.index(var) + bar_loc_offset,
-                -1.1,
-                str_Result,
-                ha='center', va='bottom', color='black',
-                rotation=90,
-                # fontsize=8
-                )
+            if text_toggle:
+                str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med, pos, neg)
+                ax.text(
+                    variables.index(var) + bar_loc_offset,
+                    -1.1,
+                    str_Result,
+                    ha='center', va='bottom', color='black',
+                    rotation=90,
+                    # fontsize=8
+                    )
             if variables.index(var) == 0:
                 ax.text(
                     variables.index(var) + bar_loc_offset,
@@ -503,11 +540,15 @@ def Fig_SPM2_plot(
                     period,
                     ha='center', va='bottom', color='white',
                     rotation=90,
-                    weight='normal'
+                    weight='regular'
                     # fontsize=8
                     )
 
     # add grid line for x axis
     ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-    ax.set_xticks(np.arange(len(variables))+(bar_width/2)*(len(periods)-1),
-                  variables)
+    # Component labels
+    tick_locs = np.arange(len(variables)) + (bar_width/2)*(len(periods)-1)
+    # ax.text(tick_locs), -0.5, 
+    ax.set_xticks(tick_locs, [names[v] for v in variables], rotation=270,
+                  weight='regular'
+                  )
