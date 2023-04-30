@@ -1,16 +1,13 @@
 import os
 import sys
-import glob
 
 import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 
-import pymagicc
-
-import graphing as gr
-from gwi import load_HadCRUT, load_PiC_CMIP6, filter_PiControl
+from global_warming_index.src import graphing as gr
+from global_warming_index.src.definitions import *
 
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################

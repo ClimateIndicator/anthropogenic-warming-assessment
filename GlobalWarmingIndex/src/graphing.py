@@ -6,7 +6,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import scipy.stats as ss
 import seaborn as sns
-from gwi import moving_average
+# from src.definitions import moving_average
 import sys
 
 
@@ -98,7 +98,11 @@ def running_mean_internal_variability(
             _time_sliced = _time[cut_beg: -cut_end]
 
         for ens in df_temp_PiC.columns:
-            _data = moving_average(df_temp_PiC[ens], timeframes[t])
+            _data = np.convolve(
+                df_temp_PiC[ens],
+                np.ones(timeframes[t]),
+                'valid') / timeframes[t]
+            # _data = moving_average(df_temp_PiC[ens], timeframes[t])
             axA.plot(_time_sliced, _data, label='CMIP6 PiControl',
                      color='gray', alpha=0.3)
 
@@ -107,7 +111,11 @@ def running_mean_internal_variability(
             y = density(x)
             axB.plot(y, x, color='gray', alpha=0.3)
 
-        _data = moving_average(temp_Obs_IV, timeframes[t])
+        # _data = moving_average(temp_Obs_IV, timeframes[t])
+        _data = np.convolve(
+            temp_Obs_IV,
+            np.ones(timeframes[t]),
+            'valid') / timeframes[t]
         axA.plot(_time_sliced, _data, label='HadCRUT5 median',
                  color='xkcd:teal', alpha=1)
         density = ss.gaussian_kde(_data)
@@ -382,8 +390,6 @@ def Fig_3_8_validation_plot(
             (-1 + 1 * 0.45 + bar_width / 2), 0.6,
             str_Result,
             ha='center', va='center', color='black')
-        
-       
 
     cycles = [dict_IPCC_hl, dict_updates_hl]
     for var in variables:
@@ -489,7 +495,6 @@ def Fig_SPM2_plot(
     """Plot AR6 WG1 SPM Fig.2-esque figure summarising assessed results."""
     # bar_width = (1.0-0.4)/(len(periods))
     bar_width = 0.3
-
 
     names = {
         'Obs': 'Observed Warming',
