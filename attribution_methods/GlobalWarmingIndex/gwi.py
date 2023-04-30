@@ -387,6 +387,8 @@ if __name__ == "__main__":
                                      axis=0))
 
     plot_folder = 'plots/'
+    if not os.path.exists(plot_folder):
+        os.makedirs(plot_folder)
 
     ###########################################################################
     # READ IN THE DATA ########################################################
@@ -567,6 +569,8 @@ if __name__ == "__main__":
 
         # PRODUCE FINAL RESULTS DATASETS ######################################
         # Remove old results first
+        if not os.path.exists('results'):
+            os.makedirs('results')
         files = os.listdir('results')
         csvs = [f for f in files if f.endswith('.csv')]
         for csv in csvs:

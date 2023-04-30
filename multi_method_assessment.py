@@ -335,6 +335,8 @@ labels = {
     }
 
 plot_folder = './plots/'
+if not os.path.exists(plot_folder):
+    os.makedirs(plot_folder)
 
 # PLOT TIMESERIES FOR EACH METHOD #############################################
 for method in dict_updates_ts.keys():
