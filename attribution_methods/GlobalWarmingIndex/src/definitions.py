@@ -4,44 +4,44 @@ import functools
 import xarray as xr
 import glob
 from pathlib import Path
-
-
 import pymagicc
+
 
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
 ###############################################################################
-def load_ERF_Stuart():
-    """Load the ERFs from Stuart's ERF datasets."""
-    here = Path(__file__).parent
-    forc_Path = here / '../data/ERF Samples/Stuart/'
-    # list_ERF = ['_'.join(file.split('_')[1:-1])
-    #             for file in os.listdir(forc_Path)
-    #             if '.csv' in file]
-    forc_Group = {
-                #   'Ant': {'Consists': ['ant'], 'Colour': 'green'},
-                'Nat': {'Consists': ['nat'],
-                        'Colour': 'green'},
-                'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'other_wmghg'],
-                        'Colour': 'orange'},
-                'OHF': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails',
-                                     'o3_tropospheric', 'o3_stratospheric',
-                                     'h2o_stratospheric', 'land_use'],
-                        'Colour': 'blue'}
-                }
+# def load_ERF_Old(end_yr):
+#     """Load the ERFs from Stuart's ERF datasets."""
+#     here = Path(__file__).parent
+#     forc_Path = here / '../data/ERF Samples/Stuart/'
+#     # list_ERF = ['_'.join(file.split('_')[1:-1])
+#     #             for file in os.listdir(forc_Path)
+#     #             if '.csv' in file]
+#     forc_Group = {
+#                 #   'Ant': {'Consists': ['ant'], 'Colour': 'green'},
+#                 'Nat': {'Consists': ['nat'],
+#                         'Colour': 'green'},
+#                 'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'other_wmghg'],
+#                         'Colour': 'orange'},
+#                 'OHF': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails',
+#                                      'o3_tropospheric', 'o3_stratospheric',
+#                                      'h2o_stratospheric', 'land_use'],
+#                         'Colour': 'blue'}
+#                 }
 
-    for grouping in forc_Group:
-        list_df = []
-        for element in forc_Group[grouping]['Consists']:
-            _df = pd.read_csv(
-                forc_Path + f'rf_{element}_200samples.csv', skiprows=[1]
-                   ).rename(columns={'Unnamed: 0': 'Year'}
-                   ).set_index('Year')
-            list_df.append(_df.loc[_df.index <= end_yr])
+#     for grouping in forc_Group:
+#         list_df = []
+#         for element in forc_Group[grouping]['Consists']:
+#             _df = pd.read_csv(
+#                 forc_Path + f'rf_{element}_200samples.csv',
+#                 skiprows=[1]
+#                             ).rename(columns={'Unnamed: 0': 'Year'}
+#                             ).set_index('Year')
+#             list_df.append(_df.loc[_df.index <= end_yr])
 
-        forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y),
-                                                      list_df)
-    return forc_Group
+#         forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y),
+#                                                       list_df)
+#     return forc_Group
 
 
 def load_ERF_CMIP6():
@@ -81,7 +81,8 @@ def load_HadCRUT(start_pi, end_pi):
     df_temp_Obs = pd.read_csv(temp_ens_Path,
                               ).rename(columns={'Time': 'Year'}
                                        ).set_index('Year'
-                                                   ).filter(regex='Realization')
+                                                   ).filter(regex='Realization'
+                                                            )
 
     # Find PI offset that is the PI-mean of the median (HadCRUT best estimate)
     # of the ensemble and substract this from entire ensemble. Importantly,
@@ -97,38 +98,39 @@ def load_HadCRUT(start_pi, end_pi):
     return df_temp_Obs
 
 
-def load_PiC_Stuart(n_yrs):
-    """Load piControl data from Stuart's ERF datasets."""
-    here = Path(__file__).parent
-    file_PiC = here / '../data/piControl/piControl.csv'
-                          
-    df_temp_PiC = pd.read_csv(file_PiC
-                          ).rename(columns={'year': 'Year'}
-                                   ).set_index('Year')
-    # model_names = list(set(['_'.join(ens.split('_')[:1])
-    #                         for ens in list(df_temp_PiC)]))
+# def load_PiC_Old(n_yrs):
+#     """Load piControl data from Stuart's ERF datasets."""
+#     here = Path(__file__).parent
+#     file_PiC = here / '../data/piControl/piControl.csv'
 
-    temp_IV_Group = {}
+#     df_temp_PiC = pd.read_csv(file_PiC
+#                           ).rename(columns={'year': 'Year'}
+#                                    ).set_index('Year')
+#     # model_names = list(set(['_'.join(ens.split('_')[:1])
+#     #                         for ens in list(df_temp_PiC)]))
 
-    for ens in list(df_temp_PiC):
-        # pi Control data located all over the place in csv; the following
-        # lines strip the NaN values, and limits slices to the same length as
-        # observed temperatures
-        temp = df_temp_PiC[ens].dropna().to_numpy()[:n_yrs]
+#     temp_IV_Group = {}
 
-        # Remove pre-industrial mean period; this is done because the models
-        # use different "zero" temperatures (eg 0, 100, 287, etc).
-        # An alternative approach would be to simply subtract the first value
-        # to start all models on 0; the removal of the first 50 years
-        # is used here in case the models don't start in equilibrium (and jump
-        # up by x degrees at the start, for example), and the baseline period
-        # is just defined as the same as for the observation PI period.
-        temp -= temp[:start_pi-end_pi+1].mean()
+#     for ens in list(df_temp_PiC):
+#         # pi Control data located all over the place in csv; the following
+#         # lines strip the NaN values, and limits slices to the same length as
+#         # observed temperatures
+#         temp = df_temp_PiC[ens].dropna().to_numpy()[:n_yrs]
 
-        if len(temp) == n_yrs:
-            temp_IV_Group[ens] = temp
+#         # Remove pre-industrial mean period; this is done because the models
+#         # use different "zero" temperatures (eg 0, 100, 287, etc).
+#         # An alternative approach would be to simply subtract the first value
+#         # to start all models on 0; the removal of the first 50 years
+#         # is used here in case the models don't start in equilibrium (and
+#         # jump up by x degrees at the start, for example), and the baseline
+#         # period is just defined as the same as for the observation PI
+#         # period.
+#         temp -= temp[:start_pi-end_pi+1].mean()
 
-    return pd.DataFrame(temp_IV_Group)
+#         if len(temp) == n_yrs:
+#             temp_IV_Group[ens] = temp
+
+#     return pd.DataFrame(temp_IV_Group)
 
 
 def load_PiC_CMIP6(n_yrs, start_pi, end_pi):
@@ -183,16 +185,17 @@ def filter_PiControl(df, timeframes):
         # 1. there must be a minimum level of variation (to remove those models
         # that are clearly wrong, eg oscillating between 0.01 and 0 warming)
         # 2. they must not exceed a certain min or max temperature bound; the
-        # 0.3 value is roughyl similar to a 0.15 drift per century limit. I may
-        # need to check this...
+        # 0.3 value is roughyl similar to a 0.15 drift per century limit as
+        # used in Haustein et al 2017, and Leach et al 2021.
         # The final ensemble distribution are plotted against HadCRUT5 median
-        # below, to check that the percentiles of this median run are similar
-        # to the percentiles on the entire CMIP5 ensemble. ie, if the observed
-        # internal variability is essentially a sampling of the climate each
-        # year, you would expect the percentiles over history to be similar
-        # to the percentiles of the ensemble in any given year. I allow the
-        # ensemble to be slightly broader, to allow reasonably allow for a
-        # wider range of behaviours than we have seen in the real world.
+        # in gwi.py, to check that the percentiles of this median run are
+        # similar to the percentiles on the entire CMIP5 ensemble. ie, if the
+        # observed internal variability is essentially a sampling of the
+        # climate each year, you would expect the percentiles over the observed
+        # history to be similar to the percentiles across the ensemble (ie
+        # multiple parallel realisations of reality) in any given year. We
+        # allow the ensemble to be slightly broader, to reasonably allow for a
+        # wider range of behaviours than we have so far seen in the real world.
         temp = df[ens].to_numpy()
         temp_ma_3 = moving_average(temp, 3)
         temp_ma_30 = moving_average(temp, 30)
@@ -249,23 +252,22 @@ def temp_signal(data, w, method):
 
 
 def final_value_of_trend(temp):
-    """Used for calculating the SR15 definition of present-day warming."""
-    
+    """Used for calculating the SR1.5 definition of present-day warming."""
+
     """Pass a 15-year long timeseries to this function and it will compute
-    a linear trend through it, and return the final value of it. This
+    a linear trend through it, and return the final value of the trend. This
     corresponds to the SR15 definition of warming, if the 'present-day' in
     consideration is the final observable year; the SR15 definition would
     extrapolate this linear trend for 15 more years and take the mid-value,
     which is simply the end value of the first 15 years."""
 
-    """SR15 definition: 'warming at a given point in time is defined as the global average
-    temperatures for a 30-year period centred on that time, extrapolating into
-    the future if necessary'. For these calculations, therefore, we take the 
-    final 15 years of the timeseries, take the trend through it, and then
-    warming is given by the value of the trend in the final (present-day)
-    year."""
+    """SR1.5 definition: 'warming at a given point in time is defined as the
+    global average temperatures for a 30-year period centred on that time,
+    extrapolating into the future if necessary'. For these calculations,
+    therefore, we take the final 15 years of the timeseries, take the trend
+    through it, and then warming is given by the value of the trend in the
+    final (present-day) year."""
 
     time = np.arange(temp.shape[0])
     fit = np.poly1d(np.polyfit(time, temp, 1))
     return fit(time)[-1]
-

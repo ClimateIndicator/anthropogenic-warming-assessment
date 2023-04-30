@@ -12,18 +12,11 @@ from attribution_methods.GlobalWarmingIndex.src.definitions import (
 )
 
 ###############################################################################
-# DEFINE FUNCTIONS ############################################################
-###############################################################################
-
-
-###############################################################################
 # LOAD DATA ###################################################################
 ###############################################################################
 
-
 start_pi, end_pi = 1850, 1900
 start_yr, end_yr = 1850, 2022
-
 
 # Temperature dataset
 df_temp_Obs = load_HadCRUT(start_pi, end_pi)
@@ -35,7 +28,8 @@ df_temp_PiC.set_index(np.arange(end_yr-start_yr+1)+1850, inplace=True)
 
 
 # RESULTS FROM ANNUAL UPDATES #################################################
-# WALSH
+# Combine dataframes of results from all attribution methods (Walsh (GWI),
+# Ribes (KCC), Gillett (ROF)) into one dictionary.
 dict_updates_hl = {}
 dict_updates_ts = {}
 files = os.listdir('results')
@@ -52,41 +46,46 @@ for method in ['Walsh', 'Ribes', 'Gillett']:
     dict_updates_hl[method] = df_method_hl
     dict_updates_ts[method] = df_method_ts
 
-
-# Nathan Gillett's timeseries results aren't PI-baselined, so do this now
+# Nathan Gillett's timeseries timeseries results aren't already PI-baselined,
+# so do this now
 df_ts = dict_updates_ts['Gillett']
 ofst_ts = df_ts.loc[(df_ts.index >= start_pi) & (df_ts.index <= end_pi)
                     ].mean(axis=0)
 dict_updates_ts['Gillett'] = df_ts - ofst_ts
+# No Tot warming is provided in draft either, so include an approximation as
+# the sum of Ant and Nat warming
 dict_updates_ts['Gillett'].loc[:, ('Tot', '50')] = (
     dict_updates_ts['Gillett'].loc[:, ('Ant', '50')] +
     dict_updates_ts['Gillett'].loc[:, ('Nat', '50')]
-)
+    )
 
 # (ish) MULTI-METHOD ASSESSMENT - AR6 STYLE - TIMESERIES ######################
-# Conclusion: no uncertainty plumes available at time of writing ROF method,
-# "Gillett", so this a multi-method timeseries is not created.
-# Instead, we plot individual methods separately as an indicative alternative.
+# Conclusion: no uncertainty plumes available at time of writing for ROF
+# (Gillett) method, so a multi-method timeseries is not created here. Instead,
+# we plot the individual methods separately as an indicative alternative later.
 
 # MULTI-METHOD ASSESSMENT - AR6 STYLE - HEADLINES #############################
 # Create a list of the variables in df_Walsh_hl
 list_of_dfs = []
-periods_to_assess = ['2010-2019', '2013-2022',
-                     '2017', '2022',
-                     '2017 (SR15 definition)', '2022 (SR15 definition)']
+periods_to_assess = ['2010-2019',
+                     '2013-2022',
+                     '2017',
+                     '2022',
+                     '2017 (SR15 definition)',
+                     '2022 (SR15 definition)']
 for period in periods_to_assess:
     dict_updates_Assessment = {}
 
     variables = ['Ant', 'GHG', 'OHF', 'Nat']
 
     for var in variables:
-        # Find the highest 95%, lowest 5%, and all medians
-        minimum = min([dict_updates_hl[m].loc[period, (var, '5')]
-                       for m in dict_updates_hl.keys()])
-        maximum = max([dict_updates_hl[m].loc[period, (var, '95')]
-                       for m in dict_updates_hl.keys()])
-        medians = [dict_updates_hl[m].loc[period, (var, '50')]
-                   for m in dict_updates_hl.keys()]
+        # Find the highest 95%, lowest 5%, and all medians, across methods
+        minimum = min([dict_updates_hl[method].loc[period, (var, '5')]
+                       for method in dict_updates_hl.keys()])
+        maximum = max([dict_updates_hl[method].loc[period, (var, '95')]
+                       for method in dict_updates_hl.keys()])
+        medians = [dict_updates_hl[method].loc[period, (var, '50')]
+                   for method in dict_updates_hl.keys()]
 
         # Follow AR6 assessment method of best estimate being the
         # 0.01C-prevision mean of the central estimates for each method, and
@@ -96,12 +95,10 @@ for period in periods_to_assess:
         # The simplest way to handle the multiple cases of some or all values
         # being negative is to translate them all to being posisitve.
         minimum, maximum = minimum + 10, maximum + 10
-
-        likely_min = (np.floor(np.sign(minimum) * minimum * 10) / 10 *
-                      np.sign(minimum))
+        # round minimum value in minimum down to the lowest 0.1
+        likely_min = (np.floor(minimum * 10) / 10 * np.sign(minimum))
         # round maximum value in maximum up to the highest 0.1
-        likely_max = (np.ceil(np.sign(maximum) * maximum * 10) / 10 *
-                      np.sign(maximum))
+        likely_max = (np.ceil(maximum * 10) / 10 * np.sign(maximum))
 
         # subraction loses the 0.1-precision from the above steps, so round.
         likely_min = np.round(likely_min - 10, 1)
@@ -109,13 +106,14 @@ for period in periods_to_assess:
 
         # calculate best estimate as mean across methods to 0.01 precision
         best_est = np.round(np.mean(medians), 2)
-
+        # add dictionary of results for this variable to the dictionary for the
+        # single-perdiod assessment
         dict_updates_Assessment.update(
             {(var, '50'): best_est,
              (var,  '5'): likely_min,
              (var, '95'): likely_max}
         )
-    # Create a dataframe
+    # Create a dataframe for assessment of this period
     df_updates_Assessment = pd.DataFrame(
         dict_updates_Assessment, index=[period])
     df_updates_Assessment.columns.names = ['variable', 'percentile']
@@ -123,12 +121,14 @@ for period in periods_to_assess:
     # Add it to the list
     list_of_dfs.append(df_updates_Assessment)
 
+# Overall assessment dataframe is concatenation of dataframes for each period
 dict_updates_hl['Assessment'] = pd.concat(list_of_dfs)
 dict_updates_hl['Assessment'].to_csv(
         'results/Assessment-Update-2022_GMST_headlines.csv')
 
 
 # RESULTS FROM AR6 WG1 Ch.3 ###################################################
+# Create dataframe of results from AR6 WG1 Ch.3
 df_AR6_assessment = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
     ('Tot', '50'): 1.06,  # AR6 3.3.1.1.2 p442 from observations
@@ -153,6 +153,42 @@ df_AR6_assessment = pd.DataFrame({
 df_AR6_assessment.columns.names = ['variable', 'percentile']
 df_AR6_assessment.index.name = 'Year'
 
+# Add observations quoted from AR6
+df_AR6_Obs = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Obs', '50'): 1.06,  # AR6 3.3.1.1.2 p442 from observations
+    ('Obs',  '5'): 0.88,  # AR6 3.3.1.1.2 p442 from observations
+    ('Obs', '95'): 1.21,  # AR6 3.3.1.1.2 p442 from observations
+}, index=['2010-2019'])
+df_AR6_Obs.columns.names = ['variable', 'percentile']
+df_AR6_Obs.index.name = 'Year'
+
+# Add updated observation results from the annual updates paper section 4
+df_update_Obs_repeat = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Obs', '50'): 1.07,  # from annual updates paper section 4
+    ('Obs',  '5'): 0.89,  # from annual updates paper section 4
+    ('Obs', '95'): 1.22,  # from annual updates paper section 4
+}, index=['2010-2019'])
+df_update_Obs_repeat.columns.names = ['variable', 'percentile']
+df_update_Obs_repeat.index.name = 'Year'
+df_update_Obs_update = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Obs', '50'): 1.15,  # from annual updates paper section 4
+    ('Obs',  '5'): 1.00,  # from annual updates paper section 4
+    ('Obs', '95'): 1.25,  # from annual updates paper section 4
+}, index=['2013-2022'])
+df_update_Obs_update.columns.names = ['variable', 'percentile']
+df_update_Obs_update.index.name = 'Year'
+
+df_All_Obs = pd.concat([
+                        # df_AR6_Obs,
+                        df_update_Obs_repeat,
+                        df_update_Obs_update
+                        ])
+dict_updates_Obs_hl = {'Assessment': df_All_Obs}
+
+
 df_SR15_assessment = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
     ('Ant', '50'): 1.0,  # SR15 1.2.1.3
@@ -167,6 +203,7 @@ df_IPCC_assessment.to_csv('results/Assessment-6thIPCC_headlines.csv')
 
 # RESULTS FROM AR6 METHODS ####################################################
 # Data available from https://github.com/ESMValGroup/ESMValTool-AR6-OriginalCode-FinalFigures/blob/ar6_chapter_3_nathan/esmvaltool/diag_scripts/ipcc_ar6/fig3_8.py
+# Haustein 2017 (GWI)
 df_AR6_Haustein = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
     ('Ant', '50'): 1.064,
@@ -196,7 +233,7 @@ df_SR15_Haustein.index.name = 'Year'
 
 df_IPCC_Haustein = pd.concat([df_AR6_Haustein, df_SR15_Haustein])
 
-
+# Ribes (KCC)
 df_AR6_Ribes = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
     ('Ant', '50'): 1.03,
@@ -219,6 +256,7 @@ df_AR6_Ribes.columns.names = ['variable', 'percentile']
 df_AR6_Ribes.index.name = 'Year'
 df_IPCC_Ribes = df_AR6_Ribes
 
+# Gillet (ROF)
 df_AR6_Gillett = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
     ('Ant', '50'): 1.11,
@@ -238,6 +276,7 @@ df_AR6_Gillett.columns.names = ['variable', 'percentile']
 df_AR6_Gillett.index.name = 'Year'
 df_IPCC_Gillett = df_AR6_Gillett
 
+# Smith (AR6 WGI Chapter 7)
 df_AR6_Smith = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
     ('Ant', '50'): 1.066304612,
@@ -257,6 +296,7 @@ df_AR6_Smith.columns.names = ['variable', 'percentile']
 df_AR6_Smith.index.name = 'Year'
 df_IPCC_Smith = df_AR6_Smith
 
+# Combine all IPCC-quoted results into ont dictionary
 dict_IPCC_hl = {
     'Assessment': df_IPCC_assessment,
     'Haustein': df_IPCC_Haustein,
@@ -265,41 +305,9 @@ dict_IPCC_hl = {
     'Smith': df_IPCC_Smith,
 }
 
-
-# Observations
-df_AR6_Obs = pd.DataFrame({
-    # (VARIABLE, PERCENTILE): VALUE
-    ('Obs', '50'): 1.06,  # AR6 3.3.1.1.2 p442 from observations
-    ('Obs',  '5'): 0.88,  # AR6 3.3.1.1.2 p442 from observations
-    ('Obs', '95'): 1.21,  # AR6 3.3.1.1.2 p442 from observations
-}, index=['2010-2019'])
-df_AR6_Obs.columns.names = ['variable', 'percentile']
-df_AR6_Obs.index.name = 'Year'
-df_update_Obs_repeat = pd.DataFrame({
-    # (VARIABLE, PERCENTILE): VALUE
-    ('Obs', '50'): 1.07,  # from annual updates paper section 4
-    ('Obs',  '5'): 0.89,  # from annual updates paper section 4
-    ('Obs', '95'): 1.22,  # from annual updates paper section 4
-}, index=['2010-2019'])
-df_update_Obs_repeat.columns.names = ['variable', 'percentile']
-df_update_Obs_repeat.index.name = 'Year'
-
-df_update_Obs_update = pd.DataFrame({
-    # (VARIABLE, PERCENTILE): VALUE
-    ('Obs', '50'): 1.15,  # from annual updates paper section 4
-    ('Obs',  '5'): 1.00,  # from annual updates paper section 4
-    ('Obs', '95'): 1.25,  # from annual updates paper section 4
-}, index=['2013-2022'])
-df_update_Obs_update.columns.names = ['variable', 'percentile']
-df_update_Obs_update.index.name = 'Year'
-
-df_All_Obs = pd.concat([
-                        # df_AR6_Obs,
-                        df_update_Obs_repeat,
-                        df_update_Obs_update
-                        ])
-dict_updates_Obs_hl = {'Assessment': df_All_Obs}
-
+###############################################################################
+# CREATE PLOTS
+###############################################################################
 
 # Plotting colours
 var_colours = {'Tot': '#d7827e',
@@ -326,10 +334,9 @@ labels = {
     'Smith': 'AR6 WG1 Chapter 7',
     }
 
+plot_folder = './plots/'
 
-plot_folder = 'plots/assessment/'
-
-# PLOT TIMESERIES FOR EACH METHOD ############################################
+# PLOT TIMESERIES FOR EACH METHOD #############################################
 for method in dict_updates_ts.keys():
     print(f'Creating {method} Simple Plot...')
     plot_vars = ['Ant', 'GHG', 'Nat', 'OHF']
@@ -346,16 +353,16 @@ for method in dict_updates_ts.keys():
     fig.savefig(f'{plot_folder}/2_{method}_timeseries.svg')
 
 
-###############################################################################
-# PLOT THE MULTI-METHOD TIMESERIES IN SINGLE FIGURE
-###############################################################################
+# PLOT THE MULTI-METHOD TIMESERIES IN SINGLE FIGURE ###########################
 print('Creating Multi-Method Stacked Plot...')
 fig = plt.figure(figsize=(12, 8))
 ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
 
+# Plot simplified (5-95% only) plumes for GWI method.
 gr.gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, dict_updates_ts['Walsh'],
                   plot_vars, var_colours, sigmas=['5', '95', '50'],
                   labels=True)
+# Plot the median best-estimate for each method on top of the GWI plumes.
 for m, l in zip(['Walsh', 'Ribes', 'Gillett'], ['-', '--', ':']):
     for v in plot_vars:
         ax.plot(
@@ -363,6 +370,8 @@ for m, l in zip(['Walsh', 'Ribes', 'Gillett'], ['-', '--', ':']):
             dict_updates_ts[m].loc[:, (v, '50')].values,
             color=var_colours[v],
             ls=l, lw=2, alpha=0.7)
+    # Plot arbitrary lines so that separate black lines for each method appear
+    # in the legend.
     ax.plot([100, 100], [100, 100], color='black', lw=2, alpha=0.7, ls=l,
             label=f'{m}: {labels[m]}')
 
@@ -372,14 +381,11 @@ ax.text(1875, -0.85, '1850-1900\nPreindustrial Baseline', ha='center')
 fig.suptitle('Timeseries for each attribution method used '
              'in the assessment of contributions to observed warming')
 fig.tight_layout(rect=(0.02, 0.08, 0.98, 0.98))
-
 gr.overall_legend(fig, 'lower center', 3, reorder=[8, 0, 1, 2, 3, 4, 5, 6, 7])
 fig.savefig(f'{plot_folder}/2_stacked-multi_method_timeseries.png')
 fig.savefig(f'{plot_folder}/2_stacked-multi_method_timeseries.svg')
 
-###############################################################################
-# PLOT THE MULTI-METHOD TIMESERIES IN MULTI-FIGURE
-###############################################################################
+# PLOT THE MULTI-METHOD TIMESERIES IN MULTI-FIGURE ############################
 print('Creating Multi-Method Aligned Plot...')
 fig = plt.figure(figsize=(16, 6))
 methods = ['Walsh', 'Ribes', 'Gillett']
@@ -406,9 +412,7 @@ fig.savefig(f'{plot_folder}/2_aligned-multi_method_timeseries.png')
 fig.savefig(f'{plot_folder}/2_aligned-multi_method_timeseries.svg')
 
 
-###############################################################################
-# PLOT THE VALIDATION PLOT
-###############################################################################
+# PLOT THE VALIDATION PLOT ####################################################
 print('Creating Fig 3.8 Validation Plot')
 bar_plot_vars = ['Ant', 'GHG', 'OHF', 'Nat']
 fig = plt.figure(figsize=(12, 8))
@@ -445,32 +449,22 @@ fig.tight_layout(rect=(0.02, 0.08, 0.98, 0.88))
 
 fig.suptitle('Validation of updated lines of evidence for assessing '
              'contributions to observed warming')
-# fig.suptitle('Validation of updates (right bar)' +
-#              'vs Results from IPCC (left bar)')
-# fig.text(ax1.get_position().x0, ax1.get_position().y1+0.08,
-#          ('Validation of updated lines of evidence for assessing '
-#           'contributions to observed warming - cf. AR6 WG1 Fig.3.8'),
-#          fontsize=matplotlib.rcParams['axes.titlesize'],
-#          fontweight='bold'
-#          )
 fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
          '(a) 2010-2019 AR6 WG1 Ch.3 (left)\nvs 2010-2019 repeat (right)',
          ha='left', fontsize=matplotlib.rcParams['axes.titlesize'],
          fontweight='regular',
-        #  fontstyle='italic'
-        )
+         #  fontstyle='italic'
+         )
 fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
          '(b) 2017 SR1.5 Ch.1 (left)\nvs 2017 repeat (right)',
          ha='left', fontsize=matplotlib.rcParams['axes.titlesize'],
          fontweight='regular',
-        #  fontstyle='italic'
-        )
+         #  fontstyle='italic'
+         )
 fig.savefig(f'{plot_folder}/3_WG1_Ch3_Validation.png')
 fig.savefig(f'{plot_folder}/3_WG1_Ch3_Validation.svg')
 
-###############################################################################
-# Plot the headline SPM2-esque figure
-###############################################################################
+# Plot the headline SPM2-esque figure #########################################
 print('Creating SPM.2-esque figure')
 text_toggle = False
 fig = plt.figure(figsize=(12, 10))
@@ -479,14 +473,13 @@ ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
 ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
 gr.Fig_SPM2_plot(ax0, ['Obs'], ['2010-2019', '2013-2022'],
                  dict_IPCC_hl, dict_updates_Obs_hl,
-                 var_colours, labels,text_toggle)
+                 var_colours, labels, text_toggle)
 gr.Fig_SPM2_plot(ax1, ['Ant', 'GHG', 'OHF', 'Nat'], ['2010-2019', '2013-2022'],
                  dict_IPCC_hl, dict_updates_hl,
-                 var_colours, labels,text_toggle)
+                 var_colours, labels, text_toggle)
 gr.Fig_SPM2_plot(ax2, ['Ant', 'GHG', 'OHF', 'Nat'], ['2017', '2022'],
                  dict_IPCC_hl, dict_updates_hl,
-                 var_colours, labels,text_toggle)
-
+                 var_colours, labels, text_toggle)
 
 # Set the grid to the back for the fig
 ax0.set_axisbelow(True)
@@ -496,7 +489,6 @@ ax2.set_axisbelow(True)
 ax0.set_ylabel('Attributable change in global mean surface temperature '
                'since 1850-1900 (°C)')
 ax0.set_xlim(-0.7, 1.1)
-# set the ax1 ylims to be equal to the ax2 ylims    
 ax1.set_ylim(-1.0 - text_toggle * 0.2, 2.0)
 ax2.set_ylim(ax1.get_ylim())
 ax0.set_ylim(ax1.get_ylim())
@@ -505,7 +497,7 @@ ax2.set_yticklabels([])
 
 fig.tight_layout(rect=(0.02, 0.04, 0.98, 0.88))
 
-# Plot the text
+# Add text
 fig.text(ax0.get_position().x0, ax0.get_position().y1+0.08,
          'Observed Warming',
          fontsize=matplotlib.rcParams['axes.titlesize'],
@@ -516,8 +508,8 @@ fig.text(ax0.get_position().x0, ax0.get_position().y1+0.02,
          ha='left',
          fontsize=matplotlib.rcParams['font.size'],
          fontweight='regular',
-        #  fontstyle='italic'
-)
+         #  fontstyle='italic'
+         )
 fig.text(ax1.get_position().x0, ax1.get_position().y1+0.08,
          ('Contributions to observed warming '
           'expressed in terms of two IPCC warming definitions'),
@@ -551,14 +543,14 @@ for ax in [ax1, ax2]:
     for i in range(4):
         plt.annotate('',
                      arrowprops=dict(arrowstyle=arrow[i],
-                                     shrinkA=0, shrinkB=0, 
+                                     shrinkA=0, shrinkB=0,
                                      color='gainsboro',
                                      lw=1),
                      xy=(xcoords[i][1]+x0, ycoords[i][1]),
                      xycoords='figure fraction',
                      xytext=(xcoords[i][0]+x0, ycoords[i][0]),
-                     textcoords='figure fraction')
-
+                     textcoords='figure fraction'
+                     )
 
 # fig.suptitle('Assessed contributions to observed warming')  # SPM2 title
 fig.savefig(f'{plot_folder}/4_SPM2_Results.png')

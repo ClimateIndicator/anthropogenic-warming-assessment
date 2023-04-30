@@ -13,13 +13,13 @@ import pandas as pd
 # import matplotlib
 import matplotlib.pyplot as plt
 # import scipy.stats as ss
-import seaborn as sns
 
 import src.graphing as gr
 from src.definitions import *
 
 import models.AR5_IR as AR5_IR
 import models.FaIR_V2.FaIRv2_0_0_alpha1.fair.fair_runner as fair
+
 
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
@@ -37,19 +37,17 @@ def GWI_faster(
     variables = df_forc.columns.get_level_values('variable').unique().to_list()
     ensembles = df_forc.columns.get_level_values("ensemble").unique().to_list()
 
-    # # Prepare results #########################################################
+    # Prepare results #########################################################
     n = (df_temp_Obs.shape[1] * df_temp_PiC.shape[1] *
          len(df_forc.columns.get_level_values("ensemble").unique()) *
-         #  len(df_params.columns.levels[0])
-         1  # only use 1 FaIR parameter set per function call in parallel method
+         # only use 1 FaIR parameter set per function call in parallel method:
+         1
          )
-    # # Include residuals and totals for sum total and anthropogenic warming in
-    # # the same array as attributed results. +1 each for Ant, TOT, Res,
-    # # InternalVariability, ObservedTemperatures
-    # # NOTE: the order in dimension is:
-    # # 'GHG, NAT, OHF, CONST, ANT, TOTAL, RESIDUAL, Temp_PiC, Temp_Obs'
-    # # vars = ['GHG', 'Nat', 'OHF', 'Const', 'Ant', 'Tot', 'Res', 'PiC', 'Obs']
-    vars = ['GHG', 'Nat', 'OHF', 'Ant', 'Tot', 'Res']
+    # Include residuals and totals for sum total and anthropogenic warming in
+    # the same array as attributed results. +1 each for Ant, TOT, Res,
+    # InternalVariability, ObservedTemperatures
+    # NOTE: the order in dimension is:
+    # vars = ['GHG', 'Nat', 'OHF', 'Ant', 'Tot', 'Res']
     temp_Att_Results = np.empty(
       (end_yr - start_yr + 1,  # years
        len(variables) + 3,  # variables
@@ -66,7 +64,6 @@ def GWI_faster(
     forc_Yrs = df_forc.index.to_numpy()
 
     # Prepare FaIR parameters for this particular model.
-    # print(model_choice)
     params_FaIR = df_params[model_choice]
     params_FaIR.columns = pd.MultiIndex.from_product(
         [[model_choice], params_FaIR.columns])
@@ -104,8 +101,8 @@ def GWI_faster(
 
     i = 0
     for ens in range(len(ensembles)):
-        # Cut the full-forcing-length temperatures down to the same length as
-        # the other temperature data
+        # Cut the full-forcing-length temperatures (that were calculated from
+        # ERF) down to the same length as the other temperature data
         yr_mask = ((forc_Yrs >= start_yr) & (forc_Yrs <= end_yr))
         temp_Mod = temp_Mod_array[yr_mask, :, ens]
 
@@ -116,7 +113,7 @@ def GWI_faster(
                              ].mean(axis=0)
             temp_Mod = temp_Mod - _ofst
 
-        # Decide whether to include a Constant offset term in regression
+        # Toggle whether to include a Constant offset term in regression
         if inc_reg_const:
             temp_Mod = np.append(temp_Mod,
                                  np.ones((temp_Mod.shape[0], 1)),
@@ -128,6 +125,7 @@ def GWI_faster(
         coef_PiC_Results = np.empty((temp_Mod.shape[1],
                                      df_temp_PiC.shape[1]))
 
+        # Regress against observations
         c_i = 0
         for temp_Obs_Ens in df_temp_Obs.columns:
             temp_Obs_i = df_temp_Obs[temp_Obs_Ens].to_numpy()
@@ -135,6 +133,7 @@ def GWI_faster(
             coef_Obs_Results[:, c_i] = coef_Obs_i
             c_i += 1
 
+        # Regress against piControl
         c_j = 0
         for temp_PiC_Ens in df_temp_PiC.columns:
             temp_PiC_j = df_temp_PiC[temp_PiC_Ens].to_numpy()
@@ -142,11 +141,13 @@ def GWI_faster(
             coef_PiC_Results[:, c_j] = coef_PiC_j
             c_j += 1
 
+        # Combine regression coefficients from observations and piControl
         for c_k in range(coef_Obs_Results.shape[1]):
             for c_l in range(coef_PiC_Results.shape[1]):
                 # Regression coefficients
                 coef_Reg = (coef_Obs_Results[:, c_k] +
                             coef_PiC_Results[:, c_l])
+
                 # Attributed warming for each component
                 temp_Att = temp_Mod * coef_Reg
 
@@ -182,11 +183,10 @@ def GWI_faster(
                 if i % 1000 == 0:
                     percentage = int((i+1)/n*100)
                     loading_bar = (percentage // 5*'.' +
-                                (20 - percentage // 5)*' ')
+                                   (20 - percentage // 5)*' ')
                     print(f'calculating {loading_bar} {percentage}%', end='\r')
                 i += 1
 
-    # print(f"calculating {20*'.'} {100}%", end='\r')
     return temp_Att_Results
 
 
@@ -197,18 +197,14 @@ def GWI(
     """Calculate the global warming index (GWI)."""
     # - BRING start_pi AND end_pi INSIDE THE FUNCTION
 
-
     # Prepare results #########################################################
     n = (df_temp_Obs.shape[1] * df_temp_PiC.shape[1] *
          len(forc_subset.columns.get_level_values("ensemble").unique()) *
          len(df_params.columns.levels[0]))
     # Include residuals and totals for sum total and anthropogenic warming in
-    # the same array as attributed results. +1 each for Ant, TOT, Res,
-    # InternalVariability, ObservedTemperatures
+    # the same array as attributed results. +1 each for Ant, Tot, Res
     # NOTE: the order in dimension is:
-    # 'GHG, NAT, OHF, CONST, ANT, TOTAL, RESIDUAL, Temp_PiC, Temp_Obs'
-    # vars = ['GHG', 'Nat', 'OHF', 'Const', 'Ant', 'Tot', 'Res', 'PiC', 'Obs']
-    vars = ['GHG', 'Nat', 'OHF', 'Ant', 'Tot', 'Res']
+    # vars = ['GHG', 'Nat', 'OHF', 'Ant', 'Tot', 'Res']
     temp_Att_Results = np.zeros(
       (end_yr - start_yr + 1,  # years
        len(variables) + 3,  # variables
@@ -228,7 +224,7 @@ def GWI(
     for CMIP6_model in df_params.columns.levels[0].unique():
         # Select the specific model's parameters
         params_FaIR = df_params[CMIP6_model]
-        # Since the above line seems to get rid of the top colum level (the
+        # Since the above line seems to get rid of the top column level (the
         # model name), and therefore reduce the level to 1, we need to re-add
         # the level=0 column name (the model name) in order for this to be
         # compatible with the required FaIR format...
@@ -283,6 +279,7 @@ def GWI(
             coef_PiC_Results = np.empty((temp_Mod.shape[1],
                                          df_temp_PiC.shape[1]))
 
+            # Regree against observations
             c_i = 0
             for temp_Obs_Ens in df_temp_Obs.columns:
                 temp_Obs_i = df_temp_Obs[temp_Obs_Ens].to_numpy()
@@ -290,7 +287,8 @@ def GWI(
                                              rcond=None)[0]
                 coef_Obs_Results[:, c_i] = coef_Obs_i
                 c_i += 1
-
+            
+            # Regress against piControl
             c_j = 0
             for temp_PiC_Ens in df_temp_PiC.columns:
                 temp_PiC_j = df_temp_PiC[temp_PiC_Ens].to_numpy()
@@ -339,12 +337,13 @@ def GWI(
                     if i % 1000 == 0:
                         percentage = int((i+1)/n*100)
                         loading_bar = (percentage // 5*'.' +
-                                    (20 - percentage // 5)*' ')
-                        print(f'calculating {loading_bar} {percentage}%', end='\r')
+                                       (20 - percentage // 5)*' ')
+                        print(f'calculating {loading_bar} {percentage}%',
+                              end='\r')
                     i += 1
 
     print(f"calculating {20*'.'} {100}%", end='\r')
-    return temp_Att_Results, coef_Reg_Results, vars
+    return temp_Att_Results, coef_Reg_Results
 
 
 ###############################################################################
@@ -361,15 +360,17 @@ if __name__ == "__main__":
 
     # inc_pi_offset = input(f'Subtract 1850-1900 PI baseline? {ao}: ')
     # inc_reg_const = input(f'Include a constant term in regression? {ao}: ')
-
-    # Following discussion with Myles, we fix the options as the following:
+    # Following discussion with Myles, fix the regression options as the
+    # following:
     inc_pi_offset = 'y'
     inc_reg_const = 'y'
 
     if inc_pi_offset not in allowed_options:
         print(f'{inc_pi_offset} not one of {ao}')
+        sys.exit()
     elif inc_reg_const not in allowed_options:
         print(f'{inc_reg_const} not one of {ao}')
+        sys.exit()
 
     inc_pi_offset = True if inc_pi_offset == 'y' else False
     inc_reg_const = True if inc_reg_const == 'y' else False
@@ -378,7 +379,7 @@ if __name__ == "__main__":
     model_choice = 'FaIR_V2'
 
     start_yr, end_yr = 1850, 2022
-    start_pi, end_pi = 1850, 1900  # As in IPCC AR6 Ch-3 Fig-3.4
+    start_pi, end_pi = 1850, 1900  # As in IPCC AR6 Ch.3
 
     # sigmas = [[32, 68], [5, 95], [0.3, 99.7]]
     sigmas = [[17, 83], [5, 95]]
@@ -387,30 +388,30 @@ if __name__ == "__main__":
 
     plot_folder = 'plots/'
 
-
     ###########################################################################
     # READ IN THE DATA ########################################################
     ###########################################################################
+
     # Effective Radiative Forcing
-    df_forc = load_ERF_CMIP6()
+    df_forc = load_ERF_CMIP6()  # From src/definitions.py
     forc_Group_names = sorted(
         df_forc.columns.get_level_values('variable').unique())
 
     # TEMPERATURE
-    df_temp_Obs = load_HadCRUT(start_pi, end_pi)
+    df_temp_Obs = load_HadCRUT(start_pi, end_pi)  # From src/definitions.py
     n_yrs = df_temp_Obs.shape[0]
 
     # CMIP6 PI-CONTROL
     timeframes = [1, 3, 30]
     # df_temp_PiC = load_PiC_Stuart(n_yrs)
-    df_temp_PiC = load_PiC_CMIP6(n_yrs, start_pi, end_pi)
-    df_temp_PiC = filter_PiControl(df_temp_PiC, timeframes)
+    df_temp_PiC = load_PiC_CMIP6(n_yrs, start_pi, end_pi)  # From src/defs
+    df_temp_PiC = filter_PiControl(df_temp_PiC, timeframes)  # From src/defs
     df_temp_PiC.set_index(np.arange(end_yr-start_yr+1)+1850, inplace=True)
 
     # Create a very rough estimate of the internal variability for the HadCRUT5
     # best estimate.
     # TODO: Regress natural forcings out of this as well...
-    temp_Obs_signal = temp_signal(
+    temp_Obs_signal = temp_signal(  # From src/definitions.py
         df_temp_Obs.quantile(q=0.5, axis=1).to_numpy(), 30, 'extrapolate')
     temp_Obs_IV = df_temp_Obs.quantile(q=0.5, axis=1) - temp_Obs_signal
 
@@ -423,7 +424,7 @@ if __name__ == "__main__":
         'Selected Sample of Internal Variability from CMIP6 PiControl')
     fig.savefig(f'{plot_folder}0_Selected_CMIP6_Ensembles.png')
 
-    #### PLOT THE ENSEMBLE ####
+    # PLOT THE ENSEMBLE #######################################################
     fig = plt.figure(figsize=(15, 10))
     ax1 = plt.subplot2grid(shape=(1, 4), loc=(0, 0), rowspan=1, colspan=3)
     ax2 = plt.subplot2grid(shape=(1, 4), loc=(0, 3), rowspan=1, colspan=1)
@@ -440,11 +441,11 @@ if __name__ == "__main__":
     if model_choice == 'AR5_IR':
         # We only use a[10], a[11], a[15], a[16]
         # Defaults:
-        # a_ar5[10:12] = [0.631, 0.429]  # AR5 thermal sensitivity coeffs
-        # a_ar5[15:17] = [8.400, 409.5]  # AR5 thermal time-inc_Constants -- could use Geoffroy et al [4.1,249.]
-
+        # AR5 thermal sensitivity coeffs
+        # a_ar5[10:12] = [0.631, 0.429]
+        # AR5 thermal time-inc_Constants -- could use Geoffroy et al [4.1,249.]
+        # a_ar5[15:17] = [8.400, 409.5]
         # a_ar5 = np.zeros(20, 16)
-
         # # Geoffrey 2013 paramters for a_ar5[15:17]
         Geoff = np.array([[4.0, 5.0, 4.5, 2.8, 5.2, 3.9, 4.2, 3.6,
                            1.6, 5.3, 4.0, 5.5, 3.5, 3.9, 4.3, 4.0],
@@ -455,8 +456,8 @@ if __name__ == "__main__":
         # The original location of the FaIR tunings is here
         # CMIP6_param_csv = ('models/FaIR_V2/FaIRv2_0_0_alpha1/fair/util/' +
         #                    'parameter-sets/CMIP6_climresp.csv')
-        # Which is simply copied to the following location for transparency
-        # and convenience.
+        # Which is simply copied to the following location and committed
+        # to repo explicitly for transparency and convenience.
         CMIP6_param_csv = ('models/FaIR_CMIP6_climresp.csv')
         CMIP6_param_df = pd.read_csv(
             CMIP6_param_csv, index_col=[0], header=[0, 1])
@@ -473,22 +474,13 @@ if __name__ == "__main__":
         # Select random sub-set sampling of all ensemble members:
 
         # 1. Select random samples of the forcing data
-
-        # print(f'Forcing ensembles all: {forc_Group["GHG"]["df"].shape[1]}')
-        # forc_Group_subset_columns = forc_Group['GHG']['df'].sample(
-        #     n=min(samples, forc_Group['GHG']['df'].shape[1]), axis=1).columns
-        # forc_Group_subset = {
-        #     var: {'df': forc_Group[var]['df'][forc_Group_subset_columns]}
-        #     for var in forc_Group_names}
-        # print(f'Forcing ensembles pruned: {forc_Group_subset["GHG"]["df"].shape[1]}')
-
         print(f'Forcing ensemble all: {len(df_forc.columns.levels[1])}')
         forc_sample = np.random.choice(
             df_forc.columns.levels[1],
             min(samples, len(df_forc.columns.levels[1])),
             replace=False)
-        # select all variables for first column level,
-        # and forc_sample for second column level
+        # select all variables for first column level, and forc_sample for
+        # second column level
         forc_subset = df_forc.loc[:, (slice(None), forc_sample)]
         # forc_subset = df_forc.xs(tuple(forc_sample), axis=1, level=1)
         _nf = len(forc_subset.columns.get_level_values("ensemble").unique())
@@ -515,19 +507,10 @@ if __name__ == "__main__":
             n=min(samples, df_temp_PiC.shape[1]), axis=1)
         print('Internal variability ensembles pruned: '
               f'{df_temp_PiC_subset.shape[1]}')
-        
-        T0 = dt.datetime.now()
-        # temp_Att_Results, coef_Reg_Results, vars = GWI(
-        #     forc_Group_names,
-        #     inc_reg_const,
-        #     forc_subset,
-        #     params_subset,
-        #     df_temp_PiC_subset,
-        #     df_temp_Obs_subset,
-        #     start_yr,
-        #     end_yr)
-        T1 = dt.datetime.now()
 
+        # Parallelise GWI calculation, with each thread corresponding to a
+        # single (model) parameterisation for FaIR.
+        T1 = dt.datetime.now()
         with mp.Pool(os.cpu_count()) as p:
             print('Partialising Function')
             partial_GWI = functools.partial(
@@ -545,29 +528,26 @@ if __name__ == "__main__":
             )
             print('Calculating GWI (parallelised)', end=' ')
             results = p.map(partial_GWI, models)
-        vars = df_forc.columns.get_level_values(
-            'variable').unique().to_list()
+
+        vars = df_forc.columns.get_level_values('variable').unique().to_list()
         vars.extend(['Ant', 'Tot', 'Res'])
 
         T1_1 = dt.datetime.now()
-        print(f'... took {T1_1 - T1} seconds')  
+        print(f'... took {T1_1 - T1} seconds')
         print('Concatenating Results', end=' ')
         temp_Att_Results = np.concatenate(results, axis=2)
         T2 = dt.datetime.now()
         print(f'... took {T2 - T1_1} seconds')
 
-        # print(f'GWI original took {T1 - T0} seconds')                    
         n = temp_Att_Results.shape[2]
         n_parallel = temp_Att_Results.shape[2]
 
         # FILTER RESULTS ######################################################
         # For diagnosing: filter out results with particular regression
         # coefficients.
-
         # If you only want to study subsets of the results based on certain
         # constraints apply a mask here. The below mask is set to look at
         # results for different values of the coefficients.
-
         # Note to self about masking: coef_Reg_Results is the array of all
         # regression coefficients, with shape (4, n), where n is total number
         # of samplings. We select slice indices (forcing coefficients) we're
@@ -585,9 +565,6 @@ if __name__ == "__main__":
             print('Shape of masked attribution results:',
                   temp_Att_Results.shape)
 
-        # np.save('results/temp_Att_Results.npy', temp_Att_Results)
-        # np.save('results/coef_Reg_Results.npy', coef_Reg_Results)
-
         # PRODUCE FINAL RESULTS DATASETS ######################################
         # Remove old results first
         files = os.listdir('results')
@@ -595,11 +572,9 @@ if __name__ == "__main__":
         for csv in csvs:
             os.remove('results/' + csv)
 
-        # WARNING TO SELF: multidimensional np.percentile() changes the order
-        # of the axes, so that the axis along which you took the percentiles is
-        # now the first axis, and the other axes are the remaining axes. This
-        # doesn't make any sense to me why this would be useful, but it is what
-        # it is...
+        # NOTE TO SELF: multidimensional np.percentile() changes the order of
+        # the axes, so that the axis along which you took the percentiles is
+        # now the first axis, and the other axes are the remaining axes...
 
         # TIMESERIES RESULTS
         print('Calculating percentiles', end=' ')
@@ -636,15 +611,15 @@ if __name__ == "__main__":
             # See SR15 Ch1 1.2.1
             # temp_Att_Results_SR15 = np.apply_along_axis(
             #     final_value_of_trend, 0, temp_Att_Results_SR15_recent)
-
             temp_Att_Results_SR15 = np.empty(
                 temp_Att_Results_SR15_recent.shape[1:])
             for vv in range(temp_Att_Results_SR15_recent.shape[1]):
-                print(vv)
+                # print(vv)
                 with mp.Pool(os.cpu_count()) as p:
                     times = [temp_Att_Results_SR15_recent[:, vv, ii]
                              for ii
                              in range(temp_Att_Results_SR15_recent.shape[2])]
+                    # final_value_of_trend is from src/definitions.py
                     results = p.map(final_value_of_trend, times)
                 temp_Att_Results_SR15[vv, :] = np.array(results)
 
@@ -664,7 +639,6 @@ if __name__ == "__main__":
 
         T4 = dt.datetime.now()
         print('... took', T4 - T3, 'seconds')
-
 
         # AR6 DEFINITION (DECADE MEAN)
         print('Calculating AR6-definition temps', end=' ')
@@ -690,116 +664,3 @@ if __name__ == "__main__":
         df_headlines.to_csv(f'results/GWI_results_headlines_{n}.csv')
         T5 = dt.datetime.now()
         print(f'... took {T5 - T4} seconds')
-
-    
-    # GWI MULTI PLOT ##########################################################
-    # print('Creating GWI Multi Plot...')
-    # fig = plt.figure(figsize=(15, 10))
-    # ax1 = plt.subplot2grid(shape=(3, 4), loc=(0, 0), rowspan=2, colspan=3)
-    # ax2 = plt.subplot2grid(shape=(3, 4), loc=(0, 3), rowspan=2, colspan=1)
-    # ax3 = plt.subplot2grid(shape=(3, 4), loc=(2, 0), rowspan=1, colspan=3)
-    # ax4 = plt.subplot2grid(shape=(3, 4), loc=(2, 3), rowspan=1, colspan=1)
-    # ax2.set_ylim(ax1.get_ylim())
-    # gr.gwi_timeseries(ax1,
-    #                   df_temp_Obs, df_temp_PiC, df_Walsh_ts,
-    #                   plot_vars, var_colours)
-    # gr.gwi_residuals(ax3, df_Walsh_ts)
-    # gr.gwi_tot_vs_ant(ax4, df_Walsh_ts)
-    # gr.overall_legend(fig, 'lower center', 6)
-    # fig.suptitle(f'GWI Timeseries Plot for {n} runs')
-    # fig.savefig(f'{plot_folder}2_GWI_timeseries_multiplot.png')
-
-
-    ###########################################################################
-    # Recreate IPCC AR6 SPM.2 Plot
-    # https://www.ipcc.ch/report/ar6/wg1/downloads/report/IPCC_AR6_WGI_SPM.pdf
-    ###########################################################################
-
-
-    # # Create AR5 SPM2-esque comparison for the same data
-    # fig = plt.figure(figsize=(12, 8))
-    # ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=3)
-    # gr.Fig_SPM2_validation_plot(
-    #     ax, '2010-2019', bar_plot_vars, dict_updates_hl, source_colours)
-    # gr.overall_legend(fig, 'lower center', len(dict_updates_hl.keys()))
-    # fig.suptitle('Comparison of GWI to IPCC AR6 SPM.2 Assessment')
-    # fig.savefig(f'{plot_folder}4-0_SPM2_Comparison_2010-2019.png')
-
-    # # Create updated AR6 SPM2-esque plot containing results for both
-    # # AR6 and SR15 definitions for present-day warming
-    # fig = plt.figure(figsize=(12, 8))
-    # ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
-    # # ax2 = plt.subplot2grid(shape=(1, 4), loc=(0, 1), rowspan=1, colspan=3)
-    # gr.Fig_SPM2_results_plot(
-    #     ax=ax,
-    #     periods=['2013-2022', '2022'],
-    #     vars=bar_plot_vars,
-    #     dict_dfs={'Walsh': df_Walsh_hl, 'Ribes': df_Ribes_hl, },
-    #     period_cols=period_colours
-    #     )
-    # gr.overall_legend(fig, 'lower center', 3)
-    # fig.suptitle('Assessed contributions to warming relative to 1850–1900')
-    # fig.savefig(f'{plot_folder}4-1_SPM2_Update_2022.png')
-
-
-    sys.exit()
-
-    # # # Plot coefficients #########################################################
-    # print('Creating Coefficient Plot...', end=' ')
-    # fig = plt.figure(figsize=(15, 10))
-    # ax = plt.subplot2grid(
-    #     shape=(1, 1), loc=(0, 0),
-    #     # rowspan=1, colspan=3
-    #     )
-
-    # ax.scatter(coef_Reg_Results[0, :], coef_Reg_Results[1, :],
-    #         #    color=use_colours,
-    #         color='xkcd:teal',
-    #         alpha=0.01, edgecolors='none', s=20)
-    # ax.set_xlabel('OHF')
-    # ax.set_ylabel('GHG')
-    # # plt.ylim(bottom=0)
-    # fig.suptitle(f'Coefficients from {n} Samplings')
-    # fig.savefig(f'{plot_folder}3_Coefficients.png')
-    # t5 = dt.datetime.now()
-    # print(f'took {t5-t4}')
-
-    # ########### TEST SEABORN
-    # plt.close()
-
-    # coef_df = pd.DataFrame(coef_Reg_Results.T,
-    #                     columns=['GHG', 'Nat', 'OHF', 'Const'])
-    # # print(coef_df.head())
-    # g = sns.PairGrid(coef_df.sample(5000))
-    # g.map_upper(sns.scatterplot)
-    # g.map_lower(sns.kdeplot)
-    # g.map_diag(sns.kdeplot, lw=3, legend=False)
-    # g.fig.suptitle('Regression Coefficient Distributions')
-    # plt.savefig(f'{plot_folder}SNS_TEST.png')
-
-
-
-    # ############### WHAT IS UP WITH THE NEGATIVE COEFFICIENT FITS...
-
-    # for example in range(temp_Att_Results.shape[2]):
-    #     plt.plot(temp_Yrs, temp_TEST_Sig_Results[:, example],
-    #         color='black',
-    #         label='Temp Observation Signal')
-    #     plt.plot(temp_Yrs, temp_TEST_Ens_Results[:, example],
-    #         color='black',
-    #         label='Temp Observation Signal + Internal Variability')
-        
-    #     for i in range(len(forc_Group_names)):
-    #         plt.plot(temp_Yrs, temp_Att_Results[:, i, example],
-    #             color=forc_Group[forc_Group_names[i]]['Colour'],
-    #             label=str(forc_Group_names[i])
-    #             )
-    #     plt.plot(temp_Yrs, temp_TOT_Results[:, example],
-    #                 color='purple',
-    #                 label='TOT')
-    #     plt.title(coef_Reg_Results[:, i])
-
-    #     plt.legend()
-    #     plt.show()
-
-    # sys.exit()
