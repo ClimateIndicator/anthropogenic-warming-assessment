@@ -6,8 +6,10 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 
-from GlobalWarmingIndex.src import graphing as gr
-from GlobalWarmingIndex.src.definitions import *
+from attribution_methods.GlobalWarmingIndex.src import graphing as gr
+from attribution_methods.GlobalWarmingIndex.src.definitions import (
+    load_HadCRUT, load_PiC_CMIP6, filter_PiControl
+)
 
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
