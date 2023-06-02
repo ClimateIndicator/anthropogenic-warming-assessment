@@ -216,7 +216,14 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
     for s in range(max(len(sigmas)//2, 1)):  # max to enable 50% only
         # Plot the GWI timeseries
         for var in plot_vars:
-            if len(sigmas) > 1:
+            
+            # Because ROF (Gillett) method has different percentile results
+            # available for different variables (ie Tot only has 50th), check
+            # for each variable first whether to plot plume.
+            var_sigmas = df_Results_ts.iloc[\
+                :, df_Results_ts.columns.get_level_values('variable') == var
+                ].columns.get_level_values('percentile').unique()
+            if len(var_sigmas) > 1:
                 ax.fill_between(
                     df_Results_ts.index,
                     df_Results_ts.loc[:, (var, sigmas[s])].values,

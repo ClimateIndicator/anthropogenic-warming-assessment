@@ -46,13 +46,7 @@ for method in ['Walsh', 'Ribes', 'Gillett']:
     dict_updates_hl[method] = df_method_hl
     dict_updates_ts[method] = df_method_ts
 
-# Nathan Gillett's timeseries timeseries results aren't already PI-baselined,
-# so do this now
-df_ts = dict_updates_ts['Gillett']
-ofst_ts = df_ts.loc[(df_ts.index >= start_pi) & (df_ts.index <= end_pi)
-                    ].mean(axis=0)
-dict_updates_ts['Gillett'] = df_ts - ofst_ts
-# No Tot warming is provided in draft either, so include an approximation as
+# No Tot warming provided for ROF, so include an indicative approximation as
 # the sum of Ant and Nat warming
 dict_updates_ts['Gillett'].loc[:, ('Tot', '50')] = (
     dict_updates_ts['Gillett'].loc[:, ('Ant', '50')] +
