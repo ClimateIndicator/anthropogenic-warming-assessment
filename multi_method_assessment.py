@@ -551,3 +551,57 @@ for ax in [ax1, ax2]:
 # fig.suptitle('Assessed contributions to observed warming')  # SPM2 title
 fig.savefig(f'{plot_folder}/4_SPM2_Results.png')
 fig.savefig(f'{plot_folder}/4_SPM2_Results.svg')
+
+# Create appendix-layout tables for results.
+print('Creating tables for appendix')
+with open('results/Table_GMST_all_methods.csv', 'w') as f:
+    times = ['2010-2019', '2013-2022',
+             '2017', '2022',
+             '2017 (SR15 definition)', '2022 (SR15 definition)']
+    f.write('variable, method, ' + ', '.join(times) + '\n')
+    for v in ['Ant', 'GHG', 'OHF', 'Nat']:
+        for m in ['Walsh', 'Ribes', 'Gillett', 'Assessment']:
+            # print(
+            #     dict_updates_hl[m]
+            # )
+            line = [v, m]
+            if m == 'Assessment':
+                data = ["{:0.2f} ({:0.1f} to {:0.1f})".format(
+                    dict_updates_hl[m].loc[t, (v, '50')],
+                    dict_updates_hl[m].loc[t, (v, '5')],
+                    dict_updates_hl[m].loc[t, (v, '95')]
+                    )
+                        for t in times]
+            else:
+                data = ["{:0.2f} ({:0.2f} to {:0.2f})".format(
+                    dict_updates_hl[m].loc[t, (v, '50')],
+                    dict_updates_hl[m].loc[t, (v, '5')],
+                    dict_updates_hl[m].loc[t, (v, '95')]
+                    )
+                        for t in times]
+
+            line.extend(data)
+            line = ', '.join([str(x) for x in line]) + '\n'
+            f.write(line)
+
+# Load the Gillet dataset called results/Gillett_GSAT_headlines.csv to pandas
+# dataframe
+Gillet_GSAT = pd.read_csv(
+        'results/Gillett_GSAT_headlines.csv',
+        index_col=0,  header=[0, 1], skiprows=skiprows)
+
+with open('results/Table_GSAT_ROF_method.csv', 'w') as f:
+    times = ['2010-2019', '2013-2022', '2017', '2022']
+    f.write('variable, ' + ', '.join(times) + '\n')
+    for v in ['Ant', 'GHG', 'OHF', 'Nat']:
+        line = [v]
+        data = ["{:0.2f} ({:0.2f} to {:0.2f})".format(
+            Gillet_GSAT.loc[t, (v, '50')],
+            Gillet_GSAT.loc[t, (v, '5')],
+            Gillet_GSAT.loc[t, (v, '95')]
+            )
+                for t in times]
+
+        line.extend(data)
+        line = ', '.join([str(x) for x in line]) + '\n'
+        f.write(line)
