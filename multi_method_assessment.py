@@ -12,6 +12,19 @@ from attribution_methods.GlobalWarmingIndex.src.definitions import (
 )
 
 ###############################################################################
+# Checklist of inputs to this script that need updating each year:
+# 1. GWI Results (manually add csv to results/ directory)
+# 2. KCC Results (manually add csv to results/ directory)
+# 3. ROF Results (manually add csv to results/ directory)
+# 4. Observed Warming Update (manually add in this script)
+# 5. HadCRUT Observed Warming (manually add csv to
+#    attribution_methods/GlobalWarmingIndex/data/Temp/HadCRUT)
+
+# Checklist of inputs that don't need updating each year
+# 1. CMIP6 PiControl simulations (update only when CMIP7 is ready)
+# 2. IPCC Quoted reults (never update; they are quotes from IPCC AR6 and SR1.5)
+
+###############################################################################
 # LOAD DATA ###################################################################
 ###############################################################################
 
@@ -30,18 +43,18 @@ df_temp_PiC.set_index(np.arange(end_yr-start_yr+1)+1850, inplace=True)
 # RESULTS FROM ANNUAL UPDATES #################################################
 # Combine dataframes of results from all attribution methods (Walsh (GWI),
 # Ribes (KCC), Gillett (ROF)) into one dictionary.
-dict_updates_hl = {}
-dict_updates_ts = {}
-files = os.listdir('results')
+dict_updates_hl = {}  # Headline results
+dict_updates_ts = {}  # Timeseries results
+files = os.listdir('results')  # Files in the results/ directory
 for method in ['Walsh', 'Ribes', 'Gillett']:
     file_ts = [f for f in files if f'{method}_GMST_timeseries' in f][0]
     file_hs = [f for f in files if f'{method}_GMST_headlines' in f][0]
-    skiprows = 1 if method == 'Gillett' else 0
+    skiprows = 1 if method == 'Gillett' else 0  # (Different csv format)
     df_method_ts = pd.read_csv(
         f'results/{file_ts}', index_col=0,  header=[0, 1], skiprows=skiprows)
     df_method_hl = pd.read_csv(
         f'results/{file_hs}', index_col=0,  header=[0, 1], skiprows=skiprows)
-    if method == 'Walsh':
+    if method == 'Walsh':  # Extract number of ensemble samples used by GWI
         n = file_ts.split('.csv')[0].split('_')[-1]
     dict_updates_hl[method] = df_method_hl
     dict_updates_ts[method] = df_method_ts
@@ -53,7 +66,7 @@ dict_updates_ts['Gillett'].loc[:, ('Tot', '50')] = (
     dict_updates_ts['Gillett'].loc[:, ('Nat', '50')]
     )
 
-# (ish) MULTI-METHOD ASSESSMENT - AR6 STYLE - TIMESERIES ######################
+# MULTI-METHOD ASSESSMENT - AR6 STYLE - TIMESERIES ############################
 # Conclusion: no uncertainty plumes available at time of writing for ROF
 # (Gillett) method, so a multi-method timeseries is not created here. Instead,
 # we plot the individual methods separately as an indicative alternative later.
@@ -82,12 +95,12 @@ for period in periods_to_assess:
                    for method in dict_updates_hl.keys()]
 
         # Follow AR6 assessment method of best estimate being the
-        # 0.01C-prevision mean of the central estimates for each method, and
+        # 0.01C-precision mean of the central estimates for each method, and
         # the likely range being the smallest 0.1C-precision range that
-        # envelops the 5-95% range for each method.
+        # envelops the 5-95% range for each and every method.
 
-        # The simplest way to handle the multiple cases of some or all values
-        # being negative is to translate them all to being posisitve.
+        # Handle the multiple cases of some or all values being negative by
+        # translating them all to being posisitve.
         minimum, maximum = minimum + 10, maximum + 10
         # round minimum value in minimum down to the lowest 0.1
         likely_min = (np.floor(minimum * 10) / 10 * np.sign(minimum))
@@ -121,13 +134,50 @@ dict_updates_hl['Assessment'].to_csv(
         'results/Assessment-Update-2022_GMST_headlines.csv')
 
 
-# RESULTS FROM AR6 WG1 Ch.3 ###################################################
+
+# OBSERVATIONS ################################################################
+# Add updated observation results from the annual updates paper section 4
+df_update_Obs_repeat = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Obs', '50'): 1.07,  # from annual updates paper section 4
+    ('Obs',  '5'): 0.89,  # from annual updates paper section 4
+    ('Obs', '95'): 1.22,  # from annual updates paper section 4
+}, index=['2010-2019'])
+df_update_Obs_repeat.columns.names = ['variable', 'percentile']
+df_update_Obs_repeat.index.name = 'Year'
+
+df_update_Obs_update = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Obs', '50'): 1.15,  # from annual updates paper section 4
+    ('Obs',  '5'): 1.00,  # from annual updates paper section 4
+    ('Obs', '95'): 1.25,  # from annual updates paper section 4
+}, index=['2013-2022'])
+df_update_Obs_update.columns.names = ['variable', 'percentile']
+df_update_Obs_update.index.name = 'Year'
+
+# Add observations quoted from AR6
+df_AR6_Obs = pd.DataFrame({
+    # (VARIABLE, PERCENTILE): VALUE
+    ('Obs', '50'): 1.06,  # AR6 3.3.1.1.2 p442 from observations
+    ('Obs',  '5'): 0.88,  # AR6 3.3.1.1.2 p442 from observations
+    ('Obs', '95'): 1.21,  # AR6 3.3.1.1.2 p442 from observations
+}, index=['2010-2019'])
+df_AR6_Obs.columns.names = ['variable', 'percentile']
+df_AR6_Obs.index.name = 'Year'
+
+# Combine all observations into one dictionary
+df_All_Obs = pd.concat([
+                        # df_AR6_Obs,
+                        df_update_Obs_repeat,
+                        df_update_Obs_update
+                        ])
+dict_updates_Obs_hl = {'Assessment': df_All_Obs}
+
+
+# QUOTED HEADLINE RESULTS FROM IPCC 6TH ASSESSMENT CYCLE ######################
 # Create dataframe of results from AR6 WG1 Ch.3
 df_AR6_assessment = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
-    ('Tot', '50'): 1.06,  # AR6 3.3.1.1.2 p442 from observations
-    ('Tot',  '5'): 0.88,  # AR6 3.3.1.1.2 p442 from observations
-    ('Tot', '95'): 1.21,  # AR6 3.3.1.1.2 p442 from observations
     ('Ant', '50'): 1.07,  # AR6 3.3.1.1.2 p442, and SPM A.1.3
     ('Ant',  '5'): 0.80,  # AR6 3.3.1.1.2 p442, and SPM A.1.3
     ('Ant', '95'): 1.30,  # AR6 3.3.1.1.2 p442, and SPM A.1.3
@@ -147,42 +197,7 @@ df_AR6_assessment = pd.DataFrame({
 df_AR6_assessment.columns.names = ['variable', 'percentile']
 df_AR6_assessment.index.name = 'Year'
 
-# Add observations quoted from AR6
-df_AR6_Obs = pd.DataFrame({
-    # (VARIABLE, PERCENTILE): VALUE
-    ('Obs', '50'): 1.06,  # AR6 3.3.1.1.2 p442 from observations
-    ('Obs',  '5'): 0.88,  # AR6 3.3.1.1.2 p442 from observations
-    ('Obs', '95'): 1.21,  # AR6 3.3.1.1.2 p442 from observations
-}, index=['2010-2019'])
-df_AR6_Obs.columns.names = ['variable', 'percentile']
-df_AR6_Obs.index.name = 'Year'
-
-# Add updated observation results from the annual updates paper section 4
-df_update_Obs_repeat = pd.DataFrame({
-    # (VARIABLE, PERCENTILE): VALUE
-    ('Obs', '50'): 1.07,  # from annual updates paper section 4
-    ('Obs',  '5'): 0.89,  # from annual updates paper section 4
-    ('Obs', '95'): 1.22,  # from annual updates paper section 4
-}, index=['2010-2019'])
-df_update_Obs_repeat.columns.names = ['variable', 'percentile']
-df_update_Obs_repeat.index.name = 'Year'
-df_update_Obs_update = pd.DataFrame({
-    # (VARIABLE, PERCENTILE): VALUE
-    ('Obs', '50'): 1.15,  # from annual updates paper section 4
-    ('Obs',  '5'): 1.00,  # from annual updates paper section 4
-    ('Obs', '95'): 1.25,  # from annual updates paper section 4
-}, index=['2013-2022'])
-df_update_Obs_update.columns.names = ['variable', 'percentile']
-df_update_Obs_update.index.name = 'Year'
-
-df_All_Obs = pd.concat([
-                        # df_AR6_Obs,
-                        df_update_Obs_repeat,
-                        df_update_Obs_update
-                        ])
-dict_updates_Obs_hl = {'Assessment': df_All_Obs}
-
-
+# Create dataframe of results from SR15 Ch.1
 df_SR15_assessment = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
     ('Ant', '50'): 1.0,  # SR15 1.2.1.3
@@ -192,11 +207,14 @@ df_SR15_assessment = pd.DataFrame({
 df_SR15_assessment.columns.names = ['variable', 'percentile']
 df_SR15_assessment.index.name = 'Year'
 
+# Combine 6th assessment cycle results from both SR1.5 and AR6
 df_IPCC_assessment = pd.concat([df_AR6_assessment, df_SR15_assessment])
 df_IPCC_assessment.to_csv('results/Assessment-6thIPCC_headlines.csv')
 
-# RESULTS FROM AR6 METHODS ####################################################
+# QUOTED RESULTS FROM INDIVIDUAL AR6 ATTRIBUTION METHODS ######################
+# These results for each method are quoted here from the AR6 assessment.
 # Data available from https://github.com/ESMValGroup/ESMValTool-AR6-OriginalCode-FinalFigures/blob/ar6_chapter_3_nathan/esmvaltool/diag_scripts/ipcc_ar6/fig3_8.py
+
 # Haustein 2017 (GWI)
 df_AR6_Haustein = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
@@ -290,7 +308,7 @@ df_AR6_Smith.columns.names = ['variable', 'percentile']
 df_AR6_Smith.index.name = 'Year'
 df_IPCC_Smith = df_AR6_Smith
 
-# Combine all IPCC-quoted results into ont dictionary
+# Combine all IPCC-quoted results (not the updated results) into one dictionary
 dict_IPCC_hl = {
     'Assessment': df_IPCC_assessment,
     'Haustein': df_IPCC_Haustein,
@@ -341,7 +359,7 @@ for method in dict_updates_ts.keys():
     gr.gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, dict_updates_ts[method],
                       plot_vars, var_colours)
     ax.set_ylim(-1, 2)
-    ax.set_xlim(1850, 2022)
+    ax.set_xlim(start_yr, end_yr)
     ax.text(1875, -0.85, '1850-1900\nPreindustrial Baseline', ha='center')
     gr.overall_legend(fig, 'lower center', 6)
     fig.suptitle(f'{method} Timeseries Plot')
@@ -372,7 +390,7 @@ for m, l in zip(['Walsh', 'Ribes', 'Gillett'], ['-', '--', ':']):
             label=f'{m}: {labels[m]}')
 
 ax.set_ylim(-1, 2)
-ax.set_xlim(1850, 2022)
+ax.set_xlim(start_yr, end_yr)
 ax.text(1875, -0.85, '1850-1900\nPreindustrial Baseline', ha='center')
 fig.suptitle('Timeseries for each attribution method used '
              'in the assessment of contributions to observed warming')
@@ -394,7 +412,7 @@ for m in methods:
     gr.gwi_timeseries(ax, df_temp_Obs, PiC, dict_updates_ts[m],
                       ['Tot', 'GHG', 'Nat', 'OHF'], var_colours)
     ax.set_ylim(-1, 2)
-    ax.set_xlim(1900, 2022)
+    ax.set_xlim(1900, end_yr)
     if methods.index(m) > 0:
         ax.set_ylabel('')
         ax.set_yticklabels([])

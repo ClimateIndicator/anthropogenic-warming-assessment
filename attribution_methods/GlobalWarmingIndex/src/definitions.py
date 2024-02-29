@@ -181,12 +181,13 @@ def filter_PiControl(df, timeframes):
     dict_temp_PiC = {}
     for ens in list(df):
         # Establish inclusion condition, which is that the smoothed internal
-        # variability of a CMIP5 ensemble must operate within certain bounds:
+        # variability of a CMIP6 ensemble must operate within certain bounds:
         # 1. there must be a minimum level of variation (to remove those models
         # that are clearly wrong, eg oscillating between 0.01 and 0 warming)
         # 2. they must not exceed a certain min or max temperature bound; the
-        # 0.3 value is roughyl similar to a 0.15 drift per century limit as
+        # 0.3 value is roughly similar to a 0.15 drift per century limit as
         # used in Haustein et al 2017, and Leach et al 2021.
+        #
         # The final ensemble distribution are plotted against HadCRUT5 median
         # in gwi.py, to check that the percentiles of this median run are
         # similar to the percentiles on the entire CMIP5 ensemble. ie, if the
@@ -200,10 +201,10 @@ def filter_PiControl(df, timeframes):
         temp_ma_3 = moving_average(temp, 3)
         temp_ma_30 = moving_average(temp, 30)
         _cond = (
-                    (max(temp_ma_3) < 0.3 and min(temp_ma_3) > -0.3)
-                    and ((max(temp_ma_3) - min(temp_ma_3)) > 0.06)
-                    and (max(temp_ma_30) < 0.1 and min(temp_ma_30) > -0.1)
-                    )
+                 (max(temp_ma_3) < 0.3 and min(temp_ma_3) > -0.3)
+                 and ((max(temp_ma_3) - min(temp_ma_3)) > 0.06)
+                 and (max(temp_ma_30) < 0.1 and min(temp_ma_30) > -0.1)
+                 )
 
         # Approve actual (ie not smoothed) data if the corresponding smoothed
         # data is approved.
