@@ -36,4 +36,5 @@ if 'FaIR_V2' not in os.listdir('models'):
         file.write(filedata)
 
 elif 'FaIR_V2' in os.listdir('models'):
-    print('FaIR already exists - no need to download again.')
+    # print('FaIR already exists - no need to download again.')
+    pass

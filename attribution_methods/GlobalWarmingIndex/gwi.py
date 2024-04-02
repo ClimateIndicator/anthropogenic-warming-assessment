@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 # import scipy.stats as ss
 
 import src.graphing as gr
-from src.definitions import *
+import src.definitions as defs
 
 import models.AR5_IR as AR5_IR
 import models.FaIR_V2.FaIRv2_0_0_alpha1.fair.fair_runner as fair
@@ -378,13 +378,14 @@ if __name__ == "__main__":
     # model_choice = 'AR5_IR'
     model_choice = 'FaIR_V2'
 
-    start_yr, end_yr = 1850, 2022
+    start_yr, end_yr = 1850, 2023
     start_pi, end_pi = 1850, 1900  # As in IPCC AR6 Ch.3
 
     # sigmas = [[32, 68], [5, 95], [0.3, 99.7]]
     sigmas = [[17, 83], [5, 95]]
-    sigmas_all = list(np.concatenate((np.sort(np.ravel(sigmas)), [50]),
-                                     axis=0))
+    sigmas_all = list(
+        np.concatenate((np.sort(np.ravel(sigmas)), [50]), axis=0)
+        )
 
     plot_folder = 'plots/'
     if not os.path.exists(plot_folder):
@@ -395,25 +396,27 @@ if __name__ == "__main__":
     ###########################################################################
 
     # Effective Radiative Forcing
-    df_forc = load_ERF_CMIP6()  # From src/definitions.py
+    df_forc = defs.load_ERF_CMIP6()
     forc_Group_names = sorted(
         df_forc.columns.get_level_values('variable').unique())
 
     # TEMPERATURE
-    df_temp_Obs = load_HadCRUT(start_pi, end_pi)  # From src/definitions.py
+    df_temp_Obs = defs.load_HadCRUT(start_pi, end_pi, start_yr, end_yr)
     n_yrs = df_temp_Obs.shape[0]
 
     # CMIP6 PI-CONTROL
     timeframes = [1, 3, 30]
     # df_temp_PiC = load_PiC_Stuart(n_yrs)
-    df_temp_PiC = load_PiC_CMIP6(n_yrs, start_pi, end_pi)  # From src/defs
-    df_temp_PiC = filter_PiControl(df_temp_PiC, timeframes)  # From src/defs
-    df_temp_PiC.set_index(np.arange(end_yr-start_yr+1)+1850, inplace=True)
+    df_temp_PiC = defs.load_PiC_CMIP6(n_yrs, start_pi, end_pi)
+    df_temp_PiC = defs.filter_PiControl(df_temp_PiC, timeframes)
+    df_temp_PiC.set_index(np.arange(n_yrs)+start_yr, inplace=True)
+    # NOTE: For end_yr=2022, we get 183 realisations for piControl
+    # NOTE: For end_yr=2023, we get 181 realisations for piControl
 
     # Create a very rough estimate of the internal variability for the HadCRUT5
     # best estimate.
     # TODO: Regress natural forcings out of this as well...
-    temp_Obs_signal = temp_signal(  # From src/definitions.py
+    temp_Obs_signal = defs.temp_signal(
         df_temp_Obs.quantile(q=0.5, axis=1).to_numpy(), 30, 'extrapolate')
     temp_Obs_IV = df_temp_Obs.quantile(q=0.5, axis=1) - temp_Obs_signal
 
@@ -472,7 +475,7 @@ if __name__ == "__main__":
     calc_switch = input('Recalculate? y/n: ')
 
     if calc_switch == 'y':
-        samples = int(input('Number of samples for each source (0-200): '))
+        samples = int(input('Max number of samples for each source (0-200): '))
         # Select random sub-set sampling of all ensemble members:
 
         # 1. Select random samples of the forcing data
@@ -509,6 +512,23 @@ if __name__ == "__main__":
             n=min(samples, df_temp_PiC.shape[1]), axis=1)
         print('Internal variability ensembles pruned: '
               f'{df_temp_PiC_subset.shape[1]}')
+        
+        # Print the total available ensemble size
+        _n_all = (
+            len(df_forc.columns.levels[1].unique()) *
+            len(CMIP6_param_df.columns.levels[0].unique()) *
+            df_temp_Obs.shape[1] *
+            df_temp_PiC.shape[1]
+        )
+        print(f'Max available ensemble: {_n_all}')
+        # Print the randomly subsampled ensemble size
+        _n_sub = (
+            _nf *  # number of forcing ensembles
+            len(CMIP6_param_df.columns.levels[0].unique()) *
+            df_temp_Obs_subset.shape[1] *
+            df_temp_PiC_subset.shape[1]
+        )
+        print(f'Sub-sampled ensemble size: {_n_sub}')
 
         # Parallelise GWI calculation, with each thread corresponding to a
         # single (model) parameterisation for FaIR.
@@ -535,14 +555,13 @@ if __name__ == "__main__":
         vars.extend(['Ant', 'Tot', 'Res'])
 
         T1_1 = dt.datetime.now()
-        print(f'... took {T1_1 - T1} seconds')
+        print(f'... took {T1_1 - T1}')
         print('Concatenating Results', end=' ')
         temp_Att_Results = np.concatenate(results, axis=2)
         T2 = dt.datetime.now()
-        print(f'... took {T2 - T1_1} seconds')
+        print(f'... took {T2 - T1_1}')
 
         n = temp_Att_Results.shape[2]
-        n_parallel = temp_Att_Results.shape[2]
 
         # FILTER RESULTS ######################################################
         # For diagnosing: filter out results with particular regression
@@ -594,20 +613,20 @@ if __name__ == "__main__":
         df_Results.index.name = 'Year'
         df_Results.to_csv(f'results/GWI_results_timeseries_{n}.csv')
         T3 = dt.datetime.now()
-        print(f'... took {T3 - T2} seconds')
+        print(f'... took {T3 - T2}')
 
         # HEADLINE RESULTS
         print('Calculating headlines')
 
         # GWI-ANNUAL DEFINITION (SIMPLE VALUE IN A GIVEN YEAR)
-        dfs = [df_Results.loc[[2017]], df_Results.loc[[2022]]]
+        dfs = [df_Results.loc[[2017]], df_Results.loc[[end_yr]]]
 
         # SR15 DEFINITION (CENTRE OF 30-YEAR TREND)
         # Calculate the linear trend of the final 15 years of the timeseries
         # and use this to calculate the present-day warming
         print('Calculating SR15-definition temps', end=' ')
 
-        for year in [2017, 2022]:
+        for year in [2017, end_yr]:
             years_SR15 = ((year-15 <= temp_Yrs) * (temp_Yrs <= year))
             temp_Att_Results_SR15_recent = temp_Att_Results[years_SR15, :, :]
 
@@ -624,7 +643,7 @@ if __name__ == "__main__":
                              for ii
                              in range(temp_Att_Results_SR15_recent.shape[2])]
                     # final_value_of_trend is from src/definitions.py
-                    results = p.map(final_value_of_trend, times)
+                    results = p.map(defs.final_value_of_trend, times)
                 temp_Att_Results_SR15[vv, :] = np.array(results)
 
             # Obtain statistics
@@ -642,11 +661,11 @@ if __name__ == "__main__":
             dfs.append(df_headlines_i)
 
         T4 = dt.datetime.now()
-        print('... took', T4 - T3, 'seconds')
+        print(f'... took {T4 - T3}')
 
         # AR6 DEFINITION (DECADE MEAN)
         print('Calculating AR6-definition temps', end=' ')
-        for years in [[2010, 2019], [2013, 2022]]:
+        for years in [[2010, 2019], [end_yr-9, end_yr]]:
             recent_years = ((years[0] <= temp_Yrs) * (temp_Yrs <= years[1]))
             temp_Att_Results_AR6 = \
                 temp_Att_Results[recent_years, :, :].mean(axis=0)
@@ -667,4 +686,4 @@ if __name__ == "__main__":
         df_headlines = pd.concat(dfs, axis=0)
         df_headlines.to_csv(f'results/GWI_results_headlines_{n}.csv')
         T5 = dt.datetime.now()
-        print(f'... took {T5 - T4} seconds')
+        print(f'... took {T5 - T4}')

@@ -45,10 +45,10 @@ import pymagicc
 
 
 def load_ERF_CMIP6():
-    """Load the ERFs from CMIP6."""
+    """Load the ERFs from Chris."""
     # ERF location
     here = Path(__file__).parent
-    file_ERF = here / '../data/ERF Samples/Chris/ERF_DAMIP_1000.nc'
+    file_ERF = here / '../data/ERF Samples/Chris/ERF_DAMIP_1000_1750-2023.nc'
     # import ERF_file to xarray dataset and convert to pandas dataframe
     df_ERF = xr.open_dataset(file_ERF).to_dataframe()
     # assign the columns the name 'variable'
@@ -68,12 +68,12 @@ def load_ERF_CMIP6():
     return df_ERF
 
 
-def load_HadCRUT(start_pi, end_pi):
+def load_HadCRUT(start_pi, end_pi, start_yr, end_yr):
     """Load HadCRUT5 observations and remove PI baseline."""
     here = Path(__file__).parent
     temp_ens_Path = (
         '../data/Temp/HadCRUT/' +
-        'HadCRUT.5.0.1.0.analysis.ensemble_series.global.annual.csv')
+        'HadCRUT.5.0.2.0.analysis.ensemble_series.global.annual.csv')
     temp_ens_Path = here / temp_ens_Path
     # read temp_Path into pandas dataframe, rename column 'Time' to 'Year'
     # and set the index to 'Year', keeping only columns with 'Realization' in
@@ -94,6 +94,12 @@ def load_HadCRUT(start_pi, end_pi):
         (df_temp_Obs.index <= end_pi),
         ].mean(axis=0)
     df_temp_Obs -= ofst_Obs
+
+    # Filter only years between start_yr and end_yr
+    df_temp_Obs = df_temp_Obs.loc[
+        (df_temp_Obs.index >= start_yr) &
+        (df_temp_Obs.index <= end_yr),
+        ]
 
     return df_temp_Obs
 
