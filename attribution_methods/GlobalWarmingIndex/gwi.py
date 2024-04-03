@@ -472,218 +472,222 @@ if __name__ == "__main__":
     temp_Yrs = np.array(df_temp_Obs.index)
 
     t1 = dt.datetime.now()
-    calc_switch = input('Recalculate? y/n: ')
+    # calc_switch = input('Recalculate? y/n: ')
+    # if calc_switch == 'y':
+    samples = int(input('Max number of samples for each source (0-200): '))
+    # Select random sub-set sampling of all ensemble members:
 
-    if calc_switch == 'y':
-        samples = int(input('Max number of samples for each source (0-200): '))
-        # Select random sub-set sampling of all ensemble members:
+    # 1. Select random samples of the forcing data
+    print(f'Forcing ensemble all: {len(df_forc.columns.levels[1])}')
+    forc_sample = np.random.choice(
+        df_forc.columns.levels[1],
+        min(samples, len(df_forc.columns.levels[1])),
+        replace=False)
+    # select all variables for first column level, and forc_sample for
+    # second column level
+    forc_subset = df_forc.loc[:, (slice(None), forc_sample)]
+    # forc_subset = df_forc.xs(tuple(forc_sample), axis=1, level=1)
+    _nf = len(forc_subset.columns.get_level_values("ensemble").unique())
+    print(f'Forcing ensemble pruned: {_nf}')
 
-        # 1. Select random samples of the forcing data
-        print(f'Forcing ensemble all: {len(df_forc.columns.levels[1])}')
-        forc_sample = np.random.choice(
-            df_forc.columns.levels[1],
-            min(samples, len(df_forc.columns.levels[1])),
-            replace=False)
-        # select all variables for first column level, and forc_sample for
-        # second column level
-        forc_subset = df_forc.loc[:, (slice(None), forc_sample)]
-        # forc_subset = df_forc.xs(tuple(forc_sample), axis=1, level=1)
-        _nf = len(forc_subset.columns.get_level_values("ensemble").unique())
-        print(f'Forcing ensemble pruned: {_nf}')
+    # 2. Select all samples of the model parameters
+    print('FaIR Parameters: '
+            f'{len(CMIP6_param_df.columns.levels[0].unique())}')
+    if model_choice == 'AR5_IR':
+        params_subset = Geoff[:, :min(samples, Geoff.shape[1])]
+    elif model_choice == 'FaIR_V2':
+        params_subset = CMIP6_param_df
+        models = CMIP6_param_df.columns.levels[0].unique().to_list()
 
-        # 2. Select all samples of the model parameters
-        print('FaIR Parameters: '
-              f'{len(CMIP6_param_df.columns.levels[0].unique())}')
-        if model_choice == 'AR5_IR':
-            params_subset = Geoff[:, :min(samples, Geoff.shape[1])]
-        elif model_choice == 'FaIR_V2':
-            params_subset = CMIP6_param_df
-            models = CMIP6_param_df.columns.levels[0].unique().to_list()
+    # 3. Select random samples of the temperature data
+    print(f'Temperature ensembles all: {df_temp_Obs.shape[1]}')
+    df_temp_Obs_subset = df_temp_Obs.sample(
+        n=min(samples, df_temp_Obs.shape[1]), axis=1)
+    print(f'Temperature ensembles pruned: {df_temp_Obs_subset.shape[1]}')
 
-        # 3. Select random samples of the temperature data
-        print(f'Temperature ensembles all: {df_temp_Obs.shape[1]}')
-        df_temp_Obs_subset = df_temp_Obs.sample(
-            n=min(samples, df_temp_Obs.shape[1]), axis=1)
-        print(f'Temperature ensembles pruned: {df_temp_Obs_subset.shape[1]}')
+    # 4. Select random samples of the internal variability
+    print(f'Internal variability ensembles all: {df_temp_PiC.shape[1]}')
+    df_temp_PiC_subset = df_temp_PiC.sample(
+        n=min(samples, df_temp_PiC.shape[1]), axis=1)
+    print('Internal variability ensembles pruned: '
+            f'{df_temp_PiC_subset.shape[1]}')
+    
+    # Print the total available ensemble size
+    _n_all = (
+        len(df_forc.columns.levels[1].unique()) *
+        len(CMIP6_param_df.columns.levels[0].unique()) *
+        df_temp_Obs.shape[1] *
+        df_temp_PiC.shape[1]
+    )
+    print(f'Max available ensemble: {_n_all}')
+    # Print the randomly subsampled ensemble size
+    _n_sub = (
+        _nf *  # number of forcing ensembles
+        len(CMIP6_param_df.columns.levels[0].unique()) *
+        df_temp_Obs_subset.shape[1] *
+        df_temp_PiC_subset.shape[1]
+    )
+    print(f'Sub-sampled ensemble size: {_n_sub}')
 
-        # 4. Select random samples of the internal variability
-        print(f'Internal variability ensembles all: {df_temp_PiC.shape[1]}')
-        df_temp_PiC_subset = df_temp_PiC.sample(
-            n=min(samples, df_temp_PiC.shape[1]), axis=1)
-        print('Internal variability ensembles pruned: '
-              f'{df_temp_PiC_subset.shape[1]}')
-        
-        # Print the total available ensemble size
-        _n_all = (
-            len(df_forc.columns.levels[1].unique()) *
-            len(CMIP6_param_df.columns.levels[0].unique()) *
-            df_temp_Obs.shape[1] *
-            df_temp_PiC.shape[1]
+    # Parallelise GWI calculation, with each thread corresponding to a
+    # single (model) parameterisation for FaIR.
+    T1 = dt.datetime.now()
+    with mp.Pool(os.cpu_count()) as p:
+        print('Partialising Function')
+        partial_GWI = functools.partial(
+            GWI_faster,
+            inc_reg_const=inc_reg_const,
+            inc_pi_offset=inc_pi_offset,
+            df_forc=forc_subset,
+            df_params=params_subset,
+            df_temp_PiC=df_temp_PiC_subset,
+            df_temp_Obs=df_temp_Obs_subset,
+            start_yr=start_yr,
+            end_yr=end_yr,
+            start_pi=start_pi,
+            end_pi=end_pi,
         )
-        print(f'Max available ensemble: {_n_all}')
-        # Print the randomly subsampled ensemble size
-        _n_sub = (
-            _nf *  # number of forcing ensembles
-            len(CMIP6_param_df.columns.levels[0].unique()) *
-            df_temp_Obs_subset.shape[1] *
-            df_temp_PiC_subset.shape[1]
-        )
-        print(f'Sub-sampled ensemble size: {_n_sub}')
+        print('Calculating GWI (parallelised)', end=' ')
+        results = p.map(partial_GWI, models)
 
-        # Parallelise GWI calculation, with each thread corresponding to a
-        # single (model) parameterisation for FaIR.
-        T1 = dt.datetime.now()
-        with mp.Pool(os.cpu_count()) as p:
-            print('Partialising Function')
-            partial_GWI = functools.partial(
-                GWI_faster,
-                inc_reg_const=inc_reg_const,
-                inc_pi_offset=inc_pi_offset,
-                df_forc=forc_subset,
-                df_params=params_subset,
-                df_temp_PiC=df_temp_PiC_subset,
-                df_temp_Obs=df_temp_Obs_subset,
-                start_yr=start_yr,
-                end_yr=end_yr,
-                start_pi=start_pi,
-                end_pi=end_pi,
-            )
-            print('Calculating GWI (parallelised)', end=' ')
-            results = p.map(partial_GWI, models)
+    vars = df_forc.columns.get_level_values('variable').unique().to_list()
+    vars.extend(['Ant', 'Tot', 'Res'])
 
-        vars = df_forc.columns.get_level_values('variable').unique().to_list()
-        vars.extend(['Ant', 'Tot', 'Res'])
+    T1_1 = dt.datetime.now()
+    print(f'... took {T1_1 - T1}')
+    print('Concatenating Results', end=' ')
+    temp_Att_Results = np.concatenate(results, axis=2)
+    T2 = dt.datetime.now()
+    print(f'... took {T2 - T1_1}')
 
-        T1_1 = dt.datetime.now()
-        print(f'... took {T1_1 - T1}')
-        print('Concatenating Results', end=' ')
-        temp_Att_Results = np.concatenate(results, axis=2)
-        T2 = dt.datetime.now()
-        print(f'... took {T2 - T1_1}')
+    n = temp_Att_Results.shape[2]
 
-        n = temp_Att_Results.shape[2]
+    # FILTER RESULTS ######################################################
+    # For diagnosing: filter out results with particular regression
+    # coefficients.
+    # If you only want to study subsets of the results based on certain
+    # constraints apply a mask here. The below mask is set to look at
+    # results for different values of the coefficients.
+    # Note to self about masking: coef_Reg_Results is the array of all
+    # regression coefficients, with shape (4, n), where n is total number
+    # of samplings. We select slice indices (forcing coefficients) we're
+    # interested in basing the condition on:
+    # AER is index 0, GHGs index 1, NAT index 2, Const index 3
+    # Then choose whether you want any or all or the coefficients to meet
+    # the condition (in this case being less than zero)
+    mask_switch = False
+    if mask_switch:
+        coef_mask = np.all(coef_Reg_Results[[0, 2], :] <= 0, axis=0)
+        # mask = np.any(coef_Reg_Results[[0], :] <= 0.0, axis=0)
 
-        # FILTER RESULTS ######################################################
-        # For diagnosing: filter out results with particular regression
-        # coefficients.
-        # If you only want to study subsets of the results based on certain
-        # constraints apply a mask here. The below mask is set to look at
-        # results for different values of the coefficients.
-        # Note to self about masking: coef_Reg_Results is the array of all
-        # regression coefficients, with shape (4, n), where n is total number
-        # of samplings. We select slice indices (forcing coefficients) we're
-        # interested in basing the condition on:
-        # AER is index 0, GHGs index 1, NAT index 2, Const index 3
-        # Then choose whether you want any or all or the coefficients to meet
-        # the condition (in this case being less than zero)
-        mask_switch = False
-        if mask_switch:
-            coef_mask = np.all(coef_Reg_Results[[0, 2], :] <= 0, axis=0)
-            # mask = np.any(coef_Reg_Results[[0], :] <= 0.0, axis=0)
+        temp_Att_Results = temp_Att_Results[:, :, coef_mask]
+        coef_Reg_Results = coef_Reg_Results[:, coef_mask]
+        print('Shape of masked attribution results:',
+                temp_Att_Results.shape)
 
-            temp_Att_Results = temp_Att_Results[:, :, coef_mask]
-            coef_Reg_Results = coef_Reg_Results[:, coef_mask]
-            print('Shape of masked attribution results:',
-                  temp_Att_Results.shape)
+    # PRODUCE FINAL RESULTS DATASETS ######################################
+    # Remove old results first
+    if not os.path.exists('results'):
+        os.makedirs('results')
+    files = os.listdir('results')
+    # csvs = [f for f in files if f.endswith('.csv')]
+    # for csv in csvs:
+    #     os.remove('results/' + csv)
+    
+    current_time = dt.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    iteration = current_time
 
-        # PRODUCE FINAL RESULTS DATASETS ######################################
-        # Remove old results first
-        if not os.path.exists('results'):
-            os.makedirs('results')
-        files = os.listdir('results')
-        csvs = [f for f in files if f.endswith('.csv')]
-        for csv in csvs:
-            os.remove('results/' + csv)
 
-        # NOTE TO SELF: multidimensional np.percentile() changes the order of
-        # the axes, so that the axis along which you took the percentiles is
-        # now the first axis, and the other axes are the remaining axes...
 
-        # TIMESERIES RESULTS
-        print('Calculating percentiles', end=' ')
-        gwi_timeseries_array = np.percentile(
-            temp_Att_Results, sigmas_all, axis=2)
+    # NOTE TO SELF: multidimensional np.percentile() changes the order of
+    # the axes, so that the axis along which you took the percentiles is
+    # now the first axis, and the other axes are the remaining axes...
+
+    # TIMESERIES RESULTS
+    print('Calculating percentiles', end=' ')
+    gwi_timeseries_array = np.percentile(
+        temp_Att_Results, sigmas_all, axis=2)
+    dict_Results = {
+        (var, sigma):
+        gwi_timeseries_array[sigmas_all.index(sigma), :, vars.index(var)]
+        for var in vars for sigma in sigmas_all
+    }
+    df_Results = pd.DataFrame(dict_Results, index=temp_Yrs)
+    df_Results.columns.names = ['variable', 'percentile']
+    df_Results.index.name = 'Year'
+    df_Results.to_csv(f'results/GWI_results_timeseries_{n}_{iteration}.csv')
+    T3 = dt.datetime.now()
+    print(f'... took {T3 - T2}')
+
+    # HEADLINE RESULTS
+    print('Calculating headlines')
+
+    # GWI-ANNUAL DEFINITION (SIMPLE VALUE IN A GIVEN YEAR)
+    dfs = [df_Results.loc[[2017]], df_Results.loc[[end_yr]]]
+
+    # SR15 DEFINITION (CENTRE OF 30-YEAR TREND)
+    # Calculate the linear trend of the final 15 years of the timeseries
+    # and use this to calculate the present-day warming
+    print('Calculating SR15-definition temps', end=' ')
+
+    for year in [2017, end_yr]:
+        years_SR15 = ((year-15 <= temp_Yrs) * (temp_Yrs <= year))
+        temp_Att_Results_SR15_recent = temp_Att_Results[years_SR15, :, :]
+
+        # Calculate SR15-definition warming for each var-ens combination
+        # See SR15 Ch1 1.2.1
+        # temp_Att_Results_SR15 = np.apply_along_axis(
+        #     final_value_of_trend, 0, temp_Att_Results_SR15_recent)
+        temp_Att_Results_SR15 = np.empty(
+            temp_Att_Results_SR15_recent.shape[1:])
+        for vv in range(temp_Att_Results_SR15_recent.shape[1]):
+            # print(vv)
+            with mp.Pool(os.cpu_count()) as p:
+                times = [temp_Att_Results_SR15_recent[:, vv, ii]
+                            for ii
+                            in range(temp_Att_Results_SR15_recent.shape[2])]
+                # final_value_of_trend is from src/definitions.py
+                results = p.map(defs.final_value_of_trend, times)
+            temp_Att_Results_SR15[vv, :] = np.array(results)
+
+        # Obtain statistics
+        gwi_headline_array = np.percentile(
+            temp_Att_Results_SR15, sigmas_all, axis=1)
         dict_Results = {
             (var, sigma):
-            gwi_timeseries_array[sigmas_all.index(sigma), :, vars.index(var)]
+            gwi_headline_array[sigmas_all.index(sigma), vars.index(var)]
             for var in vars for sigma in sigmas_all
         }
-        df_Results = pd.DataFrame(dict_Results, index=temp_Yrs)
-        df_Results.columns.names = ['variable', 'percentile']
-        df_Results.index.name = 'Year'
-        df_Results.to_csv(f'results/GWI_results_timeseries_{n}.csv')
-        T3 = dt.datetime.now()
-        print(f'... took {T3 - T2}')
+        df_headlines_i = pd.DataFrame(
+            dict_Results, index=[f'{year} (SR15 definition)'])
+        df_headlines_i.columns.names = ['variable', 'percentile']
+        df_headlines_i.index.name = 'Year'
+        dfs.append(df_headlines_i)
 
-        # HEADLINE RESULTS
-        print('Calculating headlines')
+    T4 = dt.datetime.now()
+    print(f'... took {T4 - T3}')
 
-        # GWI-ANNUAL DEFINITION (SIMPLE VALUE IN A GIVEN YEAR)
-        dfs = [df_Results.loc[[2017]], df_Results.loc[[end_yr]]]
+    # AR6 DEFINITION (DECADE MEAN)
+    print('Calculating AR6-definition temps', end=' ')
+    for years in [[2010, 2019], [end_yr-9, end_yr]]:
+        recent_years = ((years[0] <= temp_Yrs) * (temp_Yrs <= years[1]))
+        temp_Att_Results_AR6 = \
+            temp_Att_Results[recent_years, :, :].mean(axis=0)
+        # Obtain statistics
+        gwi_headline_array = np.percentile(
+            temp_Att_Results_AR6, sigmas_all, axis=1)
+        dict_Results = {
+            (var, sigma):
+            gwi_headline_array[sigmas_all.index(sigma), vars.index(var)]
+            for var in vars for sigma in sigmas_all
+        }
+        df_headlines_i = pd.DataFrame(
+            dict_Results, index=['-'.join([str(y) for y in years])])
+        df_headlines_i.columns.names = ['variable', 'percentile']
+        df_headlines_i.index.name = 'Year'
+        dfs.append(df_headlines_i)
 
-        # SR15 DEFINITION (CENTRE OF 30-YEAR TREND)
-        # Calculate the linear trend of the final 15 years of the timeseries
-        # and use this to calculate the present-day warming
-        print('Calculating SR15-definition temps', end=' ')
-
-        for year in [2017, end_yr]:
-            years_SR15 = ((year-15 <= temp_Yrs) * (temp_Yrs <= year))
-            temp_Att_Results_SR15_recent = temp_Att_Results[years_SR15, :, :]
-
-            # Calculate SR15-definition warming for each var-ens combination
-            # See SR15 Ch1 1.2.1
-            # temp_Att_Results_SR15 = np.apply_along_axis(
-            #     final_value_of_trend, 0, temp_Att_Results_SR15_recent)
-            temp_Att_Results_SR15 = np.empty(
-                temp_Att_Results_SR15_recent.shape[1:])
-            for vv in range(temp_Att_Results_SR15_recent.shape[1]):
-                # print(vv)
-                with mp.Pool(os.cpu_count()) as p:
-                    times = [temp_Att_Results_SR15_recent[:, vv, ii]
-                             for ii
-                             in range(temp_Att_Results_SR15_recent.shape[2])]
-                    # final_value_of_trend is from src/definitions.py
-                    results = p.map(defs.final_value_of_trend, times)
-                temp_Att_Results_SR15[vv, :] = np.array(results)
-
-            # Obtain statistics
-            gwi_headline_array = np.percentile(
-                temp_Att_Results_SR15, sigmas_all, axis=1)
-            dict_Results = {
-                (var, sigma):
-                gwi_headline_array[sigmas_all.index(sigma), vars.index(var)]
-                for var in vars for sigma in sigmas_all
-            }
-            df_headlines_i = pd.DataFrame(
-                dict_Results, index=[f'{year} (SR15 definition)'])
-            df_headlines_i.columns.names = ['variable', 'percentile']
-            df_headlines_i.index.name = 'Year'
-            dfs.append(df_headlines_i)
-
-        T4 = dt.datetime.now()
-        print(f'... took {T4 - T3}')
-
-        # AR6 DEFINITION (DECADE MEAN)
-        print('Calculating AR6-definition temps', end=' ')
-        for years in [[2010, 2019], [end_yr-9, end_yr]]:
-            recent_years = ((years[0] <= temp_Yrs) * (temp_Yrs <= years[1]))
-            temp_Att_Results_AR6 = \
-                temp_Att_Results[recent_years, :, :].mean(axis=0)
-            # Obtain statistics
-            gwi_headline_array = np.percentile(
-                temp_Att_Results_AR6, sigmas_all, axis=1)
-            dict_Results = {
-                (var, sigma):
-                gwi_headline_array[sigmas_all.index(sigma), vars.index(var)]
-                for var in vars for sigma in sigmas_all
-            }
-            df_headlines_i = pd.DataFrame(
-                dict_Results, index=['-'.join([str(y) for y in years])])
-            df_headlines_i.columns.names = ['variable', 'percentile']
-            df_headlines_i.index.name = 'Year'
-            dfs.append(df_headlines_i)
-
-        df_headlines = pd.concat(dfs, axis=0)
-        df_headlines.to_csv(f'results/GWI_results_headlines_{n}.csv')
-        T5 = dt.datetime.now()
-        print(f'... took {T5 - T4}')
+    df_headlines = pd.concat(dfs, axis=0)
+    df_headlines.to_csv(f'results/GWI_results_headlines_{n}_{iteration}.csv')
+    T5 = dt.datetime.now()
+    print(f'... took {T5 - T4}')
