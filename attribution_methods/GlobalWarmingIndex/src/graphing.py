@@ -232,9 +232,9 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
             ax.plot(df_Results_ts.index,
                     df_Results_ts.loc[:, (var, sigmas[-1])].values,
                     color=plot_cols[var], alpha=line_alpha, label=labels*var)
-
-    ax.set_xticks([1850, 1900, 1950, 2000, 2022],
-                  [1850, 1900, 1950, 2000, 2022])
+        
+    ax.set_xticks([1850, 1900, 1950, 2000, df_temp_Obs.index[-1]],
+                  [1850, 1900, 1950, 2000, df_temp_Obs.index[-1]])
 
 
 def gwi_residuals(ax, df_Results_ts):
@@ -368,31 +368,42 @@ def Fig_SPM2_validation_plot(ax, period, variables, dict_updates_hl, source_cols
 def Fig_3_8_validation_plot(
         ax, variables, period,
         dict_IPCC_hl, dict_updates_hl,
+        dict_IPCC_Obs_hl, dict_updates_Obs_hl,
         source_markers, var_colours, labels):
     """Plot AR6 WG1 Ch.3 Fig.3.8"""
 
     bar_width = 0.4
 
-    # Manually add observations...
+    # Plot observations
     if period == '2010-2019':
+        # Plot the IPCC-quoted results for 2010-2019 observations
+        med_Obs = dict_IPCC_Obs_hl['Assessment'].loc[period, ('Obs', '50')]
+        min_Obs = dict_IPCC_Obs_hl['Assessment'].loc[period, ('Obs', '5')]
+        max_Obs = dict_IPCC_Obs_hl['Assessment'].loc[period, ('Obs', '95')]
+
         ax.fill_between(
-            [-1 + 0 * 0.45, -1 + 0 + bar_width], 0.88, 1.21,
+            [-1 + 0 * 0.45, -1 + 0 + bar_width], min_Obs, max_Obs,
             color=var_colours['Obs'], alpha=0.4,)
         ax.plot(
-            [-1 + 0 * 0.45, -1 + 0 + bar_width], [1.06, 1.06],
+            [-1 + 0 * 0.45, -1 + 0 + bar_width], [med_Obs, med_Obs],
             color=var_colours['Obs'], lw=2)
-        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (1.06, 1.21, 0.88)
+        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med_Obs, max_Obs, min_Obs)
         ax.text(
             (-1 + 0 * 0.45 + bar_width / 2), 0.6,
             str_Result,
             ha='center', va='center', color='black')
+        
+        # Plot the updated re-assessment for 2010-2019 observations
+        med_Obs = dict_updates_Obs_hl['Assessment'].loc[period, ('Obs', '50')]
+        min_Obs = dict_updates_Obs_hl['Assessment'].loc[period, ('Obs', '5')]
+        max_Obs = dict_updates_Obs_hl['Assessment'].loc[period, ('Obs', '95')]
         ax.fill_between(
-            [-1 + 1 * 0.45, -1 + 0.45 + bar_width], 0.89, 1.22,
+            [-1 + 1 * 0.45, -1 + 0.45 + bar_width], min_Obs, max_Obs,
             color=var_colours['Obs'], alpha=0.6,)
         ax.plot(
-            [-1 + 1 * 0.45, -1 + 0.45 + bar_width], [1.07, 1.07],
+            [-1 + 1 * 0.45, -1 + 0.45 + bar_width], [med_Obs, med_Obs],
             color=var_colours['Obs'], lw=2)
-        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (1.07, 1.22, 0.89)
+        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med_Obs, max_Obs, min_Obs)
         ax.text(
             (-1 + 1 * 0.45 + bar_width / 2), 0.6,
             str_Result,
@@ -527,14 +538,13 @@ def Fig_SPM2_plot(
             elif med < 0:
                 colour = '#7dbfd9'
                 # colour = '#56949f'
-
             ax.bar(variables.index(var) + bar_loc_offset,
                    med,
                    yerr=([med-neg], [pos-med]),
                    error_kw=dict(lw=0.8, capsize=2, capthick=0.8),
                    width=bar_width,
                    color=colour,
-                   alpha=1.0 if '2022' in period else 0.7)
+                   alpha=1.0 if periods.index(period) == 1 else 0.7)
             if text_toggle:
                 str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med, pos, neg)
                 ax.text(

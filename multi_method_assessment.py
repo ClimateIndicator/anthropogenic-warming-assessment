@@ -16,7 +16,7 @@ from attribution_methods.GlobalWarmingIndex.src.definitions import (
 # 1. GWI Results (manually add csv to results/ directory)
 # 2. KCC Results (manually add csv to results/ directory)
 # 3. ROF Results (manually add csv to results/ directory)
-# 4. Observed Warming Update (manually add in this script)
+# 4. Observed Warming Update (manually add in this script - get from IGCC team)
 # 5. HadCRUT Observed Warming (manually add csv to
 #    attribution_methods/GlobalWarmingIndex/data/Temp/HadCRUT)
 
@@ -29,15 +29,15 @@ from attribution_methods.GlobalWarmingIndex.src.definitions import (
 ###############################################################################
 
 start_pi, end_pi = 1850, 1900
-start_yr, end_yr = 1850, 2022
+start_yr, end_yr = 1850, 2023
 
 # Temperature dataset
-df_temp_Obs = load_HadCRUT(start_pi, end_pi)
+df_temp_Obs = load_HadCRUT(start_pi, end_pi, start_yr, end_yr)
 n_yrs = df_temp_Obs.shape[0]
 timeframes = [1, 3, 30]
 df_temp_PiC = load_PiC_CMIP6(n_yrs, start_pi, end_pi)
 df_temp_PiC = filter_PiControl(df_temp_PiC, timeframes)
-df_temp_PiC.set_index(np.arange(end_yr-start_yr+1)+1850, inplace=True)
+df_temp_PiC.set_index(np.arange(n_yrs)+start_yr, inplace=True)
 
 
 # RESULTS FROM ANNUAL UPDATES #################################################
@@ -49,12 +49,13 @@ files = os.listdir('results')  # Files in the results/ directory
 for method in ['Walsh', 'Ribes', 'Gillett']:
     file_ts = [f for f in files if f'{method}_GMST_timeseries' in f][0]
     file_hs = [f for f in files if f'{method}_GMST_headlines' in f][0]
-    skiprows = 1 if method == 'Gillett' else 0  # (Different csv format)
+    # skiprows = 1 if method == 'Gillett' else 0
+    skiprows = 0
     df_method_ts = pd.read_csv(
         f'results/{file_ts}', index_col=0,  header=[0, 1], skiprows=skiprows)
     df_method_hl = pd.read_csv(
         f'results/{file_hs}', index_col=0,  header=[0, 1], skiprows=skiprows)
-    if method == 'Walsh':  # Extract number of ensemble samples used by GWI
+    if method == 'Walsh':
         n = file_ts.split('.csv')[0].split('_')[-1]
     dict_updates_hl[method] = df_method_hl
     dict_updates_ts[method] = df_method_ts
@@ -75,11 +76,11 @@ dict_updates_ts['Gillett'].loc[:, ('Tot', '50')] = (
 # Create a list of the variables in df_Walsh_hl
 list_of_dfs = []
 periods_to_assess = ['2010-2019',
-                     '2013-2022',
+                     '2014-2023',
                      '2017',
-                     '2022',
+                     '2023',
                      '2017 (SR15 definition)',
-                     '2022 (SR15 definition)']
+                     '2023 (SR15 definition)']
 for period in periods_to_assess:
     dict_updates_Assessment = {}
 
@@ -131,7 +132,7 @@ for period in periods_to_assess:
 # Overall assessment dataframe is concatenation of dataframes for each period
 dict_updates_hl['Assessment'] = pd.concat(list_of_dfs)
 dict_updates_hl['Assessment'].to_csv(
-        'results/Assessment-Update-2022_GMST_headlines.csv')
+        'results/Assessment-Update-2023_GMST_headlines.csv')
 
 
 
@@ -139,19 +140,33 @@ dict_updates_hl['Assessment'].to_csv(
 # Add updated observation results from the annual updates paper section 4
 df_update_Obs_repeat = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
-    ('Obs', '50'): 1.07,  # from annual updates paper section 4
-    ('Obs',  '5'): 0.89,  # from annual updates paper section 4
-    ('Obs', '95'): 1.22,  # from annual updates paper section 4
+    ('Obs', '50'): 1.50, # 1.07,  # from annual updates paper section 4
+    ('Obs',  '5'): 1.00, # 0.89,  # from annual updates paper section 4
+    ('Obs', '95'): 2.00 # 1.22,  # from annual updates paper section 4
 }, index=['2010-2019'])
 df_update_Obs_repeat.columns.names = ['variable', 'percentile']
 df_update_Obs_repeat.index.name = 'Year'
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+
 
 df_update_Obs_update = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
-    ('Obs', '50'): 1.15,  # from annual updates paper section 4
-    ('Obs',  '5'): 1.00,  # from annual updates paper section 4
-    ('Obs', '95'): 1.25,  # from annual updates paper section 4
-}, index=['2013-2022'])
+    ('Obs', '50'): 1.50,  # 1.15,  # from annual updates paper section 4
+    ('Obs',  '5'): 1.00,  # 1.00,  # from annual updates paper section 4
+    ('Obs', '95'): 2.00,  # 1.25,  # from annual updates paper section 4
+}, index=['2014-2023'])
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
+
 df_update_Obs_update.columns.names = ['variable', 'percentile']
 df_update_Obs_update.index.name = 'Year'
 
@@ -172,6 +187,7 @@ df_All_Obs = pd.concat([
                         df_update_Obs_update
                         ])
 dict_updates_Obs_hl = {'Assessment': df_All_Obs}
+dict_IPCC_Obs_hl = {'Assessment': df_AR6_Obs}
 
 
 # QUOTED HEADLINE RESULTS FROM IPCC 6TH ASSESSMENT CYCLE ######################
@@ -346,7 +362,7 @@ labels = {
     'Smith': 'AR6 WG1 Chapter 7',
     }
 
-plot_folder = './plots/'
+plot_folder = f'./plots/{end_yr}/'
 if not os.path.exists(plot_folder):
     os.makedirs(plot_folder)
 
@@ -435,9 +451,11 @@ ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 4), rowspan=1, colspan=1)
 
 gr.Fig_3_8_validation_plot(ax2, ['Ant'], '2017',
                            dict_IPCC_hl, dict_updates_hl,
+                           dict_IPCC_Obs_hl, dict_updates_Obs_hl,
                            source_markers, var_colours, labels)
 gr.Fig_3_8_validation_plot(ax1, bar_plot_vars, '2010-2019',
                            dict_IPCC_hl, dict_updates_hl,
+                           dict_IPCC_Obs_hl, dict_updates_Obs_hl,
                            source_markers, var_colours, labels)
 
 # set the ax2 ylims to be equal to the ax1 ylims
@@ -485,13 +503,13 @@ fig = plt.figure(figsize=(12, 10))
 ax0 = plt.subplot2grid(shape=(1, 5), loc=(0, 0), rowspan=1, colspan=1)
 ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
 ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
-gr.Fig_SPM2_plot(ax0, ['Obs'], ['2010-2019', '2013-2022'],
+gr.Fig_SPM2_plot(ax0, ['Obs'], ['2010-2019', '2014-2023'],
                  dict_IPCC_hl, dict_updates_Obs_hl,
                  var_colours, labels, text_toggle)
-gr.Fig_SPM2_plot(ax1, ['Ant', 'GHG', 'OHF', 'Nat'], ['2010-2019', '2013-2022'],
+gr.Fig_SPM2_plot(ax1, ['Ant', 'GHG', 'OHF', 'Nat'], ['2010-2019', '2014-2023'],
                  dict_IPCC_hl, dict_updates_hl,
                  var_colours, labels, text_toggle)
-gr.Fig_SPM2_plot(ax2, ['Ant', 'GHG', 'OHF', 'Nat'], ['2017', '2022'],
+gr.Fig_SPM2_plot(ax2, ['Ant', 'GHG', 'OHF', 'Nat'], ['2017', '2023'],
                  dict_IPCC_hl, dict_updates_hl,
                  var_colours, labels, text_toggle)
 
@@ -573,9 +591,9 @@ fig.savefig(f'{plot_folder}/4_SPM2_Results.svg')
 # Create appendix-layout tables for results.
 print('Creating tables for appendix')
 with open('results/Table_GMST_all_methods.csv', 'w') as f:
-    times = ['2010-2019', '2013-2022',
-             '2017', '2022',
-             '2017 (SR15 definition)', '2022 (SR15 definition)']
+    times = ['2010-2019', '2014-2023',
+             '2017', '2023',
+             '2017 (SR15 definition)', '2023 (SR15 definition)']
     f.write('variable, method, ' + ', '.join(times) + '\n')
     for v in ['Ant', 'GHG', 'OHF', 'Nat']:
         for m in ['Walsh', 'Ribes', 'Gillett', 'Assessment']:
@@ -602,6 +620,7 @@ with open('results/Table_GMST_all_methods.csv', 'w') as f:
             line = ', '.join([str(x) for x in line]) + '\n'
             f.write(line)
 
+
 # Load the Gillet dataset called results/Gillett_GSAT_headlines.csv to pandas
 # dataframe
 Gillet_GSAT = pd.read_csv(
@@ -609,7 +628,8 @@ Gillet_GSAT = pd.read_csv(
         index_col=0,  header=[0, 1], skiprows=skiprows)
 
 with open('results/Table_GSAT_ROF_method.csv', 'w') as f:
-    times = ['2010-2019', '2013-2022', '2017', '2022']
+    times = ['2010-2019', '2014-2023',
+             '2017 (SR15 definition)', '2023 (SR15 definition)']
     f.write('variable, ' + ', '.join(times) + '\n')
     for v in ['Ant', 'GHG', 'OHF', 'Nat']:
         line = [v]
