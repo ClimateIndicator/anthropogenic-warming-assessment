@@ -140,32 +140,23 @@ dict_updates_hl['Assessment'].to_csv(
 # Add updated observation results from the annual updates paper section 4
 df_update_Obs_repeat = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
-    ('Obs', '50'): 1.50, # 1.07,  # from annual updates paper section 4
-    ('Obs',  '5'): 1.00, # 0.89,  # from annual updates paper section 4
-    ('Obs', '95'): 2.00 # 1.22,  # from annual updates paper section 4
+    # 2010-2019 (2023 analysis): 1.07 [0.89-1.22] From Blair, paper section 4
+    # 2010-2019 (2022 analysis): 1.07 [0.89-1.22] From Blair, paper section 4
+    ('Obs', '50'): 1.07,
+    ('Obs',  '5'): 0.89,
+    ('Obs', '95'): 1.22
 }, index=['2010-2019'])
 df_update_Obs_repeat.columns.names = ['variable', 'percentile']
 df_update_Obs_repeat.index.name = 'Year'
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
-
 
 df_update_Obs_update = pd.DataFrame({
     # (VARIABLE, PERCENTILE): VALUE
-    ('Obs', '50'): 1.50,  # 1.15,  # from annual updates paper section 4
-    ('Obs',  '5'): 1.00,  # 1.00,  # from annual updates paper section 4
-    ('Obs', '95'): 2.00,  # 1.25,  # from annual updates paper section 4
+    # 2014-2023 (2023 analysis): 1.19 [1.06-1.30] From Blair, paper section 4
+    # 2013-2022 (2022 analysis): 1.14 [1.00-1.25] From Blair, paper section 4
+    ('Obs', '50'): 1.19,
+    ('Obs',  '5'): 1.06,
+    ('Obs', '95'): 1.30,
 }, index=['2014-2023'])
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
-print('WARNING: OBSERVED WARMING IS STILL DUMMY DATA - YOU NEED RESULTS FROM BLAIR')
 
 df_update_Obs_update.columns.names = ['variable', 'percentile']
 df_update_Obs_update.index.name = 'Year'
