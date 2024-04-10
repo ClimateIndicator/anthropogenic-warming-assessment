@@ -20,7 +20,6 @@ import src.definitions as defs
 import models.AR5_IR as AR5_IR
 import models.FaIR_V2.FaIRv2_0_0_alpha1.fair.fair_runner as fair
 
-
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
 ###############################################################################
@@ -474,7 +473,15 @@ if __name__ == "__main__":
     t1 = dt.datetime.now()
     # calc_switch = input('Recalculate? y/n: ')
     # if calc_switch == 'y':
-    samples = int(input('Max number of samples for each source (0-200): '))
+
+    if len(sys.argv) > 1:
+        # Use command line arguments instead of interactivity, so that we can
+        # run the script using nohup.
+        samples = int(sys.argv[1])
+    else:
+        # If no command line argument passed, use interactivity.
+        samples = int(input('Max number of samples for each source (0-200): '))
+
     # Select random sub-set sampling of all ensemble members:
 
     # 1. Select random samples of the forcing data
@@ -582,8 +589,7 @@ if __name__ == "__main__":
 
         temp_Att_Results = temp_Att_Results[:, :, coef_mask]
         coef_Reg_Results = coef_Reg_Results[:, coef_mask]
-        print('Shape of masked attribution results:',
-                temp_Att_Results.shape)
+        print('Shape of masked attribution results:', temp_Att_Results.shape)
 
     # PRODUCE FINAL RESULTS DATASETS ######################################
     # Remove old results first
@@ -593,11 +599,9 @@ if __name__ == "__main__":
     # csvs = [f for f in files if f.endswith('.csv')]
     # for csv in csvs:
     #     os.remove('results/' + csv)
-    
+
     current_time = dt.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     iteration = current_time
-
-
 
     # NOTE TO SELF: multidimensional np.percentile() changes the order of
     # the axes, so that the axis along which you took the percentiles is
@@ -605,8 +609,7 @@ if __name__ == "__main__":
 
     # TIMESERIES RESULTS
     print('Calculating percentiles', end=' ')
-    gwi_timeseries_array = np.percentile(
-        temp_Att_Results, sigmas_all, axis=2)
+    gwi_timeseries_array = np.percentile(temp_Att_Results, sigmas_all, axis=2)
     dict_Results = {
         (var, sigma):
         gwi_timeseries_array[sigmas_all.index(sigma), :, vars.index(var)]
@@ -691,3 +694,48 @@ if __name__ == "__main__":
     df_headlines.to_csv(f'results/GWI_results_headlines_{n}_{iteration}.csv')
     T5 = dt.datetime.now()
     print(f'... took {T5 - T4}')
+
+
+
+
+    # RATE: AR6 DEFINITION
+    T6 = dt.datetime.now()
+    dfs_rates = []
+    for year in np.arange(1950, end_yr+1):
+        print(f'Calculating AR6-definition warming rate: {year}', end='\r')
+        recent_years = ((year-9 <= temp_Yrs) * (temp_Yrs <= year))
+        ten_slice = temp_Att_Results[recent_years, :, :]
+
+        # Calculate AR6-definition warming rate for each var-ens combination
+        # See AR6 WGI Chapter 3 Table 3.1
+        temp_Rate_Results = np.empty(
+            ten_slice.shape[1:])
+        # Only include 'Ant'
+        for vv in range(ten_slice.shape[1]):
+        # Parallelise over ensemble members
+            with mp.Pool(os.cpu_count()) as p:
+                single_series = [ten_slice[:, vv, ii]
+                                 for ii in range(ten_slice.shape[2])]
+                # final_value_of_trend is from src/definitions.py
+                results = p.map(defs.rate_func, single_series)
+            temp_Rate_Results[vv, :] = np.array(results)
+
+        # Obtain statistics
+        gwi_rate_array = np.percentile(
+            temp_Rate_Results, sigmas_all, axis=1)
+        dict_Results = {
+            (var, sigma):
+            gwi_rate_array[sigmas_all.index(sigma), vars.index(var)]
+            for var in vars for sigma in sigmas_all
+        }
+        df_rates_i = pd.DataFrame(
+            dict_Results, index=[f'{year-9}-{year} (AR6 rate definition)'])
+        df_rates_i.columns.names = ['variable', 'percentile']
+        df_rates_i.index.name = 'Year'
+        dfs_rates.append(df_rates_i)
+
+    df_rates = pd.concat(dfs_rates, axis=0)
+    df_rates.to_csv(f'results/GWI_results_rates_{n}_{iteration}.csv')
+    T7 = dt.datetime.now()
+    print('')
+    print(f'... took {T7 - T6}')

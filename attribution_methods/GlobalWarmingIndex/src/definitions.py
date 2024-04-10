@@ -278,3 +278,11 @@ def final_value_of_trend(temp):
     time = np.arange(temp.shape[0])
     fit = np.poly1d(np.polyfit(time, temp, 1))
     return fit(time)[-1]
+
+
+def rate_func(array):
+    # Instead of passing years array, just set the start year for the slice
+    # to zero
+    times = np.arange(array.shape[0])
+    fit = np.polyfit(x=times, y=array, deg=1)
+    return fit[0]
