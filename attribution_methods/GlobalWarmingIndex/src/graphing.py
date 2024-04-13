@@ -62,7 +62,6 @@ def overall_legend(fig, loc, ncol, nrow=False, reorder=None):
         order = np.arange(len(by_label))
     else:
         order = reorder
-    
 
     fig.legend([list(by_label.values())[i] for i in order],
                [list(by_label.keys())[i] for i in order],
@@ -204,7 +203,7 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
         if len(sigmas) > 1:
             for s in range(len(sigmas)//2):
                 # Plot the PiControl ensemble
-                    ax.fill_between(
+                ax.fill_between(
                         df_temp_PiC.index,
                         df_temp_PiC.quantile(q=float(sigmas[s])/100, axis=1),
                         df_temp_PiC.quantile(q=float(sigmas[-(s+2)])/100, axis=1),
@@ -216,7 +215,7 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
     for s in range(max(len(sigmas)//2, 1)):  # max to enable 50% only
         # Plot the GWI timeseries
         for var in plot_vars:
-            
+
             # Because ROF (Gillett) method has different percentile results
             # available for different variables (ie Tot only has 50th), check
             # for each variable first whether to plot plume.
@@ -232,7 +231,7 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
             ax.plot(df_Results_ts.index,
                     df_Results_ts.loc[:, (var, sigmas[-1])].values,
                     color=plot_cols[var], alpha=line_alpha, label=labels*var)
-        
+
     ax.set_xticks([1850, 1900, 1950, 2000, df_temp_Obs.index[-1]],
                   [1850, 1900, 1950, 2000, df_temp_Obs.index[-1]])
 

@@ -695,47 +695,54 @@ if __name__ == "__main__":
     T5 = dt.datetime.now()
     print(f'... took {T5 - T4}')
 
-
-
-
     # RATE: AR6 DEFINITION
-    T6 = dt.datetime.now()
-    dfs_rates = []
-    for year in np.arange(1950, end_yr+1):
-        print(f'Calculating AR6-definition warming rate: {year}', end='\r')
-        recent_years = ((year-9 <= temp_Yrs) * (temp_Yrs <= year))
-        ten_slice = temp_Att_Results[recent_years, :, :]
+    if len(sys.argv) == 3 and sys.argv[-1] == 'include-rate':
+        # Use command line arguments to trigger expensive rate calculation, so
+        # that we can run the script using nohup.
+        rate_toggle = True
+    else:
+        # If no command line argument passed, use interactivity as a backup.
+        rate_toggle = input('Calculate rates? (y/n): ')
+        rate_toggle = True if rate_toggle == 'y' else False
 
-        # Calculate AR6-definition warming rate for each var-ens combination
-        # See AR6 WGI Chapter 3 Table 3.1
-        temp_Rate_Results = np.empty(
-            ten_slice.shape[1:])
-        # Only include 'Ant'
-        for vv in range(ten_slice.shape[1]):
-        # Parallelise over ensemble members
-            with mp.Pool(os.cpu_count()) as p:
-                single_series = [ten_slice[:, vv, ii]
-                                 for ii in range(ten_slice.shape[2])]
-                # final_value_of_trend is from src/definitions.py
-                results = p.map(defs.rate_func, single_series)
-            temp_Rate_Results[vv, :] = np.array(results)
+    if rate_toggle:
+        T6 = dt.datetime.now()
+        dfs_rates = []
+        for year in np.arange(1950, end_yr+1):
+            print(f'Calculating AR6-definition warming rate: {year}', end='\r')
+            recent_years = ((year-9 <= temp_Yrs) * (temp_Yrs <= year))
+            ten_slice = temp_Att_Results[recent_years, :, :]
 
-        # Obtain statistics
-        gwi_rate_array = np.percentile(
-            temp_Rate_Results, sigmas_all, axis=1)
-        dict_Results = {
-            (var, sigma):
-            gwi_rate_array[sigmas_all.index(sigma), vars.index(var)]
-            for var in vars for sigma in sigmas_all
-        }
-        df_rates_i = pd.DataFrame(
-            dict_Results, index=[f'{year-9}-{year} (AR6 rate definition)'])
-        df_rates_i.columns.names = ['variable', 'percentile']
-        df_rates_i.index.name = 'Year'
-        dfs_rates.append(df_rates_i)
+            # Calculate AR6-definition warming rate for each var-ens combination
+            # See AR6 WGI Chapter 3 Table 3.1
+            temp_Rate_Results = np.empty(
+                ten_slice.shape[1:])
+            # Only include 'Ant'
+            for vv in range(ten_slice.shape[1]):
+            # Parallelise over ensemble members
+                with mp.Pool(os.cpu_count()) as p:
+                    single_series = [ten_slice[:, vv, ii]
+                                    for ii in range(ten_slice.shape[2])]
+                    # final_value_of_trend is from src/definitions.py
+                    results = p.map(defs.rate_func, single_series)
+                temp_Rate_Results[vv, :] = np.array(results)
 
-    df_rates = pd.concat(dfs_rates, axis=0)
-    df_rates.to_csv(f'results/GWI_results_rates_{n}_{iteration}.csv')
-    T7 = dt.datetime.now()
-    print('')
-    print(f'... took {T7 - T6}')
+            # Obtain statistics
+            gwi_rate_array = np.percentile(
+                temp_Rate_Results, sigmas_all, axis=1)
+            dict_Results = {
+                (var, sigma):
+                gwi_rate_array[sigmas_all.index(sigma), vars.index(var)]
+                for var in vars for sigma in sigmas_all
+            }
+            df_rates_i = pd.DataFrame(
+                dict_Results, index=[f'{year-9}-{year} (AR6 rate definition)'])
+            df_rates_i.columns.names = ['variable', 'percentile']
+            df_rates_i.index.name = 'Year'
+            dfs_rates.append(df_rates_i)
+
+        df_rates = pd.concat(dfs_rates, axis=0)
+        df_rates.to_csv(f'results/GWI_results_rates_{n}_{iteration}.csv')
+        T7 = dt.datetime.now()
+        print('')
+        print(f'... took {T7 - T6}')
