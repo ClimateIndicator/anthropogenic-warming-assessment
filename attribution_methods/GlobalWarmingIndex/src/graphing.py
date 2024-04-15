@@ -19,8 +19,23 @@ matplotlib.rcParams.update({
     'legend.frameon': False,
     # General fonts
     'font.size': 11,
-    'font.family': 'Roboto',
+    # 'font.family':  'sans-serif',
+    'font.family':  'Roboto',
+    'font.sans-serif': 'Roboto',
+    'font.cursive': 'Roboto',  # Linux cluster doesn't have cursive fonts
+    # installed, so it will fall back to DejaVu Sans with an error message.
+    # This error can be avoided by preemptively specifying a font that does
+    # exist on the system for matplotlib to use for 'cursive' text (in this
+    # script those text elements are the str_Results that use LaTeX text).
+    # Note that Roboto is not a cursive font, so if you expect some parts of
+    # LaTeX text rendering to look cursive, they will not as they will be
+    # standard Roboto.
     'font.weight': 'light',
+    # TeX fonts
+    'mathtext.fontset': 'custom',
+    'mathtext.rm': 'Roboto',
+    'mathtext.it': 'Roboto:italic',
+    'mathtext.bf': 'Roboto:bold',
     # Axis box
     'axes.spines.bottom': True,
     'axes.spines.left': False,
@@ -355,7 +370,10 @@ def Fig_SPM2_validation_plot(ax, period, variables, dict_updates_hl, source_cols
             #     # Manually set the padding for negative values to put them
             #     # above the x axis
             #     padding = -80 - 15*(methods.index(source))
-            ax.bar_label(bar, labels=[str_Result], padding=10 + 15*(methods.index(source)))
+            ax.bar_label(
+                bar,
+                labels=[str_Result],
+                padding=10 + 15*(methods.index(source)))
             ax.set_ylim(-1.5, 2.5)
 
     ax.set_xticks(np.arange(len(variables)), variables)
@@ -507,19 +525,11 @@ def Fig_3_8_validation_plot(
 def Fig_SPM2_plot(
     ax, variables, periods,
     dict_IPCC_hl, dict_updates_hl,
-    var_colours, labels,
+    var_colours, var_names, labels,
     text_toggle):
     """Plot AR6 WG1 SPM Fig.2-esque figure summarising assessed results."""
     # bar_width = (1.0-0.4)/(len(periods))
     bar_width = 0.3
-
-    names = {
-        'Obs': 'Observed Warming',
-        'Ant': 'Total Human-induced Warming',
-        'GHG': 'Well-mixed Greenhouse Gases',
-        'OHF': 'Other Human Forcings',
-        'Nat': 'Natural Forcings',
-        }
 
     for var in variables:
         for period in periods:
@@ -569,7 +579,7 @@ def Fig_SPM2_plot(
     ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
     # Component labels
     tick_locs = np.arange(len(variables)) + (bar_width/2)*(len(periods)-1)
-    # ax.text(tick_locs), -0.5, 
-    ax.set_xticks(tick_locs, [names[v] for v in variables], rotation=270,
+    # ax.text(tick_locs), -0.5,
+    ax.set_xticks(tick_locs, [var_names[v] for v in variables], rotation=270,
                   weight='regular'
                   )
