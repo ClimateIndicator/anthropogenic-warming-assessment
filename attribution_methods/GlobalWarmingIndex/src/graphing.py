@@ -583,3 +583,166 @@ def Fig_SPM2_plot(
     ax.set_xticks(tick_locs, [var_names[v] for v in variables], rotation=270,
                   weight='regular'
                   )
+
+
+def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
+                       var_colours):
+    text_offset = 2
+    AR6_colour = '#67c1bf'
+    SR15_colour = '#4f91cd'
+    periods = {'single_period': str(end_yr),
+               'trend_period': f'{end_yr} (SR15 definition)',
+               'decade_period': f'{end_yr-9}-{end_yr}'}
+
+    # Plot the observations ###################################################
+    lower = df_temp_Obs.quantile(q=0.05, axis=1)
+    upper = df_temp_Obs.quantile(q=0.95, axis=1)
+    middle = df_temp_Obs.quantile(q=0.5, axis=1)
+    err_neg = middle - lower
+    err_pos = upper - middle
+    ax1.errorbar(df_temp_Obs.index, middle,
+                 yerr=(err_neg, err_pos),
+                 fmt='o', color=var_colours['Obs'], ms=2.5, lw=1,
+                 label='Reference Temp: HadCRUT5')
+    value = f"{middle[end_yr]:.2f} ({lower[end_yr]:.2f} - {upper[end_yr]:.2f})"
+    annotation = (r'$\bf{Observed \ single \ year}$' +
+                  '\nHadCRUT5 reference' +
+                  f'\n{end_yr} observation:\n{value}')
+    ax1.annotate(
+        annotation,
+        xy=(df_temp_Obs.index[-1], middle[end_yr]),
+        xytext=(df_temp_Obs.index[-1] + text_offset,
+                middle[end_yr] - 0.04),
+        color=var_colours['Obs'],
+        fontweight='regular',
+        arrowprops=dict(
+            color=var_colours['Obs'],
+            arrowstyle='->',
+            connectionstyle="angle,angleA=0,angleB=-45,rad=20"
+            ),
+        verticalalignment='center'
+        )
+
+    # Plot GWI timeseries #####################################################
+    # Plot a line plot with scatter marks for Ant 50
+    ax1.plot(df_temp_Obs.index, df_temp_Att['Ant', '50'],
+             color=var_colours['Ant'], linestyle='-', linewidth=1)
+    # Plot a scatter of the  'Ant', '50' GWI values
+    ax1.scatter(x=df_temp_Obs.index,
+                y=df_temp_Att['Ant', '50'],
+                color=var_colours['Ant'], s=50,
+                label='SR1.5 single year')
+    # Plot the final value as single scatter point
+    ax1.scatter(x=df_temp_Obs.index[-1],
+                y=df_temp_Att.loc[end_yr, ('Ant', '50')],
+                color=var_colours['Ant'], s=100)
+    # ax1.fill_between(
+    #     df_temp_Obs.index, df_temp_Att['Ant', '5'], df_temp_Att['Ant', '95'],
+    #     color=var_colours['Ant'], alpha=0.1, linewidth=0
+    #     )
+    value = (f"{df_headlines.loc[periods['single_period'], ('Ant', '50')]} " +
+             f"({df_headlines.loc[periods['single_period'], ('Ant', '5')]} -" +
+             f" {df_headlines.loc[periods['single_period'], ('Ant', '95')]})")
+    annotation = (r'$\bf{SR1.5 \ single \ year}$' +
+                  f'\n{end_yr} assessment:\n{value}')
+    ax1.annotate(
+        annotation,
+        xy=(df_temp_Obs.index[-1],
+            df_temp_Att.loc[end_yr, ('Ant', '50')]),
+        xytext=(df_temp_Obs.index[-1] + text_offset,
+                df_temp_Att.loc[end_yr, ('Ant', '50')] + 0.04),
+        color=var_colours['Ant'],
+        fontweight='regular',
+        arrowprops=dict(
+            color=var_colours['Ant'],
+            arrowstyle='->',
+            connectionstyle="angle,angleA=0,angleB=45,rad=20"),
+        verticalalignment='center',
+        horizontalalignment='left'
+        )
+
+    # Calculate a trend line through the final 15 years of the GWI
+    gwi_fit = np.polyfit(
+        df_temp_Obs.index[-15:],
+        df_temp_Att['Ant', '50'].iloc[-15:], 1)
+    gwi_trend = np.poly1d(gwi_fit)
+    gwi_trend = gwi_trend + (df_temp_Att.loc[end_yr, ('Ant', '50')] -
+                             gwi_trend(df_temp_Obs.index[-1]))
+    # Plot this line
+    ax1.plot(df_temp_Obs.index[-15:], gwi_trend(df_temp_Obs.index[-15:]),
+             color=SR15_colour, linestyle='--', linewidth=2)
+    # Plot a scatter at the end of this line
+    ax1.scatter(x=df_temp_Obs.index[-1],
+                y=gwi_trend(df_temp_Obs.index[-1]),
+                color=SR15_colour, s=45,
+                label='SR1.5 trend-based')
+    ax1.fill_between(
+        df_temp_Obs.index[-15:],
+        gwi_trend(df_temp_Obs.index[-15:]),
+        df_temp_Att['Ant', '50'].iloc[-15:],
+        color=SR15_colour, alpha=0.2
+    )
+    # Add an arrow pointing to trend-based scatter point
+    value = (f"{df_headlines.loc[periods['trend_period'], ('Ant', '50')]} " +
+             f"({df_headlines.loc[periods['trend_period'], ('Ant', '5')]} - " +
+             f"{df_headlines.loc[periods['trend_period'], ('Ant', '95')]})")
+    annotation = (r'$\bf{SR1.5 \ trend \ based}$' +
+                  f'\n{end_yr} assessment:\n{value}')
+    ax1.annotate(
+        annotation,
+        xy=(df_temp_Obs.index[-1],
+            gwi_trend(df_temp_Obs.index[-1])),
+        xytext=(df_temp_Obs.index[-1] + text_offset,
+                gwi_trend(df_temp_Obs.index[-1]) - 0.04),
+        color=SR15_colour,
+        fontweight='regular',
+        arrowprops=dict(
+            color=SR15_colour,
+            arrowstyle='->',
+            connectionstyle="angle,angleA=0,angleB=-45,rad=20"),
+        verticalalignment='center'
+        )
+
+    # find the average of the last 10 years of GWI
+    decade_avg = df_temp_Att['Ant', '50'].iloc[-10:].mean()
+    # decade_avg = df_headlines.loc['2014-2023', ('Ant', '50')]
+
+    ax1.plot(df_temp_Obs.index[-10:],
+             [decade_avg for _ in range(10)],
+             color=AR6_colour,
+             linestyle='--',
+             linewidth=2
+             )
+    ax1.fill_between(
+        df_temp_Obs.index[-10:],
+        [decade_avg for _ in range(10)],
+        df_temp_Att['Ant', '50'].iloc[-10:],
+        color=AR6_colour, alpha=0.2
+    )
+    ax1.scatter(
+        x=df_temp_Obs.index[-1] - 4.5,
+        y=decade_avg,
+        color=AR6_colour, s=50,
+        label='AR6 decade-average'
+    )
+
+    value = (f"{df_headlines.loc[periods['decade_period'], ('Ant', '50')]} " +
+             f"({df_headlines.loc[periods['decade_period'], ('Ant', '5')]} -" +
+             f" {df_headlines.loc[periods['decade_period'], ('Ant', '95')]})")
+    annotation = (r'$\bf{AR6 \ decade \ average}$' +
+                  f'\n{end_yr-9}-{end_yr} assessment:\n{value}')
+    ax1.annotate(
+        annotation,
+        xy=(df_temp_Obs.index[-1] - 4.5,
+            decade_avg),
+        xytext=(df_temp_Obs.index[-1] + text_offset,
+                decade_avg-0.02),
+        color=AR6_colour,
+        fontweight='regular',
+        arrowprops=dict(
+            color=AR6_colour,
+            arrowstyle='->',
+            connectionstyle="angle,angleA=0,angleB=-45,rad=20"
+            ),
+        verticalalignment='center'
+        )

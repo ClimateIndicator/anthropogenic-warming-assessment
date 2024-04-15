@@ -332,7 +332,7 @@ if __name__ == '__main__':
     }
 
     ###########################################################################
-    # CREATE PLOTS
+    # CREATE PLOTS ############################################################
     ###########################################################################
 
     # Plotting colours
@@ -650,7 +650,7 @@ if __name__ == '__main__':
             f.write(line)
 
     ###########################################################################
-    # PLOT THE RATES
+    # PLOT THE RATES ##########################################################
     ###########################################################################
     print('Creating rate plots...')
     fig = plt.figure(figsize=(14, 7))
@@ -661,7 +661,7 @@ if __name__ == '__main__':
     sigmas_all = list(
         np.concatenate((np.sort(np.ravel(sigmas)), [50]), axis=0)
         )
-    rate_vars = ['Ant', 'GHG', 'Nat', 'OHF']
+    rate_vars = ['Ant', 'GHG', 'OHF', 'Nat']
 
     # Plot attributed warming rates ###########################################
     # Import the rates csv file (files are a list to facilitate comparing
@@ -669,17 +669,16 @@ if __name__ == '__main__':
     files = ['./results/Walsh_GMST_rates.csv']
 
     for file in files:
-        df_rates = pd.read_csv(file, index_col=0,  header=[0, 1], skiprows=0)
-        times = [int(y.split(' ')[0].split('-')[1])
-                 for y in df_rates.index]
-        for var in ['Ant', 'GHG', 'OHF', 'Nat']:
-            ax1.plot(times, df_rates[(var, '50')]*10,
+        df_rates_GWI = pd.read_csv(file, index_col=0,  header=[0, 1], skiprows=0)
+        times = [int(y.split(' ')[0].split('-')[1]) for y in df_rates_GWI.index]
+        for var in rate_vars:
+            ax1.plot(times, df_rates_GWI[(var, '50')]*10,
                      label=var_names[var], color=var_colours[var])
             for s in range(len(sigmas_all)//2):
                 ax1.fill_between(
                     times,
-                    df_rates[(var, str(sigmas_all[s]))]*10,
-                    df_rates[(var, str(sigmas_all[-(s+2)]))]*10,
+                    df_rates_GWI[(var, str(sigmas_all[s]))]*10,
+                    df_rates_GWI[(var, str(sigmas_all[-(s+2)]))]*10,
                     alpha=0.2, color=var_colours[var], linewidth=0.0
                     )
     # # plot the olf GWI trend values from Chris' plot
@@ -705,25 +704,42 @@ if __name__ == '__main__':
     # If it does, read it in. If it doesn't, calculate the rates and save them.
     if os.path.exists('./results/Rates_Obs_HadCRUT5.csv'):
         # print('Reading existing HadCRUT rate dataset.')
-        df_rates = pd.read_csv('./results/Rates_Obs_HadCRUT5.csv',
+        df_rates_GWI = pd.read_csv('./results/Rates_Obs_HadCRUT5.csv',
                                index_col=0,  header=[0, 1], skiprows=0)
     else:
         print('Calculating HadCRUT rate dataset.')
-        df_rates = defs.rate_HadCRUT5(
+        df_rates_GWI = defs.rate_HadCRUT5(
             start_pi, end_pi, start_yr, end_yr, sigmas_all)
-        df_rates.to_csv('./results/Rates_Obs_HadCRUT5.csv')
+        df_rates_GWI.to_csv('./results/Rates_Obs_HadCRUT5.csv')
 
     # Plot the observed rates
-    err_pos = df_rates[('Obs', '95')]*10 - df_rates[('Obs', '50')]*10
-    err_neg = df_rates[('Obs', '50')]*10 - df_rates[('Obs', '5')]*10
-    ax1.errorbar(times,  df_rates[('Obs', '50')]*10,
+    err_pos = df_rates_GWI[('Obs', '95')]*10 - df_rates_GWI[('Obs', '50')]*10
+    err_neg = df_rates_GWI[('Obs', '50')]*10 - df_rates_GWI[('Obs', '5')]*10
+    ax1.errorbar(times,  df_rates_GWI[('Obs', '50')]*10,
                  yerr=(err_neg, err_pos),
                  fmt='o', color=var_colours['Obs'], ms=2.5, lw=1,
                  label='Reference Observations: HadCRUT5')
 
+    # # Plot the Ribes rates as scatter:
+    # df_rates_Ribes = pd.read_csv(
+    #     './results/Ribes_GMST_rates.csv',
+    #     index_col=0,  header=[0, 1], skiprows=0)
+    # times = [int(y.split(' ')[0].split('-')[1]) for y in df_rates_Ribes.index]
+    # for var in rate_vars:
+    #     err_pos = (df_rates_Ribes[(var, '95')] * 10 -
+    #                df_rates_Ribes[(var, '50')] * 10)
+    #     err_neg = (df_rates_Ribes[(var, '50')] * 10 -
+    #                df_rates_Ribes[(var, '5')] * 10)
+    #     ax1.errorbar(times, df_rates_Ribes[(var, '50')]*10,
+    #                  yerr=(err_neg, err_pos),
+    #                  # make it a square marker for the scatter
+    #                  fmt='s',
+    #                  color=var_colours[var], ms=5, lw=2,
+    #                  label=var_names[var])
+
     # Add a line along the y=0 line
     ax1.axhline(0, color='black', lw=0.5)
-    ax1.set_xlim([1950, end_yr])
+    ax1.set_xlim([1950, end_yr+1])
     ax1.set_title('(a) Attributed Global Warming',
                   loc='left',
                   fontweight='regular',
@@ -783,7 +799,7 @@ if __name__ == '__main__':
     # ax2.plot(x[-4:], y[-4:], marker='o', color='red', linestyle='None')
 
     ax2.axhline(0, color='black', lw=0.5)
-    ax2.set_xlim([1950, end_yr])
+    ax2.set_xlim([1950, end_yr+1])
     ax2.set_ylim([-1.5, 2.5])
     ax2.set_title('(a) Effective Radiative Forcing',
                   loc='left',
@@ -809,3 +825,32 @@ if __name__ == '__main__':
         )
     fig.savefig(f'{plot_folder}/5_Rates_timeseries.png')
     fig.savefig(f'{plot_folder}/5_Rates_timeseries.svg')
+
+    ###########################################################################
+    # Plot definition diagram #################################################
+    ###########################################################################
+    # Load the assessment results
+    df_headlines = pd.read_csv(
+        "results/Assessment-Update-2023_GMST_headlines.csv",
+        index_col=0,  header=[0, 1], skiprows=0
+    )
+
+    # Plot the GWI 'Ant' 50th percentile
+    fig = plt.figure(figsize=(12, 8))
+    ax1 = plt.subplot2grid((1, 1), (0, 0), colspan=1)
+    gr.definition_diagram(
+        ax1, end_yr,
+        df_headlines, df_temp_Obs, dict_updates_ts['Walsh'],
+        var_colours)
+    ax1.set_ylabel('Temperature anomaly, relative to 1850-1900 baseline (°C)')
+    ax1.set_ylim(0.7, 1.5)
+    ticks = list(np.arange(start_yr, end_yr, 5))
+    ticks.append(end_yr)
+    ax1.set_xticks(ticks, ticks)
+    ax1.set_yticks([1.0, 1.5])
+    ax1.set_xlim(2002.5, end_yr + 1)
+    # gr.overall_legend(fig, loc='lower center', ncol=4)
+    fig.suptitle('Anthropogenic Warming Assessment Period Definitions')
+    fig.tight_layout(rect=(0.02, 0.06, 0.98, 0.98))
+    fig.savefig(f'{plot_folder}/1_definition_diagram.png')
+    fig.savefig(f'{plot_folder}/1_definition_diagram.svg')
