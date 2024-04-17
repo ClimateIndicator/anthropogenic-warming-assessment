@@ -56,6 +56,8 @@ if __name__ == '__main__':
             index_col=0,  header=[0, 1], skiprows=skiprows)
         if method == 'Walsh':
             n = file_ts.split('.csv')[0].split('_')[-1]
+        df_method_hl - defs.en_dash_ify(df_method_hl)
+
         dict_updates_hl[method] = df_method_hl
         dict_updates_ts[method] = df_method_ts
 
@@ -75,8 +77,8 @@ if __name__ == '__main__':
     # MULTI-METHOD ASSESSMENT - AR6 STYLE - HEADLINES #########################
     # Create a list of the variables in df_Walsh_hl
     list_of_dfs = []
-    periods_to_assess = ['2010-2019',
-                         '2014-2023',
+    periods_to_assess = ['2010\N{EN DASH}2019',
+                         '2014\N{EN DASH}2023',
                          '2017',
                          '2023',
                          '2017 (SR15 definition)',
@@ -132,7 +134,9 @@ if __name__ == '__main__':
     # Overall assessment dataframe is concatenation of dataframes for each
     # period
     dict_updates_hl['Assessment'] = pd.concat(list_of_dfs)
-    dict_updates_hl['Assessment'].to_csv(
+    unendashed_assessment = defs.un_en_dash_ify(
+        dict_updates_hl['Assessment'].copy())
+    unendashed_assessment.to_csv(
             'results/Assessment-Update-2023_GMST_headlines.csv')
 
     # OBSERVATIONS ############################################################
@@ -144,7 +148,7 @@ if __name__ == '__main__':
         ('Obs', '50'): 1.07,
         ('Obs',  '5'): 0.89,
         ('Obs', '95'): 1.22
-    }, index=['2010-2019'])
+    }, index=['2010\N{EN DASH}2019'])
     df_update_Obs_repeat.columns.names = ['variable', 'percentile']
     df_update_Obs_repeat.index.name = 'Year'
 
@@ -155,7 +159,7 @@ if __name__ == '__main__':
         ('Obs', '50'): 1.19,
         ('Obs',  '5'): 1.06,
         ('Obs', '95'): 1.30,
-    }, index=['2014-2023'])
+    }, index=['2014\N{EN DASH}2023'])
 
     df_update_Obs_update.columns.names = ['variable', 'percentile']
     df_update_Obs_update.index.name = 'Year'
@@ -166,7 +170,7 @@ if __name__ == '__main__':
         ('Obs', '50'): 1.06,  # AR6 3.3.1.1.2 p442 from observations
         ('Obs',  '5'): 0.88,  # AR6 3.3.1.1.2 p442 from observations
         ('Obs', '95'): 1.21,  # AR6 3.3.1.1.2 p442 from observations
-    }, index=['2010-2019'])
+    }, index=['2010\N{EN DASH}2019'])
     df_AR6_Obs.columns.names = ['variable', 'percentile']
     df_AR6_Obs.index.name = 'Year'
 
@@ -206,7 +210,7 @@ if __name__ == '__main__':
         # used here.
         ('Int',  '5'): -0.20,  # AR6 3.3.1.1.2 p443, SPM A.1.3
         ('Int', '95'): 0.20,  # AR6 3.3.1.1.2 p443, SPM A.1.3
-    }, index=['2010-2019'])
+    }, index=['2010\N{EN DASH}2019'])
     df_AR6_assessment.columns.names = ['variable', 'percentile']
     df_AR6_assessment.index.name = 'Year'
 
@@ -222,7 +226,8 @@ if __name__ == '__main__':
 
     # Combine 6th assessment cycle results from both SR1.5 and AR6
     df_IPCC_assessment = pd.concat([df_AR6_assessment, df_SR15_assessment])
-    df_IPCC_assessment.to_csv('results/Assessment-6thIPCC_headlines.csv')
+    unendashed_assessment = defs.un_en_dash_ify(df_IPCC_assessment.copy())
+    unendashed_assessment.to_csv('results/Assessment-6thIPCC_headlines.csv')
 
     # QUOTED RESULTS FROM INDIVIDUAL AR6 ATTRIBUTION METHODS ##################
     # These results for each method are quoted here from the AR6 assessment.
@@ -243,7 +248,7 @@ if __name__ == '__main__':
         ('OHF', '50'): -0.195,
         ('OHF',  '5'): -0.195,
         ('OHF', '95'): -0.195,
-    }, index=['2010-2019'])
+    }, index=['2010\N{EN DASH}2019'])
     df_AR6_Haustein.columns.names = ['variable', 'percentile']
     df_AR6_Haustein.index.name = 'Year'
 
@@ -276,7 +281,7 @@ if __name__ == '__main__':
         ('Int', '50'): -0.02,
         ('Int',  '5'): -0.18,
         ('Int', '95'): 0.14,
-    }, index=['2010-2019'])
+    }, index=['2010\N{EN DASH}2019'])
     df_AR6_Ribes.columns.names = ['variable', 'percentile']
     df_AR6_Ribes.index.name = 'Year'
     df_IPCC_Ribes = df_AR6_Ribes
@@ -296,7 +301,7 @@ if __name__ == '__main__':
         ('OHF', '50'): -0.37,
         ('OHF',  '5'): -0.71,
         ('OHF', '95'): -0.03,
-    }, index=['2010-2019'])
+    }, index=['2010\N{EN DASH}2019'])
     df_AR6_Gillett.columns.names = ['variable', 'percentile']
     df_AR6_Gillett.index.name = 'Year'
     df_IPCC_Gillett = df_AR6_Gillett
@@ -316,7 +321,7 @@ if __name__ == '__main__':
         ('OHF', '50'): -0.269287921,
         ('OHF',  '5'): -0.628487091,
         ('OHF', '95'): -0.026618862,
-    }, index=['2010-2019'])
+    }, index=['2010\N{EN DASH}2019'])
     df_AR6_Smith.columns.names = ['variable', 'percentile']
     df_AR6_Smith.index.name = 'Year'
     df_IPCC_Smith = df_AR6_Smith
@@ -351,6 +356,7 @@ if __name__ == '__main__':
         'GHG': 'Well-mixed Greenhouse Gases',
         'OHF': 'Other Human Forcings',
         'Nat': 'Natural Forcings',
+        'Tot': 'Total Attributable Warming'
         }
 
     source_markers = {
@@ -383,11 +389,12 @@ if __name__ == '__main__':
             plot_vars, var_colours)
         ax.set_ylim(-1, 2)
         ax.set_xlim(start_yr, end_yr)
-        ax.text(1875, -0.85, '1850-1900\nPreindustrial Baseline', ha='center')
+        ax.text(1875, -0.85, '1850\N{EN DASH}1900\nPreindustrial Baseline',
+                ha='center')
         gr.overall_legend(fig, 'lower center', 6)
         fig.suptitle(f'{method} Timeseries Plot')
         fig.savefig(f'{plot_folder}/2_{method}_timeseries.png')
-        fig.savefig(f'{plot_folder}/2_{method}_timeseries.svg')
+        fig.savefig(f'{plot_folder}/2_{method}_timeseries.pdf')
 
     # PLOT THE MULTI-METHOD TIMESERIES IN SINGLE FIGURE #######################
     print('Creating Multi-Method Stacked Plot...')
@@ -413,14 +420,15 @@ if __name__ == '__main__':
 
     ax.set_ylim(-1, 2)
     ax.set_xlim(start_yr, end_yr)
-    ax.text(1875, -0.85, '1850-1900\nPreindustrial Baseline', ha='center')
+    ax.text(1875, -0.85, '1850\N{EN DASH}1900\nPreindustrial Baseline',
+            ha='center')
     fig.suptitle('Timeseries for each attribution method used '
                  'in the assessment of contributions to observed warming')
     fig.tight_layout(rect=(0.02, 0.08, 0.98, 0.98))
     gr.overall_legend(fig, 'lower center', 3,
                       reorder=[8, 0, 1, 2, 3, 4, 5, 6, 7])
     fig.savefig(f'{plot_folder}/2_stacked-multi_method_timeseries.png')
-    fig.savefig(f'{plot_folder}/2_stacked-multi_method_timeseries.svg')
+    fig.savefig(f'{plot_folder}/2_stacked-multi_method_timeseries.pdf')
 
     # PLOT THE MULTI-METHOD TIMESERIES IN MULTI-FIGURE ########################
     print('Creating Multi-Method Aligned Plot...')
@@ -446,7 +454,7 @@ if __name__ == '__main__':
     fig.suptitle('Timeseries for each attribution method used '
                  'in the assessment of contributions to observed warming')
     fig.savefig(f'{plot_folder}/2_aligned-multi_method_timeseries.png')
-    fig.savefig(f'{plot_folder}/2_aligned-multi_method_timeseries.svg')
+    fig.savefig(f'{plot_folder}/2_aligned-multi_method_timeseries.pdf')
 
     # PLOT THE VALIDATION PLOT ################################################
     print('Creating Fig 3.8 Validation Plot')
@@ -459,7 +467,7 @@ if __name__ == '__main__':
                                dict_IPCC_hl, dict_updates_hl,
                                dict_IPCC_Obs_hl, dict_updates_Obs_hl,
                                source_markers, var_colours, labels)
-    gr.Fig_3_8_validation_plot(ax1, bar_plot_vars, '2010-2019',
+    gr.Fig_3_8_validation_plot(ax1, bar_plot_vars, '2010\N{EN DASH}2019',
                                dict_IPCC_hl, dict_updates_hl,
                                dict_IPCC_Obs_hl, dict_updates_Obs_hl,
                                source_markers, var_colours, labels)
@@ -471,7 +479,7 @@ if __name__ == '__main__':
     ax2.set_yticklabels([])
     # set the y axis label
     ax1.set_ylabel('Attributable change in surface temperature '
-                   'since 1850-1900 (°C)')
+                   'since 1850\N{EN DASH}1900 (°C)')
 
     # create a one datapoint at 100, 100 for each method:
     for m in sorted(labels.keys()):
@@ -485,7 +493,8 @@ if __name__ == '__main__':
     fig.suptitle('Validation of updated lines of evidence for assessing '
                  'contributions to observed warming')
     fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
-             '(a) 2010-2019 AR6 WG1 Ch.3 (left)\nvs 2010-2019 repeat (right)',
+             ('(a) 2010\N{EN DASH}2019 AR6 WG1 Ch.3 (left)\n' +
+              'vs 2010\N{EN DASH}2019 repeat (right)'),
              ha='left', fontsize=matplotlib.rcParams['axes.titlesize'],
              fontweight='regular',
              #  fontstyle='italic'
@@ -497,7 +506,7 @@ if __name__ == '__main__':
              #  fontstyle='italic'
              )
     fig.savefig(f'{plot_folder}/3_WG1_Ch3_Validation.png')
-    fig.savefig(f'{plot_folder}/3_WG1_Ch3_Validation.svg')
+    fig.savefig(f'{plot_folder}/3_WG1_Ch3_Validation.pdf')
 
     # Plot the headline SPM2-esque figure #####################################
     print('Creating SPM.2-esque figure')
@@ -507,15 +516,19 @@ if __name__ == '__main__':
     ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
     ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
     gr.Fig_SPM2_plot(
-        ax0, ['Obs'], ['2010-2019', '2014-2023'],
+        ax0, ['Obs'], ['2010\N{EN DASH}2019', '2014\N{EN DASH}2023'],
         dict_IPCC_hl, dict_updates_Obs_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
-        ax1, ['Ant', 'GHG', 'OHF', 'Nat'], ['2010-2019', '2014-2023'],
+        ax1,
+        ['Ant', 'GHG', 'OHF', 'Nat'],
+        ['2010\N{EN DASH}2019', '2014\N{EN DASH}2023'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
-        ax2, ['Ant', 'GHG', 'OHF', 'Nat'], ['2017', '2023'],
+        ax2,
+        ['Ant', 'GHG', 'OHF', 'Nat'],
+        ['2017', '2023'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
 
@@ -525,7 +538,7 @@ if __name__ == '__main__':
     ax2.set_axisbelow(True)
 
     ax0.set_ylabel('Attributable change in global mean surface temperature '
-                   'since 1850-1900 (°C)')
+                   'since 1850\N{EN DASH}1900 (°C)')
     ax0.set_xlim(-0.7, 1.1)
     ax1.set_ylim(-1.0 - text_toggle * 0.2, 2.0)
     ax2.set_ylim(ax1.get_ylim())
@@ -592,12 +605,12 @@ if __name__ == '__main__':
 
     # fig.suptitle('Assessed contributions to observed warming')  # SPM2 title
     fig.savefig(f'{plot_folder}/4_SPM2_Results.png')
-    fig.savefig(f'{plot_folder}/4_SPM2_Results.svg')
+    fig.savefig(f'{plot_folder}/4_SPM2_Results.pdf')
 
     # Create appendix-layout tables for results.
     print('Creating tables for appendix')
     with open('results/Table_GMST_all_methods.csv', 'w') as f:
-        times = ['2010-2019', '2014-2023',
+        times = ['2010\N{EN DASH}2019', '2014\N{EN DASH}2023',
                  '2017', '2023',
                  '2017 (SR15 definition)', '2023 (SR15 definition)']
         f.write('variable, method, ' + ', '.join(times) + '\n')
@@ -631,9 +644,10 @@ if __name__ == '__main__':
     Gillet_GSAT = pd.read_csv(
             'results/Gillett_GSAT_headlines.csv',
             index_col=0,  header=[0, 1], skiprows=skiprows)
+    Gillet_GSAT = defs.en_dash_ify(Gillet_GSAT)
 
     with open('results/Table_GSAT_ROF_method.csv', 'w') as f:
-        times = ['2010-2019', '2014-2023',
+        times = ['2010\N{EN DASH}2019', '2014\N{EN DASH}2023',
                  '2017 (SR15 definition)', '2023 (SR15 definition)']
         f.write('variable, ' + ', '.join(times) + '\n')
         for v in ['Ant', 'GHG', 'OHF', 'Nat']:
@@ -669,8 +683,10 @@ if __name__ == '__main__':
     files = ['./results/Walsh_GMST_rates.csv']
 
     for file in files:
-        df_rates_GWI = pd.read_csv(file, index_col=0,  header=[0, 1], skiprows=0)
-        times = [int(y.split(' ')[0].split('-')[1]) for y in df_rates_GWI.index]
+        df_rates_GWI = pd.read_csv(
+            file, index_col=0,  header=[0, 1], skiprows=0)
+        times = [int(y.split(' ')[0].split('-')[1])
+                 for y in df_rates_GWI.index]
         for var in rate_vars:
             ax1.plot(times, df_rates_GWI[(var, '50')]*10,
                      label=var_names[var], color=var_colours[var])
@@ -724,7 +740,8 @@ if __name__ == '__main__':
     # df_rates_Ribes = pd.read_csv(
     #     './results/Ribes_GMST_rates.csv',
     #     index_col=0,  header=[0, 1], skiprows=0)
-    # times = [int(y.split(' ')[0].split('-')[1]) for y in df_rates_Ribes.index]
+    # times = [int(y.split(' ')[0].split('-')[1])
+    #          for y in df_rates_Ribes.index]
     # for var in rate_vars:
     #     err_pos = (df_rates_Ribes[(var, '95')] * 10 -
     #                df_rates_Ribes[(var, '50')] * 10)
@@ -765,7 +782,7 @@ if __name__ == '__main__':
     else:
         print('Calculating ERF rate dataset.')
         # Load the ERF dataset
-        df_forc_rates = defs.rate_ERF(end_yr, sigmas_all, rate_vars)
+        df_forc_rates = defs.rate_ERF(end_yr, sigmas_all)
         df_forc_rates.to_csv('./results/Rates_results_ERF.csv')
 
     times = [int(y.split(' ')[0].split('-')[1])
@@ -824,7 +841,7 @@ if __name__ == '__main__':
         fontsize=matplotlib.rcParams['axes.titlesize'],
         )
     fig.savefig(f'{plot_folder}/5_Rates_timeseries.png')
-    fig.savefig(f'{plot_folder}/5_Rates_timeseries.svg')
+    fig.savefig(f'{plot_folder}/5_Rates_timeseries.pdf')
 
     ###########################################################################
     # Plot definition diagram #################################################
@@ -834,23 +851,39 @@ if __name__ == '__main__':
         "results/Assessment-Update-2023_GMST_headlines.csv",
         index_col=0,  header=[0, 1], skiprows=0
     )
+    df_headlines = defs.en_dash_ify(df_headlines)
 
     # Plot the GWI 'Ant' 50th percentile
-    fig = plt.figure(figsize=(12, 8))
+    fig = plt.figure(figsize=(12, 7))
     ax1 = plt.subplot2grid((1, 1), (0, 0), colspan=1)
     gr.definition_diagram(
         ax1, end_yr,
         df_headlines, df_temp_Obs, dict_updates_ts['Walsh'],
         var_colours)
-    ax1.set_ylabel('Temperature anomaly, relative to 1850-1900 baseline (°C)')
-    ax1.set_ylim(0.7, 1.5)
+    ax1.set_ylabel(
+        'Global mean surface temperature, relative to '
+        '1850\N{EN DASH}1900 baseline (°C)'
+        )
+    ax1.set_ylim(0.75, 1.5)
     ticks = list(np.arange(start_yr, end_yr, 5))
     ticks.append(end_yr)
     ax1.set_xticks(ticks, ticks)
     ax1.set_yticks([1.0, 1.5])
     ax1.set_xlim(2002.5, end_yr + 1)
     # gr.overall_legend(fig, loc='lower center', ncol=4)
-    fig.suptitle('Anthropogenic Warming Assessment Period Definitions')
-    fig.tight_layout(rect=(0.02, 0.06, 0.98, 0.98))
+    # fig.suptitle(
+    #     'Period Definitions for the IPCC Anthropogenic Warming Assesments',
+    # )
+
+    fig.tight_layout(rect=(0.02, 0.06, 0.98, 0.92))
+    fig.text(
+        ax1.get_position().x0,
+        ax1.get_position().y1+0.06,
+        ('Period definitions for the IPCC assesments of ' +
+         'attributed global warming'),
+        fontweight=matplotlib.rcParams['figure.titleweight'],
+        fontsize=matplotlib.rcParams['figure.titlesize'],
+        )
+
     fig.savefig(f'{plot_folder}/1_definition_diagram.png')
-    fig.savefig(f'{plot_folder}/1_definition_diagram.svg')
+    fig.savefig(f'{plot_folder}/1_definition_diagram.pdf')

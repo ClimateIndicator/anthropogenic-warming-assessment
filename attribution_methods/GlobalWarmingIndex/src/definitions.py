@@ -324,7 +324,8 @@ def rate_HadCRUT5(start_pi, end_pi, start_yr, end_yr, sigmas_all):
     return df_rates
 
 
-def rate_ERF(end_yr, sigmas_all, rate_vars):
+def rate_ERF(end_yr, sigmas_all):
+    rate_vars = ['Nat', 'GHG', 'OHF', 'Ant', 'Tot']
     df_forc = load_ERF_CMIP6()
     forc_Group_names = sorted(
         df_forc.columns.get_level_values('variable').unique())
@@ -335,13 +336,17 @@ def rate_ERF(end_yr, sigmas_all, rate_vars):
     # Apply the function defs.rate_calc to each column of this dataframe
     dfs_rates = []
     arr_forc = np.empty(
-        (len(forc_Yrs), len(forc_Group_names)+1, len(forc_Ens_names)))
+        (len(forc_Yrs), len(forc_Group_names)+2, len(forc_Ens_names)))
     # Move the data for each forcing group into a separate array dimension
     for vv in forc_Group_names:
         arr_forc[:, rate_vars.index(vv), :] = df_forc[vv].values
     arr_forc[:, rate_vars.index('Ant'), :] = (
         arr_forc[:, rate_vars.index('GHG'), :] +
         arr_forc[:, rate_vars.index('OHF'), :])
+    arr_forc[:, rate_vars.index('Tot'), :] = (
+        arr_forc[:, rate_vars.index('Ant'), :] +
+        arr_forc[:, rate_vars.index('Nat'), :]
+    )
 
     for year in np.arange(1950, end_yr+1):
         print(f'Calculating AR6-definition ERF rate: {year}', end='\r')
@@ -378,3 +383,28 @@ def rate_ERF(end_yr, sigmas_all, rate_vars):
 
     df_forc_rates = pd.concat(dfs_rates, axis=0)
     return df_forc_rates
+
+
+def en_dash_ify(df):
+    r"""Replace - with \N{EN DASH} in date danges in dataframes."""
+    """This is required by ESSD formatting"""
+    # List the rows with a - character in them
+    rows_to_rename = [r for r in df.index if '-' in r]
+    # Rename those rows, replacing the - with a \N{EN DASH}
+    df.rename(
+        index={r: r.replace('-', '\N{EN DASH}') for r in rows_to_rename},
+        inplace=True)
+    return df
+
+
+def un_en_dash_ify(df):
+    r"""Replace \N{EN DASH} with - in date danges in dataframes."""
+    """For the purposes of saving to csv, where a normal '-' is likely safest
+    for people to use, and most consistent with files from collaborators."""
+    # List the rows with a - character in them
+    rows_to_rename = [r for r in df.index if '\N{EN DASH}' in r]
+    # Rename those rows, replacing the - with a \N{EN DASH}
+    df.rename(
+        index={r: r.replace('\N{EN DASH}', '-') for r in rows_to_rename},
+        inplace=True)
+    return df

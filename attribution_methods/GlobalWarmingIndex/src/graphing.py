@@ -18,24 +18,18 @@ matplotlib.rcParams.update({
     'figure.titleweight': 'light',
     'legend.frameon': False,
     # General fonts
-    'font.size': 11,
-    # 'font.family':  'sans-serif',
     'font.family':  'Roboto',
-    'font.sans-serif': 'Roboto',
-    'font.cursive': 'Roboto',  # Linux cluster doesn't have cursive fonts
-    # installed, so it will fall back to DejaVu Sans with an error message.
-    # This error can be avoided by preemptively specifying a font that does
-    # exist on the system for matplotlib to use for 'cursive' text (in this
-    # script those text elements are the str_Results that use LaTeX text).
-    # Note that Roboto is not a cursive font, so if you expect some parts of
-    # LaTeX text rendering to look cursive, they will not as they will be
-    # standard Roboto.
     'font.weight': 'light',
-    # TeX fonts
+    'font.size': 11,
+    'pdf.fonttype': 42,  # Switch from default 3 to 42 to use TrueType fonts
+    # for published PDF figures
+    # Mathtext fonts
     'mathtext.fontset': 'custom',
     'mathtext.rm': 'Roboto',
-    'mathtext.it': 'Roboto:italic',
     'mathtext.bf': 'Roboto:bold',
+    'mathtext.cal': 'Roboto',  # To pre-emptively stop the matplotlib error of
+    # being unable to find a calligraphic/cursive font on the linux cluster,
+    # specigy to just use Roboto for these cases.
     # Axis box
     'axes.spines.bottom': True,
     'axes.spines.left': False,
@@ -392,15 +386,15 @@ def Fig_3_8_validation_plot(
     bar_width = 0.4
 
     # Plot observations
-    if period == '2010-2019':
-        # Plot the IPCC-quoted results for 2010-2019 observations
+    if period == '2010\N{EN DASH}2019':
+        # Plot the IPCC-quoted results for 2010\N{EN DASH}2019 observations
         med_Obs = dict_IPCC_Obs_hl['Assessment'].loc[period, ('Obs', '50')]
         min_Obs = dict_IPCC_Obs_hl['Assessment'].loc[period, ('Obs', '5')]
         max_Obs = dict_IPCC_Obs_hl['Assessment'].loc[period, ('Obs', '95')]
 
         ax.fill_between(
             [-1 + 0 * 0.45, -1 + 0 + bar_width], min_Obs, max_Obs,
-            color=var_colours['Obs'], alpha=0.4,)
+            color=var_colours['Obs'], alpha=0.4, linewidth=0)
         ax.plot(
             [-1 + 0 * 0.45, -1 + 0 + bar_width], [med_Obs, med_Obs],
             color=var_colours['Obs'], lw=2)
@@ -416,7 +410,7 @@ def Fig_3_8_validation_plot(
         max_Obs = dict_updates_Obs_hl['Assessment'].loc[period, ('Obs', '95')]
         ax.fill_between(
             [-1 + 1 * 0.45, -1 + 0.45 + bar_width], min_Obs, max_Obs,
-            color=var_colours['Obs'], alpha=0.6,)
+            color=var_colours['Obs'], alpha=0.6, linewidth=0)
         ax.plot(
             [-1 + 1 * 0.45, -1 + 0.45 + bar_width], [med_Obs, med_Obs],
             color=var_colours['Obs'], lw=2)
@@ -442,6 +436,7 @@ def Fig_3_8_validation_plot(
                        if (var == 'Tot' and cycles.index(cycle)==0)
                        else var_colours[var]),
                 alpha=0.4 if cycles.index(cycle) == 0 else 0.6,
+                linewidth=0,
                 # label=var
                 )
             ls = (':' if (cycles.index(cycle) == 0 and
@@ -526,7 +521,8 @@ def Fig_SPM2_plot(
     ax, variables, periods,
     dict_IPCC_hl, dict_updates_hl,
     var_colours, var_names, labels,
-    text_toggle):
+    text_toggle
+    ):
     """Plot AR6 WG1 SPM Fig.2-esque figure summarising assessed results."""
     # bar_width = (1.0-0.4)/(len(periods))
     bar_width = 0.3
@@ -592,7 +588,7 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
     SR15_colour = '#4f91cd'
     periods = {'single_period': str(end_yr),
                'trend_period': f'{end_yr} (SR15 definition)',
-               'decade_period': f'{end_yr-9}-{end_yr}'}
+               'decade_period': f'{end_yr-9}\N{EN DASH}{end_yr}'}
 
     # Plot the observations ###################################################
     lower = df_temp_Obs.quantile(q=0.05, axis=1)
@@ -604,7 +600,8 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
                  yerr=(err_neg, err_pos),
                  fmt='o', color=var_colours['Obs'], ms=2.5, lw=1,
                  label='Reference Temp: HadCRUT5')
-    value = f"{middle[end_yr]:.2f} ({lower[end_yr]:.2f} - {upper[end_yr]:.2f})"
+    value = (f"{middle[end_yr]:.2f} " +
+             f"({lower[end_yr]:.2f}\N{EN DASH}{upper[end_yr]:.2f})")
     annotation = (r'$\bf{Observed \ single \ year}$' +
                   '\nHadCRUT5 reference' +
                   f'\n{end_yr} observation:\n{value}')
@@ -612,13 +609,13 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
         annotation,
         xy=(df_temp_Obs.index[-1], middle[end_yr]),
         xytext=(df_temp_Obs.index[-1] + text_offset,
-                middle[end_yr] - 0.04),
+                middle[end_yr] - 0.02),
         color=var_colours['Obs'],
         fontweight='regular',
         arrowprops=dict(
             color=var_colours['Obs'],
             arrowstyle='->',
-            connectionstyle="angle,angleA=0,angleB=-45,rad=20"
+            connectionstyle="angle,angleA=0,angleB=-45,rad=10"
             ),
         verticalalignment='center'
         )
@@ -635,20 +632,22 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
     # Plot the final value as single scatter point
     ax1.scatter(x=df_temp_Obs.index[-1],
                 y=df_temp_Att.loc[end_yr, ('Ant', '50')],
-                color=var_colours['Ant'], s=100)
+                color=var_colours['Ant'], s=100,
+                )
     # ax1.fill_between(
     #     df_temp_Obs.index, df_temp_Att['Ant', '5'], df_temp_Att['Ant', '95'],
     #     color=var_colours['Ant'], alpha=0.1, linewidth=0
     #     )
     value = (f"{df_headlines.loc[periods['single_period'], ('Ant', '50')]} " +
-             f"({df_headlines.loc[periods['single_period'], ('Ant', '5')]} -" +
-             f" {df_headlines.loc[periods['single_period'], ('Ant', '95')]})")
+             f"({df_headlines.loc[periods['single_period'], ('Ant', '5')]}" +
+             "\N{EN DASH}" +
+             f"{df_headlines.loc[periods['single_period'], ('Ant', '95')]})")
     annotation = (r'$\bf{SR1.5 \ single \ year}$' +
                   f'\n{end_yr} assessment:\n{value}')
     ax1.annotate(
         annotation,
-        xy=(df_temp_Obs.index[-1],
-            df_temp_Att.loc[end_yr, ('Ant', '50')]),
+        xy=(df_temp_Obs.index[-1] + 0.09,
+            df_temp_Att.loc[end_yr, ('Ant', '50')] + 0.006),
         xytext=(df_temp_Obs.index[-1] + text_offset,
                 df_temp_Att.loc[end_yr, ('Ant', '50')] + 0.04),
         color=var_colours['Ant'],
@@ -656,7 +655,7 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
         arrowprops=dict(
             color=var_colours['Ant'],
             arrowstyle='->',
-            connectionstyle="angle,angleA=0,angleB=45,rad=20"),
+            connectionstyle="angle,angleA=0,angleB=45,rad=10"),
         verticalalignment='center',
         horizontalalignment='left'
         )
@@ -684,14 +683,15 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
     )
     # Add an arrow pointing to trend-based scatter point
     value = (f"{df_headlines.loc[periods['trend_period'], ('Ant', '50')]} " +
-             f"({df_headlines.loc[periods['trend_period'], ('Ant', '5')]} - " +
+             f"({df_headlines.loc[periods['trend_period'], ('Ant', '5')]}" +
+             "\N{EN DASH}" +
              f"{df_headlines.loc[periods['trend_period'], ('Ant', '95')]})")
     annotation = (r'$\bf{SR1.5 \ trend \ based}$' +
                   f'\n{end_yr} assessment:\n{value}')
     ax1.annotate(
         annotation,
-        xy=(df_temp_Obs.index[-1],
-            gwi_trend(df_temp_Obs.index[-1])),
+        xy=(df_temp_Obs.index[-1] + 0.09,
+            gwi_trend(df_temp_Obs.index[-1])-0.006),
         xytext=(df_temp_Obs.index[-1] + text_offset,
                 gwi_trend(df_temp_Obs.index[-1]) - 0.04),
         color=SR15_colour,
@@ -699,7 +699,7 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
         arrowprops=dict(
             color=SR15_colour,
             arrowstyle='->',
-            connectionstyle="angle,angleA=0,angleB=-45,rad=20"),
+            connectionstyle="angle,angleA=0,angleB=-45,rad=10"),
         verticalalignment='center'
         )
 
@@ -727,14 +727,15 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
     )
 
     value = (f"{df_headlines.loc[periods['decade_period'], ('Ant', '50')]} " +
-             f"({df_headlines.loc[periods['decade_period'], ('Ant', '5')]} -" +
-             f" {df_headlines.loc[periods['decade_period'], ('Ant', '95')]})")
+             f"({df_headlines.loc[periods['decade_period'], ('Ant', '5')]}" +
+             "\N{EN DASH}" +
+             f"{df_headlines.loc[periods['decade_period'], ('Ant', '95')]})")
     annotation = (r'$\bf{AR6 \ decade \ average}$' +
-                  f'\n{end_yr-9}-{end_yr} assessment:\n{value}')
+                  f'\n{end_yr-9}\N{EN DASH}{end_yr} assessment:\n{value}')
     ax1.annotate(
         annotation,
-        xy=(df_temp_Obs.index[-1] - 4.5,
-            decade_avg),
+        xy=(df_temp_Obs.index[-1] - 4.5 + 0.05,
+            decade_avg - 0.003),
         xytext=(df_temp_Obs.index[-1] + text_offset,
                 decade_avg-0.02),
         color=AR6_colour,
@@ -742,7 +743,7 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
         arrowprops=dict(
             color=AR6_colour,
             arrowstyle='->',
-            connectionstyle="angle,angleA=0,angleB=-45,rad=20"
+            connectionstyle="angle,angleA=0,angleB=-45,rad=10"
             ),
         verticalalignment='center'
         )
