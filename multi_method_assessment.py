@@ -36,13 +36,11 @@ files = os.listdir('results')
 for method in ['Walsh', 'Ribes', 'Gillett']:
     file_ts = [f for f in files if f'{method}_GMST_timeseries' in f][0]
     file_hs = [f for f in files if f'{method}_GMST_headlines' in f][0]
-    skiprows = 1 if method == 'Gillett' else 0
+    skiprows = 0
     df_method_ts = pd.read_csv(
         f'results/{file_ts}', index_col=0,  header=[0, 1], skiprows=skiprows)
     df_method_hl = pd.read_csv(
         f'results/{file_hs}', index_col=0,  header=[0, 1], skiprows=skiprows)
-    if method == 'Walsh':
-        n = file_ts.split('.csv')[0].split('_')[-1]
     dict_updates_hl[method] = df_method_hl
     dict_updates_ts[method] = df_method_ts
 
