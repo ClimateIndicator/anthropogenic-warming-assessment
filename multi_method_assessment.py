@@ -872,3 +872,129 @@ if __name__ == '__main__':
 
     fig.savefig(f'{plot_folder}/1_definition_diagram.png')
     fig.savefig(f'{plot_folder}/1_definition_diagram.pdf')
+
+    ###########################################################################
+    # Plot the comparison figures #############################################
+    ###########################################################################
+    dict_analysis_ts = {}
+    compare_years = [str(end_yr), str(end_yr-1)]
+    linestyles = {'Walsh':   '-', 'Ribes':   '--', 'Gillett': ':'}
+
+    fig = plt.figure(figsize=(12, 8))
+    ax = plt.subplot2grid((1, 1), (0, 0), colspan=1)
+
+    for method in dict_updates_ts.keys():
+        dict_analysis_ts[method] = {}
+        for year in compare_years:
+            if year == str(end_yr):
+                # If current analysis year, then just use the results already
+                # loaded into the dict_updates_ts dictionary earlier in script.
+                dict_analysis_ts[method][year] = dict_updates_ts[method]
+            else:
+                # If previous analysis year, then download csv from previous
+                # GitHub release.
+                directory = f'https://raw.githubusercontent.com/ClimateIndicator/anthropogenic-warming-assessment/IGCC-{year}/results/'
+                file_ts = f'{method}_GMST_timeseries.csv'
+                file_location = f'{directory}{file_ts}'
+                df_ = pd.read_csv(file_location, index_col=0,  header=[0, 1])
+                if method == 'Gillett':
+                    # No Tot warming provided for ROF, so include an indicative
+                    # approximation as the sum of Ant and Nat warming
+                    df_.loc[:, ('Tot', '50')] = (
+                        df_.loc[:, ('Ant', '50')] + df_.loc[:, ('Nat', '50')])
+                dict_analysis_ts[method][year] = df_
+
+        # Plot the ('Ant', '50') columns of timeseries against each other
+        for var in ['Ant', 'Nat', 'GHG', 'OHF']:
+            selected_years = (
+                dict_analysis_ts[method][max(compare_years)].index <=
+                int(min(compare_years)))
+            ax.plot(
+                (dict_analysis_ts[method][max(compare_years)].loc[
+                     selected_years, (var, '50')] -
+                 dict_analysis_ts[method][min(compare_years)][(var, '50')]
+                 ),
+                label=f'{method} {var}',
+                color=var_colours[var],
+                linestyle=linestyles[method])
+    gr.overall_legend(fig, 'lower center', 3)
+    fig.tight_layout(rect=[0.1, 0.15, 0.9, 0.9])
+    ax.set_xlim(1850, int(min(compare_years)))
+    # Set the xticks to be at 50 year intervals
+    ax.set_xticks(np.append(np.arange(1850, int(min(compare_years))+1, 50),
+                  int(min(compare_years))))
+
+    ax.fill_between([1850, 1900], [-5, -5], [+5, +5], color='#f4f2f1')
+    ax.text(1875, -0.055, '1850\N{EN DASH}1900\nPreindustrial Baseline',
+            ha='center')
+    ax.set_ylim(-0.06, 0.08)
+    ax.set_ylabel(
+        f'{max(compare_years)} analysis minus {min(compare_years)} analysis,' +
+        ' 50th percentiles, ⁰C'
+        )
+    plt.suptitle('Difference between analysis years')
+    plt.savefig(f'{plot_folder}/6_analysis_components_comparison.png')
+    plt.savefig(f'{plot_folder}/6_analysis_components_comparison.pdf')
+
+    ###########################################################################
+    # Multi-method timeseries to see where changes come from each year ########
+    ###########################################################################
+    fig = plt.figure(figsize=(12, 8))
+    ax = plt.subplot2grid((1, 1), (0, 0), colspan=1)
+    dict_analysis_ts['Average'] = {}
+    for year in compare_years:
+        # TIMESERIES
+        # Create an empty timeseries
+        Ant_average = dict_analysis_ts['Walsh'][year][('Ant', '50')].copy()
+        Ant_average[:] = 0
+
+        for method in methods:
+            Ant_average += dict_analysis_ts[method][year][('Ant', '50')]
+            ax.plot(dict_analysis_ts[method][year][('Ant', '50')],
+                    var_colours['Ant'], linestyle=linestyles[method],
+                    label=method)
+        Ant_average /= len(methods)
+        dict_analysis_ts['Average'][year] = Ant_average
+
+        ax.plot(Ant_average, label='Multi-method Average', color='black')
+    fig.suptitle('Anthropogenic warming best estimate: ' +
+                 'three attribution methods and their multi-method average')
+    ax.set_ylabel('Ant 50th percentile, ⁰C')
+    ax.set_xlim(2000, end_yr+1)
+    ax.set_ylim(0.5, 1.5)
+    gr.overall_legend(fig, 'lower center', 4)
+    fig.savefig(f'{plot_folder}/7_Compare_{"-".join(compare_years)}.png')
+    fig.savefig(f'{plot_folder}/7_Compare_{"-".join(compare_years)}.pdf')
+
+    print('\n')
+    print('Comparing', ' and '.join(dict_analysis_ts['Average'].keys()), ':')
+    print('2022 analysis gives results for year 2022:', end=' ')
+    a = dict_analysis_ts['Average']['2022'][2022]
+    print(a)
+    print('2023 analysis gives results for year 2022:', end=' ')
+    b = dict_analysis_ts['Average']['2023'][2022]
+    print(b)
+    print('2023 analysis gives results for year 2023:', end=' ')
+    c = dict_analysis_ts['Average']['2023'][2023]
+    print(c)
+    print(f'Therefore the 2022 revision is: {b-a}')
+    print(f'Therefore the 2023 increase is: {c-b}')
+
+    ###########################################################################
+    # Create PLOT OF RAW ERFS #################################################
+    ###########################################################################
+    df_forc = defs.load_ERF_CMIP6()
+    # PLot the 0.05, 0.5, 0.95 quantile for each variable:
+    fig = plt.figure(figsize=(12, 8))
+    ax = plt.subplot2grid((1, 1), (0, 0), colspan=1)
+    for var in ['GHG', 'OHF', 'Nat']:
+        quantile_value = 0.5  # Change this to the quantile you want
+        ax.plot(df_forc.index, df_forc[var].quantile(quantile_value, axis=1),
+                label=var_names[var], color=var_colours[var])
+        ax.fill_between(
+            df_forc.index,
+            df_forc[var].quantile(0.05, axis=1),
+            df_forc[var].quantile(0.95, axis=1),
+            alpha=0.2, color=var_colours[var], linewidth=0.0)
+    fig.savefig(f'{plot_folder}/0_ERF_plottest.png')
+    fig.savefig(f'{plot_folder}/0_ERF_plottest.pdf')
