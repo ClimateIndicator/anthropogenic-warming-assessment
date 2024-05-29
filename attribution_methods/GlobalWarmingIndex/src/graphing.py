@@ -9,6 +9,7 @@ import seaborn as sns
 # from src.definitions import moving_average
 import sys
 
+font_family = 'Roboto'
 
 matplotlib.rcParams.update({
     # General figure
@@ -18,18 +19,18 @@ matplotlib.rcParams.update({
     'figure.titleweight': 'light',
     'legend.frameon': False,
     # General fonts
-    'font.family':  'Roboto',
+    'font.family':  font_family,
     'font.weight': 'light',
     'font.size': 11,
     'pdf.fonttype': 42,  # Switch from default 3 to 42 to use TrueType fonts
     # for published PDF figures
     # Mathtext fonts
     'mathtext.fontset': 'custom',
-    'mathtext.rm': 'Roboto',
-    'mathtext.bf': 'Roboto:bold',
-    'mathtext.cal': 'Roboto',  # To pre-emptively stop the matplotlib error of
+    'mathtext.rm': font_family,
+    'mathtext.bf': f'{font_family}:bold',
+    'mathtext.cal': font_family,  # To pre-emptively stop the matplotlib error of
     # being unable to find a calligraphic/cursive font on the linux cluster,
-    # specigy to just use Roboto for these cases.
+    # specigy to just use font_family font choice for these cases.
     # Axis box
     'axes.spines.bottom': True,
     'axes.spines.left': False,
@@ -189,7 +190,7 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
                    plot_vars, plot_cols, sigmas='all', labels=True):
     """Plot the GWI timeseries for the given variables."""
     ax.set_ylabel(
-        'Attributable change in surface temperature since 1850-1900 (°C)'
+        'Attributable change in surface temperature since 1850\N{EN DASH}1900 (°C)'
         )
     fill_alpha = 0.25
     line_alpha = 0.7
@@ -371,7 +372,7 @@ def Fig_SPM2_validation_plot(ax, period, variables, dict_updates_hl, source_cols
             ax.set_ylim(-1.5, 2.5)
 
     ax.set_xticks(np.arange(len(variables)), variables)
-    ax.set_ylabel(f'Contributions to {period} warming relative to 1850-1900')
+    ax.set_ylabel(f'Contributions to {period} warming relative to 1850\N{EN DASH}1900')
     ax.xaxis.grid(False)
     ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
 
@@ -584,6 +585,7 @@ def Fig_SPM2_plot(
 def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
                        var_colours):
     text_offset = 2
+    rad = 5
     AR6_colour = '#67c1bf'
     SR15_colour = '#4f91cd'
     periods = {'single_period': str(end_yr),
@@ -601,7 +603,7 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
                  fmt='o', color=var_colours['Obs'], ms=2.5, lw=1,
                  label='Reference Temp: HadCRUT5')
     value = (f"{middle[end_yr]:.2f} " +
-             f"({lower[end_yr]:.2f}\N{EN DASH}{upper[end_yr]:.2f})")
+             f"[{lower[end_yr]:.2f}\N{EN DASH}{upper[end_yr]:.2f}] °C")
     annotation = (r'$\bf{Observed \ single \ year}$' +
                   '\nHadCRUT5 reference' +
                   f'\n{end_yr} observation:\n{value}')
@@ -609,13 +611,15 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
         annotation,
         xy=(df_temp_Obs.index[-1], middle[end_yr]),
         xytext=(df_temp_Obs.index[-1] + text_offset,
-                middle[end_yr] - 0.02),
+                middle[end_yr]),
         color=var_colours['Obs'],
         fontweight='regular',
         arrowprops=dict(
             color=var_colours['Obs'],
             arrowstyle='->',
-            connectionstyle="angle,angleA=0,angleB=-45,rad=10"
+            # Add a straight horizontal line between the xy and xytext using
+            # connectionstyle=f"angle,angleA=0,angleB=0,rad={rad}"
+            connectionstyle="arc3,rad=0.0"
             ),
         verticalalignment='center'
         )
@@ -639,9 +643,10 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
     #     color=var_colours['Ant'], alpha=0.1, linewidth=0
     #     )
     value = (f"{df_headlines.loc[periods['single_period'], ('Ant', '50')]} " +
-             f"({df_headlines.loc[periods['single_period'], ('Ant', '5')]}" +
+             f"[{df_headlines.loc[periods['single_period'], ('Ant', '5')]}" +
              "\N{EN DASH}" +
-             f"{df_headlines.loc[periods['single_period'], ('Ant', '95')]})")
+             f"{df_headlines.loc[periods['single_period'], ('Ant', '95')]}] " +
+             "°C")
     annotation = (r'$\bf{SR1.5 \ single \ year}$' +
                   f'\n{end_yr} assessment:\n{value}')
     ax1.annotate(
@@ -649,13 +654,13 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
         xy=(df_temp_Obs.index[-1] + 0.09,
             df_temp_Att.loc[end_yr, ('Ant', '50')] + 0.006),
         xytext=(df_temp_Obs.index[-1] + text_offset,
-                df_temp_Att.loc[end_yr, ('Ant', '50')] + 0.04),
+                df_temp_Att.loc[end_yr, ('Ant', '50')] + 0.05),
         color=var_colours['Ant'],
         fontweight='regular',
         arrowprops=dict(
             color=var_colours['Ant'],
             arrowstyle='->',
-            connectionstyle="angle,angleA=0,angleB=45,rad=10"),
+            connectionstyle=f"angle,angleA=0,angleB=45,rad={rad}"),
         verticalalignment='center',
         horizontalalignment='left'
         )
@@ -683,9 +688,10 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
     )
     # Add an arrow pointing to trend-based scatter point
     value = (f"{df_headlines.loc[periods['trend_period'], ('Ant', '50')]} " +
-             f"({df_headlines.loc[periods['trend_period'], ('Ant', '5')]}" +
+             f"[{df_headlines.loc[periods['trend_period'], ('Ant', '5')]}" +
              "\N{EN DASH}" +
-             f"{df_headlines.loc[periods['trend_period'], ('Ant', '95')]})")
+             f"{df_headlines.loc[periods['trend_period'], ('Ant', '95')]}] " +
+             "°C")
     annotation = (r'$\bf{SR1.5 \ trend \ based}$' +
                   f'\n{end_yr} assessment:\n{value}')
     ax1.annotate(
@@ -693,13 +699,13 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
         xy=(df_temp_Obs.index[-1] + 0.09,
             gwi_trend(df_temp_Obs.index[-1])-0.006),
         xytext=(df_temp_Obs.index[-1] + text_offset,
-                gwi_trend(df_temp_Obs.index[-1]) - 0.04),
+                gwi_trend(df_temp_Obs.index[-1]) - 0.05),
         color=SR15_colour,
         fontweight='regular',
         arrowprops=dict(
             color=SR15_colour,
             arrowstyle='->',
-            connectionstyle="angle,angleA=0,angleB=-45,rad=10"),
+            connectionstyle=f"angle,angleA=0,angleB=-45,rad={rad}"),
         verticalalignment='center'
         )
 
@@ -727,9 +733,10 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
     )
 
     value = (f"{df_headlines.loc[periods['decade_period'], ('Ant', '50')]} " +
-             f"({df_headlines.loc[periods['decade_period'], ('Ant', '5')]}" +
+             f"[{df_headlines.loc[periods['decade_period'], ('Ant', '5')]}" +
              "\N{EN DASH}" +
-             f"{df_headlines.loc[periods['decade_period'], ('Ant', '95')]})")
+             f"{df_headlines.loc[periods['decade_period'], ('Ant', '95')]}] "
+             "°C")
     annotation = (r'$\bf{AR6 \ decade \ average}$' +
                   f'\n{end_yr-9}\N{EN DASH}{end_yr} assessment:\n{value}')
     ax1.annotate(
@@ -737,13 +744,13 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
         xy=(df_temp_Obs.index[-1] - 4.5 + 0.05,
             decade_avg - 0.003),
         xytext=(df_temp_Obs.index[-1] + text_offset,
-                decade_avg-0.02),
+                decade_avg-0.04),
         color=AR6_colour,
         fontweight='regular',
         arrowprops=dict(
             color=AR6_colour,
             arrowstyle='->',
-            connectionstyle="angle,angleA=0,angleB=-45,rad=10"
+            connectionstyle=f"angle,angleA=0,angleB=-45,rad={rad}"
             ),
         verticalalignment='center'
         )

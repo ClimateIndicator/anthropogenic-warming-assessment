@@ -1,4 +1,5 @@
 import os
+import sys
 
 import numpy as np
 import pandas as pd
@@ -46,7 +47,6 @@ if __name__ == '__main__':
     for method in ['Walsh', 'Ribes', 'Gillett']:
         file_ts = [f for f in files if f'{method}_GMST_timeseries' in f][0]
         file_hs = [f for f in files if f'{method}_GMST_headlines' in f][0]
-        # skiprows = 1 if method == 'Gillett' else 0
         skiprows = 0
         df_method_ts = pd.read_csv(
             f'results/{file_ts}',
@@ -607,18 +607,18 @@ if __name__ == '__main__':
     fig.savefig(f'{plot_folder}/4_SPM2_Results.png')
     fig.savefig(f'{plot_folder}/4_SPM2_Results.pdf')
 
-    # Create appendix-layout tables for results.
+    # CREATE APPENDIX-LAYOUT ABLES FOR RESULTS ################################
+    if not os.path.exists('./results/anciliary'):
+        os.makedirs('./results/anciliary')
+    # 1. Table for all methods
     print('Creating tables for appendix')
-    with open('results/Table_GMST_all_methods.csv', 'w') as f:
+    with open('./results/anciliary/Table_GMST_all_methods.csv', 'w+') as f:
         times = ['2010\N{EN DASH}2019', '2014\N{EN DASH}2023',
                  '2017', '2023',
                  '2017 (SR15 definition)', '2023 (SR15 definition)']
         f.write('variable, method, ' + ', '.join(times) + '\n')
         for v in ['Ant', 'GHG', 'OHF', 'Nat']:
             for m in ['Walsh', 'Ribes', 'Gillett', 'Assessment']:
-                # print(
-                #     dict_updates_hl[m]
-                # )
                 line = [v, m]
                 if m == 'Assessment':
                     data = ["{:0.2f} ({:0.1f} to {:0.1f})".format(
@@ -639,6 +639,7 @@ if __name__ == '__main__':
                 line = ', '.join([str(x) for x in line]) + '\n'
                 f.write(line)
 
+    # 2. Table for ROF GSAT only
     # Load the Gillet dataset called results/Gillett_GSAT_headlines.csv to
     # pandas dataframe
     Gillet_GSAT = pd.read_csv(
@@ -646,7 +647,7 @@ if __name__ == '__main__':
             index_col=0,  header=[0, 1], skiprows=skiprows)
     Gillet_GSAT = defs.en_dash_ify(Gillet_GSAT)
 
-    with open('results/Table_GSAT_ROF_method.csv', 'w') as f:
+    with open('./results/anciliary/Table_GSAT_ROF_method.csv', 'w+') as f:
         times = ['2010\N{EN DASH}2019', '2014\N{EN DASH}2023',
                  '2017 (SR15 definition)', '2023 (SR15 definition)']
         f.write('variable, ' + ', '.join(times) + '\n')
@@ -716,17 +717,18 @@ if __name__ == '__main__':
     #          marker='+', color='red', linestyle='None')
 
     # Plot HadCRUT5 rates #####################################################
-    # Check whether './results/HadCRUT_rates_Obs.csv' exists:
+    # Check whether './results/anciliary/HadCRUT_rates_Obs.csv' exists:
     # If it does, read it in. If it doesn't, calculate the rates and save them.
-    if os.path.exists('./results/Rates_Obs_HadCRUT5.csv'):
+    if os.path.exists('./results/anciliary/Rates_Obs_HadCRUT5.csv'):
         # print('Reading existing HadCRUT rate dataset.')
-        df_rates_GWI = pd.read_csv('./results/Rates_Obs_HadCRUT5.csv',
-                               index_col=0,  header=[0, 1], skiprows=0)
+        df_rates_GWI = pd.read_csv(
+            './results/anciliary/Rates_Obs_HadCRUT5.csv',
+            index_col=0,  header=[0, 1], skiprows=0)
     else:
         print('Calculating HadCRUT rate dataset.')
         df_rates_GWI = defs.rate_HadCRUT5(
             start_pi, end_pi, start_yr, end_yr, sigmas_all)
-        df_rates_GWI.to_csv('./results/Rates_Obs_HadCRUT5.csv')
+        df_rates_GWI.to_csv('./results/anciliary/Rates_Obs_HadCRUT5.csv')
 
     # Plot the observed rates
     err_pos = df_rates_GWI[('Obs', '95')]*10 - df_rates_GWI[('Obs', '50')]*10
@@ -735,24 +737,6 @@ if __name__ == '__main__':
                  yerr=(err_neg, err_pos),
                  fmt='o', color=var_colours['Obs'], ms=2.5, lw=1,
                  label='Reference Observations: HadCRUT5')
-
-    # # Plot the Ribes rates as scatter:
-    # df_rates_Ribes = pd.read_csv(
-    #     './results/Ribes_GMST_rates.csv',
-    #     index_col=0,  header=[0, 1], skiprows=0)
-    # times = [int(y.split(' ')[0].split('-')[1])
-    #          for y in df_rates_Ribes.index]
-    # for var in rate_vars:
-    #     err_pos = (df_rates_Ribes[(var, '95')] * 10 -
-    #                df_rates_Ribes[(var, '50')] * 10)
-    #     err_neg = (df_rates_Ribes[(var, '50')] * 10 -
-    #                df_rates_Ribes[(var, '5')] * 10)
-    #     ax1.errorbar(times, df_rates_Ribes[(var, '50')]*10,
-    #                  yerr=(err_neg, err_pos),
-    #                  # make it a square marker for the scatter
-    #                  fmt='s',
-    #                  color=var_colours[var], ms=5, lw=2,
-    #                  label=var_names[var])
 
     # Add a line along the y=0 line
     ax1.axhline(0, color='black', lw=0.5)
@@ -771,19 +755,19 @@ if __name__ == '__main__':
     ax1.set_xticks(rate_ticks)
 
     # Plot ERF Rates ##########################################################
-    # Check whether './results/ERF_rates_results.csv' exists:
+    # Check whether './results/anciliary/ERF_rates_results.csv' exists:
     # If it does, read it in
     # If it doesn't, calculate the rates and save them
-    if os.path.exists('./results/Rates_results_ERF.csv'):
+    if os.path.exists('./results/anciliary/Rates_results_ERF.csv'):
         # print('Reading existing ERF rate dataset.')
         df_forc_rates = pd.read_csv(
-            './results/Rates_results_ERF.csv',
+            './results/anciliary/Rates_results_ERF.csv',
             index_col=0,  header=[0, 1], skiprows=0)
     else:
         print('Calculating ERF rate dataset.')
         # Load the ERF dataset
         df_forc_rates = defs.rate_ERF(end_yr, sigmas_all)
-        df_forc_rates.to_csv('./results/Rates_results_ERF.csv')
+        df_forc_rates.to_csv('./results/anciliary/Rates_results_ERF.csv')
 
     times = [int(y.split(' ')[0].split('-')[1])
              for y in df_forc_rates.index]
@@ -854,16 +838,17 @@ if __name__ == '__main__':
     df_headlines = defs.en_dash_ify(df_headlines)
 
     # Plot the GWI 'Ant' 50th percentile
-    fig = plt.figure(figsize=(12, 7))
+    fig = plt.figure(figsize=(10, 6))
     ax1 = plt.subplot2grid((1, 1), (0, 0), colspan=1)
     gr.definition_diagram(
         ax1, end_yr,
         df_headlines, df_temp_Obs, dict_updates_ts['Walsh'],
         var_colours)
     ax1.set_ylabel(
-        'Global mean surface temperature, relative to '
-        '1850\N{EN DASH}1900 baseline (°C)'
+        'Global mean surface temperature,\n' +
+        'relative to 1850\N{EN DASH}1900 baseline (°C)'
         )
+
     ax1.set_ylim(0.75, 1.5)
     ticks = list(np.arange(start_yr, end_yr, 5))
     ticks.append(end_yr)
@@ -876,14 +861,14 @@ if __name__ == '__main__':
     # )
 
     fig.tight_layout(rect=(0.02, 0.06, 0.98, 0.92))
-    fig.text(
-        ax1.get_position().x0,
-        ax1.get_position().y1+0.06,
-        ('Period definitions for the IPCC assesments of ' +
-         'attributed global warming'),
-        fontweight=matplotlib.rcParams['figure.titleweight'],
-        fontsize=matplotlib.rcParams['figure.titlesize'],
-        )
+    # fig.text(
+    #     ax1.get_position().x0,
+    #     ax1.get_position().y1+0.06,
+    #     ('Period definitions for the IPCC assesments of ' +
+    #      'anthropogenic global warming'),
+    #     fontweight=matplotlib.rcParams['figure.titleweight'],
+    #     fontsize=matplotlib.rcParams['figure.titlesize'],
+    #     )
 
     fig.savefig(f'{plot_folder}/1_definition_diagram.png')
     fig.savefig(f'{plot_folder}/1_definition_diagram.pdf')
