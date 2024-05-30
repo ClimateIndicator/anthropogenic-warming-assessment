@@ -7,7 +7,7 @@
 This repository contains the results, and generating code, for the attributed contributions to global warming as a part of the Indicators of Global Climate Change (IGCC) [project](https://www.igcc.earth/), which provides annual updates to key IPCC assessments. The first IGCC report was [Forster et al. (2023)](https://essd.copernicus.org/articles/15/2295/2023); the section in the report corresponding to this repository is [section 7](https://essd.copernicus.org/articles/15/2295/2023/#section7).
 
 
-## Versions
+## IGCC Releases
 Each annual update of the IGCC will be available as a separate [release](https://github.com/ClimateIndicator/anthropogenic-warming-assessment/releases) in this repository. The release version is identified by the year of the assessed indictaor, and not the year of publication, e.g. results for the levels of attributed warming in 2022 (as publised in Forster et al. (2023)) are available in the release named IGCC-2022, not IGCC-2023.
 
 By default, the version of the results and code displayed on the main page of the repository is the most recent version. Currently this is the 2022 update (as published in the [IGCC 2022 Report (Forster et al. (2023))](https://essd.copernicus.org/articles/15/2295/2023/)).
@@ -58,3 +58,12 @@ The results from all three individual attribution methods, and the overall multi
 - `<Surname>_GMST_headlines.csv`: the results from the individual attribution methods that feed into the multi-method assessment. `<Surname>` is replaced by the surname of the lead author of the method, i.e. `Walsh`, `Ribes`, and `Gillett` for the GWI, KCC, and ROF methods, respectively.
 
 The results from this `anthropogenic_warming_assessment` GitHub repository are also available on [GitHub](https://github.com/ClimateIndicator/data/) and [Zenodo](https://doi.org/10.5281/zenodo.8430424) - note the specific versioning for each release differs from this repository.
+
+## Conda Environment
+The conda environment used to generate the results in this repository is available in the file `environment.yml` to aid reproducibility.
+
+To keep the environment file as cross-platform as possible, only the directly installed packages and their version during the analysis are included. Note that the analysis was only carried out and tested on a Linux computing cluster.
+
+The environment can be installed by running `conda env create --name <env-name> --file environment.yml` where you can specify your preferred environment name in place of `<env-name>`.
+
+Note, you may need to rebuild the `matplotlib` font cache using `rm -rf ~/.cache/matplotlib/` to ensure that matplotlib can find the fonts that are installed through the open-fonts conda package.

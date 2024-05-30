@@ -930,7 +930,7 @@ if __name__ == '__main__':
     ax.set_ylim(-0.06, 0.08)
     ax.set_ylabel(
         f'{max(compare_years)} analysis minus {min(compare_years)} analysis,' +
-        ' 50th percentiles, ⁰C'
+        ' 50th percentiles, °C'
         )
     plt.suptitle('Difference between analysis years')
     plt.savefig(f'{plot_folder}/6_analysis_components_comparison.png')
@@ -959,7 +959,7 @@ if __name__ == '__main__':
         ax.plot(Ant_average, label='Multi-method Average', color='black')
     fig.suptitle('Anthropogenic warming best estimate: ' +
                  'three attribution methods and their multi-method average')
-    ax.set_ylabel('Ant 50th percentile, ⁰C')
+    ax.set_ylabel('Ant 50th percentile, °C')
     ax.set_xlim(2000, end_yr+1)
     ax.set_ylim(0.5, 1.5)
     gr.overall_legend(fig, 'lower center', 4)
