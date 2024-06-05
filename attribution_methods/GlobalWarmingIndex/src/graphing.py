@@ -9,6 +9,7 @@ import seaborn as sns
 # from src.definitions import moving_average
 import sys
 
+font_family = 'Roboto'
 
 matplotlib.rcParams.update({
     # General figure
@@ -18,9 +19,18 @@ matplotlib.rcParams.update({
     'figure.titleweight': 'light',
     'legend.frameon': False,
     # General fonts
-    'font.size': 11,
-    'font.family': 'Roboto',
+    'font.family':  font_family,
     'font.weight': 'light',
+    'font.size': 11,
+    'pdf.fonttype': 42,  # Switch from default 3 to 42 to use TrueType fonts
+    # for published PDF figures
+    # Mathtext fonts
+    'mathtext.fontset': 'custom',
+    'mathtext.rm': font_family,
+    'mathtext.bf': f'{font_family}:bold',
+    'mathtext.cal': font_family,  # To pre-emptively stop the matplotlib error of
+    # being unable to find a calligraphic/cursive font on the linux cluster,
+    # specigy to just use font_family font choice for these cases.
     # Axis box
     'axes.spines.bottom': True,
     'axes.spines.left': False,
@@ -62,7 +72,6 @@ def overall_legend(fig, loc, ncol, nrow=False, reorder=None):
         order = np.arange(len(by_label))
     else:
         order = reorder
-    
 
     fig.legend([list(by_label.values())[i] for i in order],
                [list(by_label.keys())[i] for i in order],
@@ -181,7 +190,7 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
                    plot_vars, plot_cols, sigmas='all', labels=True):
     """Plot the GWI timeseries for the given variables."""
     ax.set_ylabel(
-        'Attributable change in surface temperature since 1850-1900 (°C)'
+        'Attributable change in surface temperature since 1850\N{EN DASH}1900 (°C)'
         )
     fill_alpha = 0.25
     line_alpha = 0.7
@@ -204,7 +213,7 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
         if len(sigmas) > 1:
             for s in range(len(sigmas)//2):
                 # Plot the PiControl ensemble
-                    ax.fill_between(
+                ax.fill_between(
                         df_temp_PiC.index,
                         df_temp_PiC.quantile(q=float(sigmas[s])/100, axis=1),
                         df_temp_PiC.quantile(q=float(sigmas[-(s+2)])/100, axis=1),
@@ -216,7 +225,7 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
     for s in range(max(len(sigmas)//2, 1)):  # max to enable 50% only
         # Plot the GWI timeseries
         for var in plot_vars:
-            
+
             # Because ROF (Gillett) method has different percentile results
             # available for different variables (ie Tot only has 50th), check
             # for each variable first whether to plot plume.
@@ -233,8 +242,8 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
                     df_Results_ts.loc[:, (var, sigmas[-1])].values,
                     color=plot_cols[var], alpha=line_alpha, label=labels*var)
 
-    ax.set_xticks([1850, 1900, 1950, 2000, 2022],
-                  [1850, 1900, 1950, 2000, 2022])
+    ax.set_xticks([1850, 1900, 1950, 2000, df_temp_Obs.index[-1]],
+                  [1850, 1900, 1950, 2000, df_temp_Obs.index[-1]])
 
 
 def gwi_residuals(ax, df_Results_ts):
@@ -356,11 +365,14 @@ def Fig_SPM2_validation_plot(ax, period, variables, dict_updates_hl, source_cols
             #     # Manually set the padding for negative values to put them
             #     # above the x axis
             #     padding = -80 - 15*(methods.index(source))
-            ax.bar_label(bar, labels=[str_Result], padding=10 + 15*(methods.index(source)))
+            ax.bar_label(
+                bar,
+                labels=[str_Result],
+                padding=10 + 15*(methods.index(source)))
             ax.set_ylim(-1.5, 2.5)
 
     ax.set_xticks(np.arange(len(variables)), variables)
-    ax.set_ylabel(f'Contributions to {period} warming relative to 1850-1900')
+    ax.set_ylabel(f'Contributions to {period} warming relative to 1850\N{EN DASH}1900')
     ax.xaxis.grid(False)
     ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
 
@@ -368,31 +380,42 @@ def Fig_SPM2_validation_plot(ax, period, variables, dict_updates_hl, source_cols
 def Fig_3_8_validation_plot(
         ax, variables, period,
         dict_IPCC_hl, dict_updates_hl,
+        dict_IPCC_Obs_hl, dict_updates_Obs_hl,
         source_markers, var_colours, labels):
     """Plot AR6 WG1 Ch.3 Fig.3.8"""
 
     bar_width = 0.4
 
-    # Manually add observations...
-    if period == '2010-2019':
+    # Plot observations
+    if period == '2010\N{EN DASH}2019':
+        # Plot the IPCC-quoted results for 2010\N{EN DASH}2019 observations
+        med_Obs = dict_IPCC_Obs_hl['Assessment'].loc[period, ('Obs', '50')]
+        min_Obs = dict_IPCC_Obs_hl['Assessment'].loc[period, ('Obs', '5')]
+        max_Obs = dict_IPCC_Obs_hl['Assessment'].loc[period, ('Obs', '95')]
+
         ax.fill_between(
-            [-1 + 0 * 0.45, -1 + 0 + bar_width], 0.88, 1.21,
-            color=var_colours['Obs'], alpha=0.4,)
+            [-1 + 0 * 0.45, -1 + 0 + bar_width], min_Obs, max_Obs,
+            color=var_colours['Obs'], alpha=0.4, linewidth=0)
         ax.plot(
-            [-1 + 0 * 0.45, -1 + 0 + bar_width], [1.06, 1.06],
+            [-1 + 0 * 0.45, -1 + 0 + bar_width], [med_Obs, med_Obs],
             color=var_colours['Obs'], lw=2)
-        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (1.06, 1.21, 0.88)
+        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med_Obs, max_Obs, min_Obs)
         ax.text(
             (-1 + 0 * 0.45 + bar_width / 2), 0.6,
             str_Result,
             ha='center', va='center', color='black')
+        
+        # Plot the updated re-assessment for 2010-2019 observations
+        med_Obs = dict_updates_Obs_hl['Assessment'].loc[period, ('Obs', '50')]
+        min_Obs = dict_updates_Obs_hl['Assessment'].loc[period, ('Obs', '5')]
+        max_Obs = dict_updates_Obs_hl['Assessment'].loc[period, ('Obs', '95')]
         ax.fill_between(
-            [-1 + 1 * 0.45, -1 + 0.45 + bar_width], 0.89, 1.22,
-            color=var_colours['Obs'], alpha=0.6,)
+            [-1 + 1 * 0.45, -1 + 0.45 + bar_width], min_Obs, max_Obs,
+            color=var_colours['Obs'], alpha=0.6, linewidth=0)
         ax.plot(
-            [-1 + 1 * 0.45, -1 + 0.45 + bar_width], [1.07, 1.07],
+            [-1 + 1 * 0.45, -1 + 0.45 + bar_width], [med_Obs, med_Obs],
             color=var_colours['Obs'], lw=2)
-        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (1.07, 1.22, 0.89)
+        str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med_Obs, max_Obs, min_Obs)
         ax.text(
             (-1 + 1 * 0.45 + bar_width / 2), 0.6,
             str_Result,
@@ -414,6 +437,7 @@ def Fig_3_8_validation_plot(
                        if (var == 'Tot' and cycles.index(cycle)==0)
                        else var_colours[var]),
                 alpha=0.4 if cycles.index(cycle) == 0 else 0.6,
+                linewidth=0,
                 # label=var
                 )
             ls = (':' if (cycles.index(cycle) == 0 and
@@ -497,19 +521,12 @@ def Fig_3_8_validation_plot(
 def Fig_SPM2_plot(
     ax, variables, periods,
     dict_IPCC_hl, dict_updates_hl,
-    var_colours, labels,
-    text_toggle):
+    var_colours, var_names, labels,
+    text_toggle
+    ):
     """Plot AR6 WG1 SPM Fig.2-esque figure summarising assessed results."""
     # bar_width = (1.0-0.4)/(len(periods))
     bar_width = 0.3
-
-    names = {
-        'Obs': 'Observed Warming',
-        'Ant': 'Total Human-induced Warming',
-        'GHG': 'Well-mixed Greenhouse Gases',
-        'OHF': 'Other Human Forcings',
-        'Nat': 'Natural Forcings',
-        }
 
     for var in variables:
         for period in periods:
@@ -527,14 +544,13 @@ def Fig_SPM2_plot(
             elif med < 0:
                 colour = '#7dbfd9'
                 # colour = '#56949f'
-
             ax.bar(variables.index(var) + bar_loc_offset,
                    med,
                    yerr=([med-neg], [pos-med]),
                    error_kw=dict(lw=0.8, capsize=2, capthick=0.8),
                    width=bar_width,
                    color=colour,
-                   alpha=1.0 if '2022' in period else 0.7)
+                   alpha=1.0 if periods.index(period) == 1 else 0.7)
             if text_toggle:
                 str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med, pos, neg)
                 ax.text(
@@ -560,7 +576,181 @@ def Fig_SPM2_plot(
     ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
     # Component labels
     tick_locs = np.arange(len(variables)) + (bar_width/2)*(len(periods)-1)
-    # ax.text(tick_locs), -0.5, 
-    ax.set_xticks(tick_locs, [names[v] for v in variables], rotation=270,
+    # ax.text(tick_locs), -0.5,
+    ax.set_xticks(tick_locs, [var_names[v] for v in variables], rotation=270,
                   weight='regular'
                   )
+
+
+def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
+                       var_colours):
+    text_offset = 2
+    rad = 5
+    AR6_colour = '#67c1bf'
+    SR15_colour = '#4f91cd'
+    periods = {'single_period': str(end_yr),
+               'trend_period': f'{end_yr} (SR15 definition)',
+               'decade_period': f'{end_yr-9}\N{EN DASH}{end_yr}'}
+
+    # Plot the observations ###################################################
+    lower = df_temp_Obs.quantile(q=0.05, axis=1)
+    upper = df_temp_Obs.quantile(q=0.95, axis=1)
+    middle = df_temp_Obs.quantile(q=0.5, axis=1)
+    err_neg = middle - lower
+    err_pos = upper - middle
+    ax1.errorbar(df_temp_Obs.index, middle,
+                 yerr=(err_neg, err_pos),
+                 fmt='o', color=var_colours['Obs'], ms=2.5, lw=1,
+                 label='Reference Temp: HadCRUT5')
+    value = (f"{middle[end_yr]:.2f} " +
+             f"[{lower[end_yr]:.2f}\N{EN DASH}{upper[end_yr]:.2f}] °C")
+    annotation = (r'$\bf{Observed \ single \ year}$' +
+                  '\nHadCRUT5 reference' +
+                  f'\n{end_yr} observation:\n{value}')
+    ax1.annotate(
+        annotation,
+        xy=(df_temp_Obs.index[-1], middle[end_yr]),
+        xytext=(df_temp_Obs.index[-1] + text_offset,
+                middle[end_yr]),
+        color=var_colours['Obs'],
+        fontweight='regular',
+        arrowprops=dict(
+            color=var_colours['Obs'],
+            arrowstyle='->',
+            # Add a straight horizontal line between the xy and xytext using
+            # connectionstyle=f"angle,angleA=0,angleB=0,rad={rad}"
+            connectionstyle="arc3,rad=0.0"
+            ),
+        verticalalignment='center'
+        )
+
+    # Plot GWI timeseries #####################################################
+    # Plot a line plot with scatter marks for Ant 50
+    ax1.plot(df_temp_Obs.index, df_temp_Att['Ant', '50'],
+             color=var_colours['Ant'], linestyle='-', linewidth=1)
+    # Plot a scatter of the  'Ant', '50' GWI values
+    ax1.scatter(x=df_temp_Obs.index,
+                y=df_temp_Att['Ant', '50'],
+                color=var_colours['Ant'], s=50,
+                label='SR1.5 single year')
+    # Plot the final value as single scatter point
+    ax1.scatter(x=df_temp_Obs.index[-1],
+                y=df_temp_Att.loc[end_yr, ('Ant', '50')],
+                color=var_colours['Ant'], s=100,
+                )
+    # ax1.fill_between(
+    #     df_temp_Obs.index, df_temp_Att['Ant', '5'], df_temp_Att['Ant', '95'],
+    #     color=var_colours['Ant'], alpha=0.1, linewidth=0
+    #     )
+    value = (f"{df_headlines.loc[periods['single_period'], ('Ant', '50')]} " +
+             f"[{df_headlines.loc[periods['single_period'], ('Ant', '5')]}" +
+             "\N{EN DASH}" +
+             f"{df_headlines.loc[periods['single_period'], ('Ant', '95')]}] " +
+             "°C")
+    annotation = (r'$\bf{SR1.5 \ single \ year}$' +
+                  f'\n{end_yr} assessment:\n{value}')
+    ax1.annotate(
+        annotation,
+        xy=(df_temp_Obs.index[-1] + 0.09,
+            df_temp_Att.loc[end_yr, ('Ant', '50')] + 0.006),
+        xytext=(df_temp_Obs.index[-1] + text_offset,
+                df_temp_Att.loc[end_yr, ('Ant', '50')] + 0.05),
+        color=var_colours['Ant'],
+        fontweight='regular',
+        arrowprops=dict(
+            color=var_colours['Ant'],
+            arrowstyle='->',
+            connectionstyle=f"angle,angleA=0,angleB=45,rad={rad}"),
+        verticalalignment='center',
+        horizontalalignment='left'
+        )
+
+    # Calculate a trend line through the final 15 years of the GWI
+    gwi_fit = np.polyfit(
+        df_temp_Obs.index[-15:],
+        df_temp_Att['Ant', '50'].iloc[-15:], 1)
+    gwi_trend = np.poly1d(gwi_fit)
+    gwi_trend = gwi_trend + (df_temp_Att.loc[end_yr, ('Ant', '50')] -
+                             gwi_trend(df_temp_Obs.index[-1]))
+    # Plot this line
+    ax1.plot(df_temp_Obs.index[-15:], gwi_trend(df_temp_Obs.index[-15:]),
+             color=SR15_colour, linestyle='--', linewidth=2)
+    # Plot a scatter at the end of this line
+    ax1.scatter(x=df_temp_Obs.index[-1],
+                y=gwi_trend(df_temp_Obs.index[-1]),
+                color=SR15_colour, s=45,
+                label='SR1.5 trend-based')
+    ax1.fill_between(
+        df_temp_Obs.index[-15:],
+        gwi_trend(df_temp_Obs.index[-15:]),
+        df_temp_Att['Ant', '50'].iloc[-15:],
+        color=SR15_colour, alpha=0.2
+    )
+    # Add an arrow pointing to trend-based scatter point
+    value = (f"{df_headlines.loc[periods['trend_period'], ('Ant', '50')]} " +
+             f"[{df_headlines.loc[periods['trend_period'], ('Ant', '5')]}" +
+             "\N{EN DASH}" +
+             f"{df_headlines.loc[periods['trend_period'], ('Ant', '95')]}] " +
+             "°C")
+    annotation = (r'$\bf{SR1.5 \ trend \ based}$' +
+                  f'\n{end_yr} assessment:\n{value}')
+    ax1.annotate(
+        annotation,
+        xy=(df_temp_Obs.index[-1] + 0.09,
+            gwi_trend(df_temp_Obs.index[-1])-0.006),
+        xytext=(df_temp_Obs.index[-1] + text_offset,
+                gwi_trend(df_temp_Obs.index[-1]) - 0.05),
+        color=SR15_colour,
+        fontweight='regular',
+        arrowprops=dict(
+            color=SR15_colour,
+            arrowstyle='->',
+            connectionstyle=f"angle,angleA=0,angleB=-45,rad={rad}"),
+        verticalalignment='center'
+        )
+
+    # find the average of the last 10 years of GWI
+    decade_avg = df_temp_Att['Ant', '50'].iloc[-10:].mean()
+    # decade_avg = df_headlines.loc['2014-2023', ('Ant', '50')]
+
+    ax1.plot(df_temp_Obs.index[-10:],
+             [decade_avg for _ in range(10)],
+             color=AR6_colour,
+             linestyle='--',
+             linewidth=2
+             )
+    ax1.fill_between(
+        df_temp_Obs.index[-10:],
+        [decade_avg for _ in range(10)],
+        df_temp_Att['Ant', '50'].iloc[-10:],
+        color=AR6_colour, alpha=0.2
+    )
+    ax1.scatter(
+        x=df_temp_Obs.index[-1] - 4.5,
+        y=decade_avg,
+        color=AR6_colour, s=50,
+        label='AR6 decade-average'
+    )
+
+    value = (f"{df_headlines.loc[periods['decade_period'], ('Ant', '50')]} " +
+             f"[{df_headlines.loc[periods['decade_period'], ('Ant', '5')]}" +
+             "\N{EN DASH}" +
+             f"{df_headlines.loc[periods['decade_period'], ('Ant', '95')]}] "
+             "°C")
+    annotation = (r'$\bf{AR6 \ decade \ average}$' +
+                  f'\n{end_yr-9}\N{EN DASH}{end_yr} assessment:\n{value}')
+    ax1.annotate(
+        annotation,
+        xy=(df_temp_Obs.index[-1] - 4.5 + 0.05,
+            decade_avg - 0.003),
+        xytext=(df_temp_Obs.index[-1] + text_offset,
+                decade_avg-0.04),
+        color=AR6_colour,
+        fontweight='regular',
+        arrowprops=dict(
+            color=AR6_colour,
+            arrowstyle='->',
+            connectionstyle=f"angle,angleA=0,angleB=-45,rad={rad}"
+            ),
+        verticalalignment='center'
+        )

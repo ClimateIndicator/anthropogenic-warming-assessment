@@ -1,3 +1,5 @@
+import os
+import multiprocessing as mp
 import numpy as np
 import pandas as pd
 import functools
@@ -45,10 +47,10 @@ import pymagicc
 
 
 def load_ERF_CMIP6():
-    """Load the ERFs from CMIP6."""
+    """Load the ERFs from Chris."""
     # ERF location
     here = Path(__file__).parent
-    file_ERF = here / '../data/ERF Samples/Chris/ERF_DAMIP_1000.nc'
+    file_ERF = here / '../data/ERF Samples/Chris/ERF_DAMIP_1000_1750-2023.nc'
     # import ERF_file to xarray dataset and convert to pandas dataframe
     df_ERF = xr.open_dataset(file_ERF).to_dataframe()
     # assign the columns the name 'variable'
@@ -68,12 +70,12 @@ def load_ERF_CMIP6():
     return df_ERF
 
 
-def load_HadCRUT(start_pi, end_pi):
+def load_HadCRUT(start_pi, end_pi, start_yr, end_yr):
     """Load HadCRUT5 observations and remove PI baseline."""
     here = Path(__file__).parent
     temp_ens_Path = (
         '../data/Temp/HadCRUT/' +
-        'HadCRUT.5.0.1.0.analysis.ensemble_series.global.annual.csv')
+        'HadCRUT.5.0.2.0.analysis.ensemble_series.global.annual.csv')
     temp_ens_Path = here / temp_ens_Path
     # read temp_Path into pandas dataframe, rename column 'Time' to 'Year'
     # and set the index to 'Year', keeping only columns with 'Realization' in
@@ -94,6 +96,12 @@ def load_HadCRUT(start_pi, end_pi):
         (df_temp_Obs.index <= end_pi),
         ].mean(axis=0)
     df_temp_Obs -= ofst_Obs
+
+    # Filter only years between start_yr and end_yr
+    df_temp_Obs = df_temp_Obs.loc[
+        (df_temp_Obs.index >= start_yr) &
+        (df_temp_Obs.index <= end_yr),
+        ]
 
     return df_temp_Obs
 
@@ -181,12 +189,13 @@ def filter_PiControl(df, timeframes):
     dict_temp_PiC = {}
     for ens in list(df):
         # Establish inclusion condition, which is that the smoothed internal
-        # variability of a CMIP5 ensemble must operate within certain bounds:
+        # variability of a CMIP6 ensemble must operate within certain bounds:
         # 1. there must be a minimum level of variation (to remove those models
         # that are clearly wrong, eg oscillating between 0.01 and 0 warming)
         # 2. they must not exceed a certain min or max temperature bound; the
-        # 0.3 value is roughyl similar to a 0.15 drift per century limit as
+        # 0.3 value is roughly similar to a 0.15 drift per century limit as
         # used in Haustein et al 2017, and Leach et al 2021.
+        #
         # The final ensemble distribution are plotted against HadCRUT5 median
         # in gwi.py, to check that the percentiles of this median run are
         # similar to the percentiles on the entire CMIP5 ensemble. ie, if the
@@ -200,10 +209,10 @@ def filter_PiControl(df, timeframes):
         temp_ma_3 = moving_average(temp, 3)
         temp_ma_30 = moving_average(temp, 30)
         _cond = (
-                    (max(temp_ma_3) < 0.3 and min(temp_ma_3) > -0.3)
-                    and ((max(temp_ma_3) - min(temp_ma_3)) > 0.06)
-                    and (max(temp_ma_30) < 0.1 and min(temp_ma_30) > -0.1)
-                    )
+                 (max(temp_ma_3) < 0.3 and min(temp_ma_3) > -0.3)
+                 and ((max(temp_ma_3) - min(temp_ma_3)) > 0.06)
+                 and (max(temp_ma_30) < 0.1 and min(temp_ma_30) > -0.1)
+                 )
 
         # Approve actual (ie not smoothed) data if the corresponding smoothed
         # data is approved.
@@ -271,3 +280,131 @@ def final_value_of_trend(temp):
     time = np.arange(temp.shape[0])
     fit = np.poly1d(np.polyfit(time, temp, 1))
     return fit(time)[-1]
+
+
+def rate_func(array):
+    # Instead of passing years array, just set the start year for the slice
+    # to zero
+    times = np.arange(array.shape[0])
+    fit = np.polyfit(x=times, y=array, deg=1)
+    return fit[0]
+
+
+def rate_HadCRUT5(start_pi, end_pi, start_yr, end_yr, sigmas_all):
+    # Load the HadCRUT5 dataset
+    df_temp_Obs = load_HadCRUT(start_pi, end_pi, start_yr, end_yr)
+    temp_Yrs = df_temp_Obs.index.values
+    arr_temp_Obs = df_temp_Obs.values
+    # Apply the function defs.rate_calc to each column of this dataframe
+
+    dfs_rates = []
+    for year in np.arange(1950, end_yr+1):
+        print(year, end='\r')
+        recent_years = ((year-9 <= temp_Yrs) * (temp_Yrs <= year))
+        ten_slice = arr_temp_Obs[recent_years, :]
+
+        with mp.Pool(os.cpu_count()) as p:
+            single_series = [ten_slice[:, ii]
+                             for ii in range(ten_slice.shape[-1])]
+            results = p.map(rate_func, single_series)
+        forc_Rate_results = np.array(results)
+
+        # Obtain statistics
+        obs_rate_array = np.percentile(
+            forc_Rate_results, sigmas_all, axis=0)
+        dict_Results = {
+            ('Obs', str(sigma)): obs_rate_array[sigmas_all.index(sigma)]
+            for sigma in sigmas_all}
+        df_rates_i = pd.DataFrame(
+            dict_Results, index=[f'{year-9}-{year} (AR6 rate definition)'])
+        df_rates_i.columns.names = ['variable', 'percentile']
+        df_rates_i.index.name = 'Year'
+        dfs_rates.append(df_rates_i)
+    df_rates = pd.concat(dfs_rates, axis=0)
+    return df_rates
+
+
+def rate_ERF(end_yr, sigmas_all):
+    rate_vars = ['Nat', 'GHG', 'OHF', 'Ant', 'Tot']
+    df_forc = load_ERF_CMIP6()
+    forc_Group_names = sorted(
+        df_forc.columns.get_level_values('variable').unique())
+    forc_Ens_names = sorted(
+        df_forc.columns.get_level_values('ensemble').unique())
+    forc_Yrs = df_forc.index.values
+
+    # Apply the function defs.rate_calc to each column of this dataframe
+    dfs_rates = []
+    arr_forc = np.empty(
+        (len(forc_Yrs), len(forc_Group_names)+2, len(forc_Ens_names)))
+    # Move the data for each forcing group into a separate array dimension
+    for vv in forc_Group_names:
+        arr_forc[:, rate_vars.index(vv), :] = df_forc[vv].values
+    arr_forc[:, rate_vars.index('Ant'), :] = (
+        arr_forc[:, rate_vars.index('GHG'), :] +
+        arr_forc[:, rate_vars.index('OHF'), :])
+    arr_forc[:, rate_vars.index('Tot'), :] = (
+        arr_forc[:, rate_vars.index('Ant'), :] +
+        arr_forc[:, rate_vars.index('Nat'), :]
+    )
+
+    for year in np.arange(1950, end_yr+1):
+        print(f'Calculating AR6-definition ERF rate: {year}', end='\r')
+        recent_years = ((year-9 <= forc_Yrs) * (forc_Yrs <= year))
+        ten_slice = arr_forc[recent_years, :, :]
+
+        # Calculate AR6-definition ERF rate for each var-ens combination
+        forc_Rate_results = np.empty(
+            ten_slice.shape[1:])
+        # Only include 'Ant'
+        for vv in range(ten_slice.shape[1]):
+            # Parallelise over ensemble members
+            with mp.Pool(os.cpu_count()) as p:
+                single_series = [ten_slice[:, vv, ii]
+                                 for ii in range(ten_slice.shape[2])]
+                # final_value_of_trend is from src/definitions.py
+                results = p.map(rate_func, single_series)
+            forc_Rate_results[vv, :] = np.array(results)
+
+        # Obtain statistics
+        forc_rate_array = np.percentile(
+            forc_Rate_results, sigmas_all, axis=1)
+        dict_Results = {
+            (var, str(sigma)):
+            forc_rate_array[sigmas_all.index(sigma), rate_vars.index(var)]
+            for var in rate_vars for sigma in sigmas_all
+        }
+        df_rates_i = pd.DataFrame(
+            dict_Results, index=[f'{year-9}-{year} (AR6 rate definition)'])
+        df_rates_i.columns.names = ['variable', 'percentile']
+        df_rates_i.index.name = 'Year'
+        dfs_rates.append(df_rates_i)
+    print('')
+
+    df_forc_rates = pd.concat(dfs_rates, axis=0)
+    return df_forc_rates
+
+
+def en_dash_ify(df):
+    r"""Replace - with \N{EN DASH} in date danges in dataframes."""
+    """This is required by ESSD formatting"""
+    # List the rows with a - character in them
+    rows_to_rename = [r for r in df.index if '-' in r]
+    # Rename those rows, replacing the - with a \N{EN DASH}
+    df.rename(
+        index={r: r.replace('-', '\N{EN DASH}') for r in rows_to_rename},
+        inplace=True)
+    return df
+
+
+def un_en_dash_ify(df):
+    r"""Replace \N{EN DASH} with - in date danges in dataframes."""
+    """For the purposes of saving to csv, where a normal '-' is likely safest
+    for people to use, and most consistent with files from collaborators."""
+    # List the rows with a - character in them
+    rows_to_rename = [r for r in df.index if '\N{EN DASH}' in r]
+    # Rename those rows, replacing the - with a \N{EN DASH}
+    df.rename(
+        index={r: r.replace('\N{EN DASH}', '-') for r in rows_to_rename},
+        inplace=True)
+    return df
