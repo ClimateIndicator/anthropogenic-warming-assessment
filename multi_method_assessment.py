@@ -980,6 +980,85 @@ if __name__ == '__main__':
     print(f'Therefore the 2022 revision is: {b-a}')
     print(f'Therefore the 2023 increase is: {c-b}')
 
+
+    ###########################################################################
+    # Calculate linear extrapolation of the 2023 results for WMO SotCR ########
+    ###########################################################################
+    extrap_times = ['2023', '2014\N{EN DASH}2023']
+    extrap_times_new = ['2024', '2015\N{EN DASH}2024']
+    extrap_var = 'Ant'
+    extrap_sigmas = ['5', '50', '95']
+    dict_extrap = {}
+
+    for method in methods:
+        print(f'Extrapolating {method}')
+        # Obtain the 5, 95, and 50th percentile values for the 2023 year
+        # for 'Ant'
+        df_extrap = dict_updates_hl[method].loc[
+            extrap_times, (extrap_var, extrap_sigmas)].copy()
+        print(df_extrap)
+        for t in extrap_times:
+            for p in extrap_sigmas:
+                current = dict_updates_hl[method].loc[t, (extrap_var, p)]
+                print(f'{method} {extrap_var} {t} {p}th percentile: {current}')
+                df_rate = pd.read_csv(
+                    f'./results/{method}_GMST_rates.csv',
+                    index_col=0, header=[0, 1], skiprows=0)
+                rate = df_rate.loc['2014-2023 (AR6 rate definition)',
+                                   (extrap_var, p)]
+                print(f'{method} {extrap_var} {t} {p}th percentile rate: {rate}')
+                extrap_result = current + rate
+                print(f'{method} {extrap_var} {t} {p}th percentile extrapolated: {extrap_result}')
+                df_extrap.loc[
+                    extrap_times_new[extrap_times.index(t)],
+                    (extrap_var, p)] = extrap_result
+        print(df_extrap)
+        dict_extrap[method] = df_extrap
+
+
+    # MULTI-METHOD ASSESSMENT - AR6 STYLE - HEADLINES #####################
+    list_extrap_dfs = []
+    extrap_assess_times = extrap_times + extrap_times_new
+    print(extrap_assess_times)
+    for period in extrap_assess_times:
+        print(dict_extrap.keys())
+        dict_extrap_Assessment = {}
+
+        # Find the highest 95%, lowest 5%, and all medians, across methods
+        minimum = min([dict_extrap[method].loc[period, (extrap_var, '5')]
+                        for method in dict_extrap.keys()])
+        maximum = max([dict_extrap[method].loc[period, (extrap_var, '95')]
+                        for method in dict_extrap.keys()])
+        medians = [dict_extrap[method].loc[period, (extrap_var, '50')]
+                    for method in dict_extrap.keys()]
+
+        minimum, maximum = minimum + 10, maximum + 10
+        likely_min = (np.floor(minimum * 10) / 10 * np.sign(minimum))
+        likely_max = (np.ceil(maximum * 10) / 10 * np.sign(maximum))
+        likely_min = np.round(likely_min - 10, 1)
+        likely_max = np.round(likely_max - 10, 1)
+        best_est = np.round(np.mean(medians), 2)
+        dict_extrap_Assessment.update(
+            {(extrap_var, '50'): best_est,
+                (extrap_var,  '5'): likely_min,
+                (extrap_var, '95'): likely_max}
+        )
+        df_updates_Assessment = pd.DataFrame(
+            dict_extrap_Assessment, index=[period])
+        df_updates_Assessment.columns.names = ['variable', 'percentile']
+        df_updates_Assessment.index.name = 'Year'
+        list_extrap_dfs.append(df_updates_Assessment)
+    dict_extrap['Assessment'] = pd.concat(list_extrap_dfs)
+    unendashed_assessment = defs.un_en_dash_ify(
+        dict_extrap['Assessment'].copy())
+    unendashed_assessment.to_csv(
+            'results/Assessment-Extrapolation-2024_GMST_headlines.csv')
+
+
+
+
+
+
     ###########################################################################
     # Create PLOT OF RAW ERFS #################################################
     ###########################################################################
