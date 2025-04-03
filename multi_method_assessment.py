@@ -6,8 +6,8 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 
-from attribution_methods.GlobalWarmingIndex.src import graphing as gr
-from attribution_methods.GlobalWarmingIndex.src import definitions as defs
+from src import graphing as gr
+from src import definitions as defs
 
 ###############################################################################
 # Checklist of inputs to this script that need updating each year:
