@@ -28,7 +28,7 @@ if __name__ == '__main__':
     ###########################################################################
 
     start_pi, end_pi = 1850, 1900
-    start_yr, end_yr = 1850, 2023
+    start_yr, end_yr = 1850, 2024
 
     # Temperature dataset
     df_temp_Obs = defs.load_HadCRUT(start_pi, end_pi, start_yr, end_yr)
@@ -78,11 +78,11 @@ if __name__ == '__main__':
     # Create a list of the variables in df_Walsh_hl
     list_of_dfs = []
     periods_to_assess = ['2010\N{EN DASH}2019',
-                         '2014\N{EN DASH}2023',
+                         '2015\N{EN DASH}2024',
                          '2017',
-                         '2023',
+                         '2024',
                          '2017 (SR15 definition)',
-                         '2023 (SR15 definition)']
+                         '2024 (SR15 definition)']
     for period in periods_to_assess:
         dict_updates_Assessment = {}
 
@@ -137,7 +137,7 @@ if __name__ == '__main__':
     unendashed_assessment = defs.un_en_dash_ify(
         dict_updates_hl['Assessment'].copy())
     unendashed_assessment.to_csv(
-            'results/Assessment-Update-2023_GMST_headlines.csv')
+            'results/Assessment-Update-2024_GMST_headlines.csv')
 
     # OBSERVATIONS ############################################################
     # Add updated observation results from the annual updates paper section 4
@@ -145,6 +145,7 @@ if __name__ == '__main__':
         # (VARIABLE, PERCENTILE): VALUE
         # 2010-2019 (2023 analysis): 1.07 [0.89-1.22] From Blair, paper Sect. 6
         # 2010-2019 (2022 analysis): 1.07 [0.89-1.22] From Blair, paper Sect. 4
+        # TODO: Update this to be from the 2024 data from Blair.
         ('Obs', '50'): 1.07,
         ('Obs',  '5'): 0.89,
         ('Obs', '95'): 1.22
@@ -154,12 +155,13 @@ if __name__ == '__main__':
 
     df_update_Obs_update = pd.DataFrame({
         # (VARIABLE, PERCENTILE): VALUE
+        # 2015-2024 (2024 analysis): 1.24 [1.11–1.35] From Blair, paper Sect. 7
         # 2014-2023 (2023 analysis): 1.19 [1.06-1.30] From Blair, paper Sect. 6
         # 2013-2022 (2022 analysis): 1.14 [1.00-1.25] From Blair, paper Sect. 4
-        ('Obs', '50'): 1.19,
-        ('Obs',  '5'): 1.06,
-        ('Obs', '95'): 1.30,
-    }, index=['2014\N{EN DASH}2023'])
+        ('Obs', '50'): 1.24,
+        ('Obs',  '5'): 1.11,
+        ('Obs', '95'): 1.35,
+    }, index=['2015\N{EN DASH}2024'])
 
     df_update_Obs_update.columns.names = ['variable', 'percentile']
     df_update_Obs_update.index.name = 'Year'
@@ -516,19 +518,19 @@ if __name__ == '__main__':
     ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
     ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
     gr.Fig_SPM2_plot(
-        ax0, ['Obs'], ['2010\N{EN DASH}2019', '2014\N{EN DASH}2023'],
+        ax0, ['Obs'], ['2010\N{EN DASH}2019', '2015\N{EN DASH}2024'],
         dict_IPCC_hl, dict_updates_Obs_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
         ax1,
         ['Ant', 'GHG', 'OHF', 'Nat'],
-        ['2010\N{EN DASH}2019', '2014\N{EN DASH}2023'],
+        ['2010\N{EN DASH}2019', '2015\N{EN DASH}2024'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
         ax2,
         ['Ant', 'GHG', 'OHF', 'Nat'],
-        ['2017', '2023'],
+        ['2017', '2024'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
 
@@ -613,9 +615,9 @@ if __name__ == '__main__':
     # 1. Table for all methods
     print('Creating tables for appendix')
     with open('./results/anciliary/Table_GMST_all_methods.csv', 'w+') as f:
-        times = ['2010\N{EN DASH}2019', '2014\N{EN DASH}2023',
-                 '2017', '2023',
-                 '2017 (SR15 definition)', '2023 (SR15 definition)']
+        times = ['2010\N{EN DASH}2019', '2015\N{EN DASH}2024',
+                 '2017', '2024',
+                 '2017 (SR15 definition)', '2024 (SR15 definition)']
         f.write('variable, method, ' + ', '.join(times) + '\n')
         for v in ['Ant', 'GHG', 'OHF', 'Nat']:
             for m in ['Walsh', 'Ribes', 'Gillett', 'Assessment']:
@@ -648,8 +650,8 @@ if __name__ == '__main__':
     Gillet_GSAT = defs.en_dash_ify(Gillet_GSAT)
 
     with open('./results/anciliary/Table_GSAT_ROF_method.csv', 'w+') as f:
-        times = ['2010\N{EN DASH}2019', '2014\N{EN DASH}2023',
-                 '2017 (SR15 definition)', '2023 (SR15 definition)']
+        times = ['2010\N{EN DASH}2019', '2015\N{EN DASH}2024',
+                 '2017 (SR15 definition)', '2024 (SR15 definition)']
         f.write('variable, ' + ', '.join(times) + '\n')
         for v in ['Ant', 'GHG', 'OHF', 'Nat']:
             line = [v]
@@ -832,7 +834,7 @@ if __name__ == '__main__':
     ###########################################################################
     # Load the assessment results
     df_headlines = pd.read_csv(
-        "results/Assessment-Update-2023_GMST_headlines.csv",
+        "results/Assessment-Update-2024_GMST_headlines.csv",
         index_col=0,  header=[0, 1], skiprows=0
     )
     df_headlines = defs.en_dash_ify(df_headlines)
@@ -967,25 +969,30 @@ if __name__ == '__main__':
     fig.savefig(f'{plot_folder}/7_Compare_{"-".join(compare_years)}.pdf')
 
     print('\n')
+    print(dict_analysis_ts['Average'].keys())
+    for year in dict_analysis_ts['Average'].keys():
+        print(year)
+        print(dict_analysis_ts['Average'][year])
+
     print('Comparing', ' and '.join(dict_analysis_ts['Average'].keys()), ':')
-    print('2022 analysis gives results for year 2022:', end=' ')
-    a = dict_analysis_ts['Average']['2022'][2022]
+    print(f'{compare_years[-1]} analysis gives results for year {compare_years[-1]}:', end=' ')
+    a = dict_analysis_ts['Average'][compare_years[-1]][int(compare_years[-1])]
     print(a)
-    print('2023 analysis gives results for year 2022:', end=' ')
-    b = dict_analysis_ts['Average']['2023'][2022]
+    print(f'{compare_years[0]} analysis gives results for year {compare_years[-1]}:', end=' ')
+    b = dict_analysis_ts['Average'][compare_years[0]][int(compare_years[-1])]
     print(b)
-    print('2023 analysis gives results for year 2023:', end=' ')
-    c = dict_analysis_ts['Average']['2023'][2023]
+    print(f'{compare_years[0]} analysis gives results for year {compare_years[0]}:', end=' ')
+    c = dict_analysis_ts['Average'][compare_years[0]][int(compare_years[0])]
     print(c)
-    print(f'Therefore the 2022 revision is: {b-a}')
-    print(f'Therefore the 2023 increase is: {c-b}')
+    print(f'Therefore the {compare_years[-1]} revision is: {b-a}')
+    print(f'Therefore the {compare_years[0]} increase is: {c-b}')
 
 
     ###########################################################################
-    # Calculate linear extrapolation of the 2023 results for WMO SotCR ########
+    # Calculate linear extrapolation for next year ############################
     ###########################################################################
-    extrap_times = ['2023', '2014\N{EN DASH}2023']
-    extrap_times_new = ['2024', '2015\N{EN DASH}2024']
+    extrap_times = [f'{end_yr}', f'{end_yr-9}\N{EN DASH}{end_yr}']
+    extrap_times_new = [f'{end_yr+1}', f'{end_yr+1-9}\N{EN DASH}{end_yr+1}']
     extrap_var = 'Ant'
     extrap_sigmas = ['5', '50', '95']
     dict_extrap = {}
@@ -1004,7 +1011,7 @@ if __name__ == '__main__':
                 df_rate = pd.read_csv(
                     f'./results/{method}_GMST_rates.csv',
                     index_col=0, header=[0, 1], skiprows=0)
-                rate = df_rate.loc['2014-2023 (AR6 rate definition)',
+                rate = df_rate.loc[f'{end_yr-9}-{end_yr} (AR6 rate definition)',
                                    (extrap_var, p)]
                 print(f'{method} {extrap_var} {t} {p}th percentile rate: {rate}')
                 extrap_result = current + rate
@@ -1026,11 +1033,11 @@ if __name__ == '__main__':
 
         # Find the highest 95%, lowest 5%, and all medians, across methods
         minimum = min([dict_extrap[method].loc[period, (extrap_var, '5')]
-                        for method in dict_extrap.keys()])
+                       for method in dict_extrap.keys()])
         maximum = max([dict_extrap[method].loc[period, (extrap_var, '95')]
-                        for method in dict_extrap.keys()])
+                       for method in dict_extrap.keys()])
         medians = [dict_extrap[method].loc[period, (extrap_var, '50')]
-                    for method in dict_extrap.keys()]
+                   for method in dict_extrap.keys()]
 
         minimum, maximum = minimum + 10, maximum + 10
         likely_min = (np.floor(minimum * 10) / 10 * np.sign(minimum))
@@ -1052,7 +1059,7 @@ if __name__ == '__main__':
     unendashed_assessment = defs.un_en_dash_ify(
         dict_extrap['Assessment'].copy())
     unendashed_assessment.to_csv(
-            'results/Assessment-Extrapolation-2024_GMST_headlines.csv')
+            f'results/Assessment-Extrapolation-{end_yr+1}_GMST_headlines.csv')
 
 
 
@@ -1062,7 +1069,7 @@ if __name__ == '__main__':
     ###########################################################################
     # Create PLOT OF RAW ERFS #################################################
     ###########################################################################
-    df_forc = defs.load_ERF_CMIP6()
+    df_forc = defs.load_ERF_CMIP6(end_yr)
     # PLot the 0.05, 0.5, 0.95 quantile for each variable:
     fig = plt.figure(figsize=(12, 8))
     ax = plt.subplot2grid((1, 1), (0, 0), colspan=1)

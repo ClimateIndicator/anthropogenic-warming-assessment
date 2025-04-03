@@ -46,11 +46,11 @@ import pymagicc
 #     return forc_Group
 
 
-def load_ERF_CMIP6():
+def load_ERF_CMIP6(indicator_year):
     """Load the ERFs from Chris."""
     # ERF location
     here = Path(__file__).parent
-    file_ERF = here / '../data/ERF Samples/Chris/ERF_DAMIP_1000_1750-2023.nc'
+    file_ERF = here / f'../data/ERF Samples/Chris/ERF_DAMIP_1000_1750-{indicator_year}.nc'
     # import ERF_file to xarray dataset and convert to pandas dataframe
     df_ERF = xr.open_dataset(file_ERF).to_dataframe()
     # assign the columns the name 'variable'
@@ -326,7 +326,7 @@ def rate_HadCRUT5(start_pi, end_pi, start_yr, end_yr, sigmas_all):
 
 def rate_ERF(end_yr, sigmas_all):
     rate_vars = ['Nat', 'GHG', 'OHF', 'Ant', 'Tot']
-    df_forc = load_ERF_CMIP6()
+    df_forc = load_ERF_CMIP6(end_yr)
     forc_Group_names = sorted(
         df_forc.columns.get_level_values('variable').unique())
     forc_Ens_names = sorted(
