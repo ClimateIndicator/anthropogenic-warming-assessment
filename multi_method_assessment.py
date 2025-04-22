@@ -143,6 +143,7 @@ if __name__ == '__main__':
     # Add updated observation results from the annual updates paper section 4
     df_update_Obs_repeat = pd.DataFrame({
         # (VARIABLE, PERCENTILE): VALUE
+        # 2010-2019 (2023 analysis): 1.07 [0.89-1.22] From Blair, paper Sect. 7
         # 2010-2019 (2023 analysis): 1.07 [0.89-1.22] From Blair, paper Sect. 6
         # 2010-2019 (2022 analysis): 1.07 [0.89-1.22] From Blair, paper Sect. 4
         # TODO: Update this to be from the 2024 data from Blair.
@@ -530,7 +531,7 @@ if __name__ == '__main__':
     gr.Fig_SPM2_plot(
         ax2,
         ['Ant', 'GHG', 'OHF', 'Nat'],
-        ['2017', '2024'],
+        ['2017 (SR15 definition)', '2024 (SR15 definition)'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
 
@@ -944,6 +945,16 @@ if __name__ == '__main__':
     fig = plt.figure(figsize=(12, 8))
     ax = plt.subplot2grid((1, 1), (0, 0), colspan=1)
     dict_analysis_ts['Average'] = {}
+    method_names = {
+        'Walsh': 'GWI',
+        'Ribes': 'KCC',
+        'Gillett': 'ROF',
+        'Average': 'Multi-method Average'
+    }
+    year_colours = {
+        '2024': 'xkcd:teal',
+        '2023': 'xkcd:tomato',
+    }
     for year in compare_years:
         # TIMESERIES
         # Create an empty timeseries
@@ -953,8 +964,8 @@ if __name__ == '__main__':
         for method in methods:
             Ant_average += dict_analysis_ts[method][year][('Ant', '50')]
             ax.plot(dict_analysis_ts[method][year][('Ant', '50')],
-                    var_colours['Ant'], linestyle=linestyles[method],
-                    label=method)
+                    year_colours[year], linestyle=linestyles[method],
+                    label=method_names[method])
         Ant_average /= len(methods)
         dict_analysis_ts['Average'][year] = Ant_average
 
@@ -963,30 +974,44 @@ if __name__ == '__main__':
                  'three attribution methods and their multi-method average')
     ax.set_ylabel('Ant 50th percentile, °C')
     ax.set_xlim(2000, end_yr+1)
-    ax.set_ylim(0.5, 1.5)
+    ax.set_ylim(0.6, 1.6)
     gr.overall_legend(fig, 'lower center', 4)
     fig.savefig(f'{plot_folder}/7_Compare_{"-".join(compare_years)}.png')
     fig.savefig(f'{plot_folder}/7_Compare_{"-".join(compare_years)}.pdf')
 
     print('\n')
-    print(dict_analysis_ts['Average'].keys())
-    for year in dict_analysis_ts['Average'].keys():
-        print(year)
-        print(dict_analysis_ts['Average'][year])
+    print (dict_analysis_ts['Average'].keys())
 
-    print('Comparing', ' and '.join(dict_analysis_ts['Average'].keys()), ':')
-    print(f'{compare_years[-1]} analysis gives results for year {compare_years[-1]}:', end=' ')
-    a = dict_analysis_ts['Average'][compare_years[-1]][int(compare_years[-1])]
-    print(a)
-    print(f'{compare_years[0]} analysis gives results for year {compare_years[-1]}:', end=' ')
-    b = dict_analysis_ts['Average'][compare_years[0]][int(compare_years[-1])]
-    print(b)
-    print(f'{compare_years[0]} analysis gives results for year {compare_years[0]}:', end=' ')
-    c = dict_analysis_ts['Average'][compare_years[0]][int(compare_years[0])]
-    print(c)
-    print(f'Therefore the {compare_years[-1]} revision is: {b-a}')
-    print(f'Therefore the {compare_years[0]} increase is: {c-b}')
+    for method in sorted(dict_analysis_ts.keys()):
+        print(f'Comparison for: {method}')
+        # print(dict_analysis_ts[method])
+        print('  Comparing', ' and '.join(dict_analysis_ts[method].keys()), ':')
 
+        print(f'  {compare_years[-1]} analysis gives results for year {compare_years[-1]}:', end=' ')
+        if method == 'Average':
+            a = dict_analysis_ts[method][compare_years[-1]][int(compare_years[-1])]
+        else:
+            a = dict_analysis_ts[method][compare_years[-1]].loc[int(compare_years[-1]), ('Ant', '50')]
+        print(a)
+
+        print(f'  {compare_years[0]} analysis gives results for year {compare_years[-1]}:', end=' ')
+        if method == 'Average':
+            b = dict_analysis_ts[method][compare_years[0]][int(compare_years[-1])]
+        else:
+            b = dict_analysis_ts[method][compare_years[0]].loc[int(compare_years[-1]), ('Ant', '50')]
+        print(b)
+
+        print(f'  {compare_years[0]} analysis gives results for year {compare_years[0]}:', end=' ')
+        if method == 'Average':
+            c = dict_analysis_ts[method][compare_years[0]][int(compare_years[0])]
+        else:
+            c = dict_analysis_ts[method][compare_years[0]].loc[int(compare_years[0]), ('Ant', '50')]
+        print(c)
+
+        print(f'  Therefore the {compare_years[-1]} revision is: {b-a}')
+        print(f'  Therefore the {compare_years[0]} increase is: {c-b}')
+
+    print('\n')
 
     ###########################################################################
     # Calculate linear extrapolation for next year ############################
@@ -1003,19 +1028,19 @@ if __name__ == '__main__':
         # for 'Ant'
         df_extrap = dict_updates_hl[method].loc[
             extrap_times, (extrap_var, extrap_sigmas)].copy()
-        print(df_extrap)
+        # print(df_extrap)
         for t in extrap_times:
             for p in extrap_sigmas:
                 current = dict_updates_hl[method].loc[t, (extrap_var, p)]
-                print(f'{method} {extrap_var} {t} {p}th percentile: {current}')
+                # print(f'{method} {extrap_var} {t} {p}th percentile: {current}')
                 df_rate = pd.read_csv(
                     f'./results/{method}_GMST_rates.csv',
                     index_col=0, header=[0, 1], skiprows=0)
                 rate = df_rate.loc[f'{end_yr-9}-{end_yr} (AR6 rate definition)',
                                    (extrap_var, p)]
-                print(f'{method} {extrap_var} {t} {p}th percentile rate: {rate}')
+                # print(f'{method} {extrap_var} {t} {p}th percentile rate: {rate}')
                 extrap_result = current + rate
-                print(f'{method} {extrap_var} {t} {p}th percentile extrapolated: {extrap_result}')
+                # print(f'{method} {extrap_var} {t} {p}th percentile extrapolated: {extrap_result}')
                 df_extrap.loc[
                     extrap_times_new[extrap_times.index(t)],
                     (extrap_var, p)] = extrap_result
@@ -1026,9 +1051,9 @@ if __name__ == '__main__':
     # MULTI-METHOD ASSESSMENT - AR6 STYLE - HEADLINES #####################
     list_extrap_dfs = []
     extrap_assess_times = extrap_times + extrap_times_new
-    print(extrap_assess_times)
+    # print(extrap_assess_times)
     for period in extrap_assess_times:
-        print(dict_extrap.keys())
+        # print(dict_extrap.keys())
         dict_extrap_Assessment = {}
 
         # Find the highest 95%, lowest 5%, and all medians, across methods
@@ -1056,6 +1081,8 @@ if __name__ == '__main__':
         df_updates_Assessment.index.name = 'Year'
         list_extrap_dfs.append(df_updates_Assessment)
     dict_extrap['Assessment'] = pd.concat(list_extrap_dfs)
+    print('Extrapolated assessment')
+    print(dict_extrap['Assessment'])
     unendashed_assessment = defs.un_en_dash_ify(
         dict_extrap['Assessment'].copy())
     unendashed_assessment.to_csv(

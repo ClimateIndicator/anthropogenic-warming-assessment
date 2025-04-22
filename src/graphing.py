@@ -530,6 +530,11 @@ def Fig_SPM2_plot(
 
     for var in variables:
         for period in periods:
+            # Prevent the SR15 definition from being included in the period
+            # date label that appears on the bar itself when this warming
+            # definition is chosen
+            period_name = period.replace('(SR15 definition)', '')
+
             med = dict_updates_hl['Assessment'].loc[period, (var, '50')]
             neg = dict_updates_hl['Assessment'].loc[period, (var, '5')]
             pos = dict_updates_hl['Assessment'].loc[period, (var, '95')]
@@ -565,7 +570,7 @@ def Fig_SPM2_plot(
                 ax.text(
                     variables.index(var) + bar_loc_offset,
                     0.05,
-                    period,
+                    period_name,
                     ha='center', va='bottom', color='white',
                     rotation=90,
                     weight='regular'

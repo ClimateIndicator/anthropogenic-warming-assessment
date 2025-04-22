@@ -66,7 +66,7 @@ Three attribution methods are used for the multi-method assessment of anthropoge
 There is no pipeline that automatically pulls in the results for each method; the results files were simply manually copied into the `results/` directory, and pushed to this GitHub repository.
 
 #### Global Warming Index
-The code for the GWI attribution in the IGCC 2022 report is available at [global-warming-index (github.com)](https://github.com/tristramwalsh/global-warming-index)
+The code for the GWI attribution is available at [global-warming-index (github.com)](https://github.com/tristramwalsh/global-warming-index).
 
 #### Regularised Optimal Fingerprinting
 The `esmvaltool` code (which generates ROF attribution results based on CMIP6 outout) is available on GitHub at [ESMValGroup/ESMValTool at forster23 (github.com)](https://github.com/ESMValGroup/ESMValTool/tree/forster23). The actual python diagnostics code is available here: [ESMValTool/esmvaltool/diag_scripts/attribute at forster23 · ESMValGroup/ESMValTool (github.com)](https://github.com/ESMValGroup/ESMValTool/tree/forster23/esmvaltool/diag_scripts/attribute).
