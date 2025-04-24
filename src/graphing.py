@@ -455,8 +455,21 @@ def Fig_3_8_validation_plot(
                 lw=2)
 
             # Write str_Result in the middle of the plot
+            med_assess_str = (
+                f"{med_assess:.2f}" if med_assess < 0
+                else ("\N{EN SPACE}" + f"{med_assess:.2f}")
+            )
+            max_assess_str = (
+                f"{max_assess:.2f}" if max_assess < 0
+                else ("\N{EN SPACE}" + f"{max_assess:.2f}")
+            )
+            min_assess_str = (
+                f"{min_assess:.2f}" if min_assess < 0
+                else ("\N{EN SPACE}" + f"{min_assess:.2f}")
+            )
             str_Result = r'${%s}^{{%s}}_{{%s}}$' % \
-                (med_assess, max_assess, min_assess)
+                (med_assess_str, max_assess_str, min_assess_str)
+
             ax.text(
                 (variables.index(var)
                  + cycles.index(cycle) * 0.45

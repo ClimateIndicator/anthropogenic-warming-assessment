@@ -385,11 +385,13 @@ if __name__ == '__main__':
     for method in dict_updates_ts.keys():
         print(f'Creating {method} Simple Plot...')
         plot_vars = ['Ant', 'GHG', 'Nat', 'OHF']
+        if method == 'Walsh':
+            plot_vars = ['Ant', 'GHG', 'Nat', 'OHF', 'Res']
         fig = plt.figure(figsize=(12, 8))
         ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
         gr.gwi_timeseries(
-            ax, df_temp_Obs, df_temp_PiC, dict_updates_ts[method],
-            plot_vars, var_colours)
+            ax, df_temp_Obs, None, dict_updates_ts[method], plot_vars,
+            var_colours, sigmas=['5', '95', '50'])
         ax.set_ylim(-1, 2)
         ax.set_xlim(start_yr, end_yr)
         ax.text(1875, -0.85, '1850\N{EN DASH}1900\nPreindustrial Baseline',
@@ -405,10 +407,12 @@ if __name__ == '__main__':
     ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
 
     # Plot simplified (5-95% only) plumes for GWI method.
-    gr.gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, dict_updates_ts['Walsh'],
-                      plot_vars, var_colours, sigmas=['5', '95', '50'],
+    gr.gwi_timeseries(ax, df_temp_Obs, None, dict_updates_ts['Walsh'],
+                      ['Ant', 'GHG', 'Nat', 'OHF', 'Res'],
+                      var_colours, sigmas=['5', '95', '50'],
                       labels=True)
     # Plot the median best-estimate for each method on top of the GWI plumes.
+    plot_vars = ['Ant', 'GHG', 'Nat', 'OHF']
     for m, l in zip(['Walsh', 'Ribes', 'Gillett'], ['-', '--', ':']):
         for v in plot_vars:
             ax.plot(
@@ -497,13 +501,13 @@ if __name__ == '__main__':
                  'contributions to observed warming')
     fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
              ('(a) 2010\N{EN DASH}2019 AR6 WG1 Ch.3 (left)\n' +
-              'vs 2010\N{EN DASH}2019 repeat (right)'),
+              '      vs 2010\N{EN DASH}2019 repeat (right)'),
              ha='left', fontsize=matplotlib.rcParams['axes.titlesize'],
              fontweight='regular',
              #  fontstyle='italic'
              )
     fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
-             '(b) 2017 SR1.5 Ch.1 (left)\nvs 2017 repeat (right)',
+             '(b) 2017 SR1.5 Ch.1 (left)\n      vs 2017 repeat (right)',
              ha='left', fontsize=matplotlib.rcParams['axes.titlesize'],
              fontweight='regular',
              #  fontstyle='italic'
@@ -669,14 +673,14 @@ if __name__ == '__main__':
              )
     fig.text(ax1.get_position().x0, ax1.get_position().y1+0.08,
              ('Contributions to observed warming '
-             'expressed in terms of two IPCC warming definitions'),
+              'expressed in terms of two IPCC warming definitions'),
              fontsize=matplotlib.rcParams['axes.titlesize'],
              fontweight='bold'
              )
     fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
              ('(b) AR6 Update: 2015\N{EN DASH}2024 decade-average warming'
-             '\n      '
-             'contributions assessed from attribution studies'),
+              '\n      '
+              'contributions assessed from attribution studies'),
              fontsize=matplotlib.rcParams['font.size'],
              fontweight='regular'
              )
@@ -1171,7 +1175,6 @@ if __name__ == '__main__':
         print(df_extrap)
         dict_extrap[method] = df_extrap
 
-
     # MULTI-METHOD ASSESSMENT - AR6 STYLE - HEADLINES #####################
     list_extrap_dfs = []
     extrap_assess_times = extrap_times + extrap_times_new
@@ -1211,11 +1214,6 @@ if __name__ == '__main__':
         dict_extrap['Assessment'].copy())
     unendashed_assessment.to_csv(
             f'results/Assessment-Extrapolation-{end_yr+1}_GMST_headlines.csv')
-
-
-
-
-
 
     ###########################################################################
     # Create PLOT OF RAW ERFS #################################################
