@@ -385,12 +385,10 @@ if __name__ == '__main__':
     for method in dict_updates_ts.keys():
         print(f'Creating {method} Simple Plot...')
         plot_vars = ['Ant', 'GHG', 'Nat', 'OHF']
-        if method == 'Walsh':
-            plot_vars = ['Ant', 'GHG', 'Nat', 'OHF', 'Res']
         fig = plt.figure(figsize=(12, 8))
         ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
         gr.gwi_timeseries(
-            ax, df_temp_Obs, None, dict_updates_ts[method], plot_vars,
+            ax, df_temp_Obs, df_temp_PiC, dict_updates_ts[method], plot_vars,
             var_colours, sigmas=['5', '95', '50'])
         ax.set_ylim(-1, 2)
         ax.set_xlim(start_yr, end_yr)
@@ -407,12 +405,11 @@ if __name__ == '__main__':
     ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
 
     # Plot simplified (5-95% only) plumes for GWI method.
-    gr.gwi_timeseries(ax, df_temp_Obs, None, dict_updates_ts['Walsh'],
-                      ['Ant', 'GHG', 'Nat', 'OHF', 'Res'],
+    gr.gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, dict_updates_ts['Walsh'],
+                      ['Ant', 'GHG', 'Nat', 'OHF'],
                       var_colours, sigmas=['5', '95', '50'],
                       labels=True)
     # Plot the median best-estimate for each method on top of the GWI plumes.
-    plot_vars = ['Ant', 'GHG', 'Nat', 'OHF']
     for m, l in zip(['Walsh', 'Ribes', 'Gillett'], ['-', '--', ':']):
         for v in plot_vars:
             ax.plot(
