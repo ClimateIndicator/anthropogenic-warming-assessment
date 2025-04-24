@@ -14,3 +14,6 @@ results/anciliary/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# MacOS
+*.DS_Store
