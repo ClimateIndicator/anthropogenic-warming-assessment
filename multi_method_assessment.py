@@ -733,6 +733,26 @@ if __name__ == '__main__':
             start_pi, end_pi, start_yr, end_yr, sigmas_all)
         df_rates_GWI.to_csv('./results/anciliary/Rates_Obs_HadCRUT5.csv')
 
+    # Calculate the rates for IGCC temperature dataset ########################
+    # Import IGCC temperature data
+    # Check whether './results/anciliary/IGCC_rates_Obs.csv' exists:
+    # If it does, read it in. If it doesn't, calculate the rates and save them.
+    if os.path.exists('./results/anciliary/Rates_Obs_IGCC.csv'):
+        # print('Reading existing IGCC rate dataset.')
+        df_Obs_IGCC = pd.read_csv(
+            './results/anciliary/Rates_Obs_IGCC.csv',
+            index_col=0,  header=[0, 1], skiprows=0)
+    else:
+        print('Calculating IGCC rate dataset.')
+        df_Obs_IGCC = defs.load_Temp_IGCC(start_pi, end_pi)
+        df_Obs_IGCC_rate = defs.rate_IGCC(start_pi, end_pi, start_yr, end_yr)
+        df_Obs_IGCC_rate.to_csv('./results/anciliary/Rates_Obs_IGCC.csv')
+
+    # ax1.plot(times,  df_Obs_IGCC_rate[('Obs', '50')]*10,
+    #          color='black',
+    #          label='Reference Observations: IGCC',
+    #          lw=2)
+
     # Plot the observed rates
     err_pos = df_rates_GWI[('Obs', '95')]*10 - df_rates_GWI[('Obs', '50')]*10
     err_neg = df_rates_GWI[('Obs', '50')]*10 - df_rates_GWI[('Obs', '5')]*10

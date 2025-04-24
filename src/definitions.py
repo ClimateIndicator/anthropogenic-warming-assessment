@@ -106,6 +106,25 @@ def load_HadCRUT(start_pi, end_pi, start_yr, end_yr):
     return df_temp_Obs
 
 
+def load_Temp_IGCC(start_pi, end_pi):
+    """Load IGCC observations and remove PI baseline."""
+    here = Path(__file__).parent
+    temp_Path = (
+        '../data/Temp/IGCC/' +
+        'IGCC_data_series_2024.csv'
+    )
+    temp_Path = here / temp_Path
+    # read temp_Path into pandas dataframe
+    df_temp_Obs = pd.read_csv(temp_Path).set_index('Year')
+    # Select the column named 'GMST'
+    df_temp_Obs = df_temp_Obs[['GMST']]
+    # Calculate the mean of the years 1850-1900:
+    df_temp_Obs_mean = df_temp_Obs.loc[
+        (df_temp_Obs.index >= start_pi) &
+        (df_temp_Obs.index <= end_pi),
+        'GMST'].mean(axis=0)
+    return df_temp_Obs
+
 # def load_PiC_Old(n_yrs):
 #     """Load piControl data from Stuart's ERF datasets."""
 #     here = Path(__file__).parent
@@ -323,6 +342,26 @@ def rate_HadCRUT5(start_pi, end_pi, start_yr, end_yr, sigmas_all):
     df_rates = pd.concat(dfs_rates, axis=0)
     return df_rates
 
+def rate_IGCC(start_pi, end_pi, start_yr, end_yr):
+    df_temp_Obs = load_Temp_IGCC(start_pi, end_pi)
+    temp_Yrs = df_temp_Obs.index.values
+    arr_temp_Obs = df_temp_Obs.values
+    # Apply the function defs.rate_calc to each column of this dataframe
+    dfs_rates = []
+    for year in np.arange(1950, end_yr+1):
+        print(year, end='\r')
+        recent_years = ((year-9 <= temp_Yrs) * (temp_Yrs <= year))
+        ten_slice = arr_temp_Obs[recent_years, :]
+        results = np.array(rate_func(ten_slice))
+
+        dict_Results = {('Obs', str(50)): results}
+        df_rates_i = pd.DataFrame(
+            dict_Results, index=[f'{year-9}-{year} (AR6 rate definition)'])
+        df_rates_i.columns.names = ['variable', 'percentile']
+        df_rates_i.index.name = 'Year'
+        dfs_rates.append(df_rates_i)
+        df_rates = pd.concat(dfs_rates, axis=0)
+    return df_rates
 
 def rate_ERF(end_yr, sigmas_all):
     rate_vars = ['Nat', 'GHG', 'OHF', 'Ant', 'Tot']
