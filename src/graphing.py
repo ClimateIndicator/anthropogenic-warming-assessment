@@ -549,18 +549,25 @@ def Fig_SPM2_plot(
             elif med < 0:
                 colour = '#7dbfd9'
                 # colour = '#56949f'
+            if len(periods) == 1:
+                bar_alpha = 1
+            elif len(periods) == 2:
+                bar_alpha = 1.0 if periods.index(period) == 1 else 0.7
             ax.bar(variables.index(var) + bar_loc_offset,
                    med,
                    yerr=([med-neg], [pos-med]),
                    error_kw=dict(lw=0.8, capsize=2, capthick=0.8),
                    width=bar_width,
                    color=colour,
-                   alpha=1.0 if periods.index(period) == 1 else 0.7)
+                   alpha=bar_alpha)
             if text_toggle:
-                str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med, pos, neg)
+                med_str = f"{med:.2f}" if med < 0 else ("\N{EN SPACE}" + f"{med:.2f}")
+                pos_str = f"{pos:.2f}" if pos < 0 else ("\N{EN SPACE}" + f"{pos:.2f}")
+                neg_str = f"{neg:.2f}" if neg < 0 else ("\N{EN SPACE}" + f"{neg:.2f}")
+                str_Result = r'${%s}^{{%s}}_{{%s}}$' % (med_str, pos_str, neg_str)
                 ax.text(
                     variables.index(var) + bar_loc_offset,
-                    -1.1,
+                    -1.4,
                     str_Result,
                     ha='center', va='bottom', color='black',
                     rotation=90,

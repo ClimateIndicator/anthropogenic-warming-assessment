@@ -513,7 +513,7 @@ if __name__ == '__main__':
 
     # Plot the headline SPM2-esque figure #####################################
     print('Creating SPM.2-esque figure')
-    text_toggle = False
+    text_toggle = True
     fig = plt.figure(figsize=(12, 10))
     ax0 = plt.subplot2grid(shape=(1, 5), loc=(0, 0), rowspan=1, colspan=1)
     ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
@@ -543,7 +543,7 @@ if __name__ == '__main__':
     ax0.set_ylabel('Attributable change in global mean surface temperature '
                    'since 1850\N{EN DASH}1900 (°C)')
     ax0.set_xlim(-0.7, 1.1)
-    ax1.set_ylim(-1.0 - text_toggle * 0.2, 2.0)
+    ax1.set_ylim(-1.0 - text_toggle * 0.5, 2.0)
     ax2.set_ylim(ax1.get_ylim())
     ax0.set_ylim(ax1.get_ylim())
     ax1.set_yticklabels([])
@@ -609,6 +609,110 @@ if __name__ == '__main__':
     # fig.suptitle('Assessed contributions to observed warming')  # SPM2 title
     fig.savefig(f'{plot_folder}/4_SPM2_Results.png')
     fig.savefig(f'{plot_folder}/4_SPM2_Results.pdf')
+
+    # Plot the headline SPM2-esque figure without IPCC comparisons ############
+    print('Creating SPM.2-esque figure without IPCC comparison bars')
+    text_toggle = False
+    fig = plt.figure(figsize=(12, 10))
+    ax0 = plt.subplot2grid(shape=(1, 5), loc=(0, 0), rowspan=1, colspan=1)
+    ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
+    ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
+    gr.Fig_SPM2_plot(
+        ax0, ['Obs'], ['2015\N{EN DASH}2024'],
+        dict_IPCC_hl, dict_updates_Obs_hl,
+        var_colours, var_names, labels, text_toggle)
+    gr.Fig_SPM2_plot(
+        ax1,
+        ['Ant', 'GHG', 'OHF', 'Nat'],
+        ['2015\N{EN DASH}2024'],
+        dict_IPCC_hl, dict_updates_hl,
+        var_colours, var_names, labels, text_toggle)
+    gr.Fig_SPM2_plot(
+        ax2,
+        ['Ant', 'GHG', 'OHF', 'Nat'],
+        ['2024 (SR15 definition)'],
+        dict_IPCC_hl, dict_updates_hl,
+        var_colours, var_names, labels, text_toggle)
+
+    # Set the grid to the back for the fig
+    ax0.set_axisbelow(True)
+    ax1.set_axisbelow(True)
+    ax2.set_axisbelow(True)
+
+    ax0.set_ylabel('Attributable change in global mean surface temperature '
+                   'since 1850\N{EN DASH}1900 (°C)')
+    ax0.set_xlim(-1, 1)
+    ax1.set_xlim(-0.5, 3.5)
+    ax2.set_xlim(ax1.get_xlim())
+    ax1.set_ylim(-1.0 - text_toggle * 0.2, 2.0)
+    ax2.set_ylim(ax1.get_ylim())
+    ax0.set_ylim(ax1.get_ylim())
+    ax1.set_yticklabels([])
+    ax2.set_yticklabels([])
+
+    fig.tight_layout(rect=(0.02, 0.04, 0.98, 0.88))
+
+    # Add text
+    fig.text(ax0.get_position().x0, ax0.get_position().y1+0.08,
+             'Observed Warming',
+             fontsize=matplotlib.rcParams['axes.titlesize'],
+             fontweight='bold'
+             )
+    fig.text(ax0.get_position().x0, ax0.get_position().y1+0.02,
+             '(a) Decade-average warming'
+             '\n      '
+             'given by observations',
+             ha='left',
+             fontsize=matplotlib.rcParams['font.size'],
+             fontweight='regular',
+             #  fontstyle='italic'
+             )
+    fig.text(ax1.get_position().x0, ax1.get_position().y1+0.08,
+             ('Contributions to observed warming '
+             'expressed in terms of two IPCC warming definitions'),
+             fontsize=matplotlib.rcParams['axes.titlesize'],
+             fontweight='bold'
+             )
+    fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
+             ('(b) AR6 Update: 2015\N{EN DASH}2024 decade-average warming'
+             '\n      '
+             'contributions assessed from attribution studies'),
+             fontsize=matplotlib.rcParams['font.size'],
+             fontweight='regular'
+             )
+    fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
+             ('(c) SR1.5 Update: 2014 present-day warming'
+              '\n      '
+              'contributions assessed from attribution studies'),
+             fontsize=matplotlib.rcParams['font.size'],
+             fontweight='regular'
+             )
+
+    # Add arrow from Other Human Forcing to Total Human-induced Warming
+    for ax in [ax1, ax2]:
+        # get bounds of ax1
+        x0 = ax.get_position().x0
+        y0 = ax.get_position().y0
+        wi = ax.get_position().width
+        xcoords = [[wi/8, wi/8], [3*wi/8, 3*wi/8],
+                   [5*wi/8, 5*wi/8], [wi/8, 5*wi/8]]
+        ycoords = [[y0-0.225, y0-0.26], [y0-0.225, y0-0.26],
+                   [y0-0.171, y0-0.26], [y0-0.26, y0-0.26]]
+        arrow = ['<-', ']-', ']-', '-']
+        for i in range(4):
+            plt.annotate('',
+                         arrowprops=dict(arrowstyle=arrow[i],
+                                         shrinkA=0, shrinkB=0,
+                                         color='gainsboro',
+                                         lw=1),
+                         xy=(xcoords[i][1]+x0, ycoords[i][1]),
+                         xycoords='figure fraction',
+                         xytext=(xcoords[i][0]+x0, ycoords[i][0]),
+                         textcoords='figure fraction'
+                         )
+
+    fig.savefig(f'{plot_folder}/4_SPM2_Results_Updates-Only.png')
+    fig.savefig(f'{plot_folder}/4_SPM2_Results_Updates-Only.pdf')
 
     # CREATE APPENDIX-LAYOUT ABLES FOR RESULTS ################################
     if not os.path.exists('./results/anciliary'):
