@@ -556,10 +556,10 @@ if __name__ == '__main__':
     fig.text(ax0.get_position().x0, ax0.get_position().y1+0.08,
              'Observed Warming',
              fontsize=matplotlib.rcParams['axes.titlesize'],
-             fontweight='bold'
+             fontweight='bold',
              )
     fig.text(ax0.get_position().x0, ax0.get_position().y1+0.02,
-             '(a) Decade-average warming\ngiven by observations',
+             '(a) Decade-average warming\n      given by observations',
              ha='left',
              fontsize=matplotlib.rcParams['font.size'],
              fontweight='regular',
@@ -573,13 +573,13 @@ if __name__ == '__main__':
              )
     fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
              ('(b) AR6 Update: Decade-average warming contributions'
-             '\nassessed from attribution studies'),
+             '\n      assessed from attribution studies'),
              fontsize=matplotlib.rcParams['font.size'],
              fontweight='regular'
              )
     fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
              ('(c) SR1.5 Update: Present-day warming contributions'
-             '\nassessed from attribution studies'),
+             '\n      assessed from attribution studies'),
              fontsize=matplotlib.rcParams['font.size'],
              fontweight='regular'
              )
@@ -968,16 +968,16 @@ if __name__ == '__main__':
     # Plot the GWI 'Ant' 50th percentile
     fig = plt.figure(figsize=(10, 6))
     ax1 = plt.subplot2grid((1, 1), (0, 0), colspan=1)
-    gr.definition_diagram(
+    gr.GWI_definition_diagram(
         ax1, end_yr,
-        df_headlines, df_temp_Obs, dict_updates_ts['Walsh'],
+        dict_updates_hl['Walsh'], df_temp_Obs, dict_updates_ts['Walsh'],
         var_colours)
     ax1.set_ylabel(
         'Global mean surface temperature,\n' +
         'relative to 1850\N{EN DASH}1900 baseline (°C)'
         )
 
-    ax1.set_ylim(0.75, 1.5)
+    ax1.set_ylim(0.75, 1.6)
     ticks = list(np.arange(start_yr, end_yr, 5))
     ticks.append(end_yr)
     ax1.set_xticks(ticks, ticks)
@@ -998,8 +998,8 @@ if __name__ == '__main__':
     #     fontsize=matplotlib.rcParams['figure.titlesize'],
     #     )
 
-    fig.savefig(f'{plot_folder}/1_definition_diagram.png')
-    fig.savefig(f'{plot_folder}/1_definition_diagram.pdf')
+    fig.savefig(f'{plot_folder}/1_definition_diagram_GWI.png')
+    fig.savefig(f'{plot_folder}/1_definition_diagram_GWI.pdf')
 
     ###########################################################################
     # Plot the comparison figures #############################################
