@@ -4,10 +4,12 @@ The [Indicators of Global Climate Change (IGCC) project](https://www.igcc.earth/
 
 ## IGCC Releases and Citations
 ### Summary Table
+<!-- TODO: Replace preprint links with permanent links (for both ESSD and Zenodo). -->
 | Indicator Year | Code Release | Paper Reference | Paper DOI | Dataset Reference | Dataset DOI |
 | --- | --- | --- | --- | --- | --- |
 | **2022** | [`IGCC-2022`](https://github.com/ClimateIndicator/anthropogenic-warming-assessment/tree/IGCC-2022) | [Forster et al. (2023) - Section 7](https://doi.org/10.5194/essd-15-2295-2023) | [![DOI](https://zenodo.org/badge/DOI/10.5194/essd-15-2295-2023.svg)](https://doi.org/10.5194/essd-15-2295-2023) | [Smith et al. (2023)]() | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8430424.svg)](https://doi.org/10.5281/zenodo.8430424) |
-| **2023** |  [`IGCC-2023`](https://github.com/ClimateIndicator/anthropogenic-warming-assessment/tree/IGCC-2023) | [Forster et al. (2024) - Section 7]() | [![DOI](https://zenodo.org/badge/DOI/10.5194/essd-16-2625-2024.svg)](https://doi.org/10.5194/essd-16-2625-2024) | [Smith et al. (2024)](https://doi.org/10.5281/zenodo.11388387) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.11388387.svg)](https://doi.org/10.5281/zenodo.11388387) |
+| **2023** |  [`IGCC-2023`](https://github.com/ClimateIndicator/anthropogenic-warming-assessment/tree/IGCC-2023) | [Forster et al. (2024) - Section 7](https://essd.copernicus.org/articles/16/2625/2024/) | [![DOI](https://zenodo.org/badge/DOI/10.5194/essd-16-2625-2024.svg)](https://doi.org/10.5194/essd-16-2625-2024) | [Smith et al. (2024)](https://doi.org/10.5281/zenodo.11388387) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.11388387.svg)](https://doi.org/10.5281/zenodo.11388387) |
+| **2024 (Preprint)** | [`IGCC-2024`](https://github.com/ClimateIndicator/anthropogenic-warming-assessment/tree/IGCC-2024) | [Forster et al. (2025) - Section 8](https://doi.org/10.5194/essd-2025-250) | [![DOI](https://zenodo.org/badge/DOI/10.5194/essd-2025-250.svg)](https://doi.org/10.5194/essd-2025-250) | [Smith et al. (2025)](https://doi.org/10.5281/zenodo.7883757) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7883757.svg)](https://doi.org/10.5281/zenodo.7883757) |
 
 Note:
 - The **GitHub Code Release** links to the specific release version of the code and results in this repository used to generate results and figures. The generating code here does not have a **DOI**.
@@ -39,7 +41,7 @@ The code and results for a specific iteration of the IGCC can be accessed in a n
 
 ## Methods
 ### Multi-method Assessment
-The multi-method assessment of anthropogenic warming is based on the results from three individual attribution methods. The assessment approach is detailed in [section 7]((https://essd.copernicus.org/articles/15/2295/2023/#section7)) of the IGCC 2022 report (Forster et al. (2023)).
+The multi-method assessment of anthropogenic warming is based on the results from three individual attribution methods. The assessment approach is detailed in [section 7]((https://essd.copernicus.org/articles/15/2295/2023/#section7)) of the IGCC 2022 report (Forster et al. (2023)), and again in each subsequent iteration.
 
 #### Running the code
 The code for the multi-method assessment is contained in the script `multi_method_assessment.py`. It takes as input the results from all three individual attribution methods, and produces the overall multi-method assessment.
@@ -81,6 +83,7 @@ The results from all three individual attribution methods, and the overall multi
     - `Assessment-6thIPCC_headlines.csv`: assessment results directly quoted from the IPCC's sixth assessment cycle (including both AR6 and SR1.5).
     - `Assessment-Update-<indicator-year>_GMST_headlines.csv`: the results from the multi-method assessment for the level of warming in the `<indicator-year>` update of the IGCC.
     - `Assessment-Update-<indicator-year>_GMST_rates.csv`: the results for the rates of warming in the `<indicator-year>` update of the IGCC.
+    - `Assessment-Extrapolation-<indicator-year+1>_GMST_headlines.csv`: a preliminary estimate for the next year of anthropogenic warming based on a linear extrapolation of each attribution method.
 - [Indivudual attribution methods](#individual-attribution-methods)
     - `<Surname>_GMST_headlines.csv`: the results from the individual attribution methods that feed into the multi-method assessment.
     - `<Surname>_GMST_timeseries.csv`: the single-year timeseries from the individual attribution methods. 
@@ -89,7 +92,8 @@ The results from all three individual attribution methods, and the overall multi
 
 The results from this `anthropogenic_warming_assessment` GitHub repository are formally available with metadata in the [`ClimateIndicator/data` GitHub repository](https://github.com/ClimateIndicator/data/), and with a citable DOI in the [Zenodo repository](https://zenodo.org/doi/10.5281/zenodo.7883757) - note the specific versioning for each release differs from this feeder repository.
 
-
+<!-- 
+TODO: Replace images with the 2025 versions when published.
 ### Headline Results for Level of Warming
 ![IGCC-2023 Published Headline Results Figure](https://essd.copernicus.org/articles/16/2625/2024/essd-16-2625-2024-f07-web.png)
 ![IGCC-2023 Published Headline Results Table](https://essd.copernicus.org/articles/16/2625/2024/essd-16-2625-2024-t06-web.png)
@@ -98,5 +102,5 @@ The results from this `anthropogenic_warming_assessment` GitHub repository are f
 ### Headline Results for Rate of Warming
 ![IGCC-2023 Published Rate Results Figure](https://essd.copernicus.org/articles/16/2625/2024/essd-16-2625-2024-f08-web.png)
 ![IGCC-2023 Published Rate Results Table](https://essd.copernicus.org/articles/16/2625/2024/essd-16-2625-2024-t07-web.png)
-*IGCC-2023 headline results; these and several other figures are produced by the code in this repo and published in [Forster et al. (2024)](https://essd.copernicus.org/articles/16/2625/2024/#section7)*
+*IGCC-2023 headline results; these and several other figures are produced by the code in this repo and published in [Forster et al. (2024)](https://essd.copernicus.org/articles/16/2625/2024/#section7)* -->
 
