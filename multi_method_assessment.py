@@ -720,6 +720,9 @@ if __name__ == '__main__':
         os.makedirs('./results/anciliary')
     # 1. Table for all methods
     print('Creating tables for appendix')
+    # Check if the table file already exists and remove it
+    if os.path.exists('./results/anciliary/Table_GMST_all_methods.csv'):
+        os.remove('./results/anciliary/Table_GMST_all_methods.csv')
     with open('./results/anciliary/Table_GMST_all_methods.csv', 'w+') as f:
         times = ['2010\N{EN DASH}2019', '2015\N{EN DASH}2024',
                  '2017', '2024',
