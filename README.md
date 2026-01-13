@@ -4,12 +4,13 @@ The [Indicators of Global Climate Change (IGCC) project](https://www.igcc.earth/
 
 ## IGCC Releases and Citations
 ### Summary Table
-<!-- TODO: Replace preprint links with permanent links (for both ESSD and Zenodo). -->
+
 | Indicator Year | Code Release | Paper Reference | Paper DOI | Dataset Reference | Dataset DOI |
 | --- | --- | --- | --- | --- | --- |
 | **2022** | [`IGCC-2022`](https://github.com/ClimateIndicator/anthropogenic-warming-assessment/tree/IGCC-2022) | [Forster et al. (2023) - Section 7](https://doi.org/10.5194/essd-15-2295-2023) | [![DOI](https://zenodo.org/badge/DOI/10.5194/essd-15-2295-2023.svg)](https://doi.org/10.5194/essd-15-2295-2023) | [Smith et al. (2023)]() | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8430424.svg)](https://doi.org/10.5281/zenodo.8430424) |
 | **2023** |  [`IGCC-2023`](https://github.com/ClimateIndicator/anthropogenic-warming-assessment/tree/IGCC-2023) | [Forster et al. (2024) - Section 7](https://essd.copernicus.org/articles/16/2625/2024/) | [![DOI](https://zenodo.org/badge/DOI/10.5194/essd-16-2625-2024.svg)](https://doi.org/10.5194/essd-16-2625-2024) | [Smith et al. (2024)](https://doi.org/10.5281/zenodo.11388387) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.11388387.svg)](https://doi.org/10.5281/zenodo.11388387) |
-| **2024 (Preprint)** | [`IGCC-2024`](https://github.com/ClimateIndicator/anthropogenic-warming-assessment/tree/IGCC-2024) | [Forster et al. (2025) - Section 8](https://doi.org/10.5194/essd-2025-250) | [![DOI](https://zenodo.org/badge/DOI/10.5194/essd-2025-250.svg)](https://doi.org/10.5194/essd-2025-250) | [Smith et al. (2025)](https://doi.org/10.5281/zenodo.7883757) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7883757.svg)](https://doi.org/10.5281/zenodo.7883757) |
+| **2024** | [`IGCC-2024`](https://github.com/ClimateIndicator/anthropogenic-warming-assessment/tree/IGCC-2024) | [Forster et al. (2025) - Section 8](https://essd.copernicus.org/articles/17/2641/2025/) | [![DOI](https://zenodo.org/badge/DOI/10.5194/essd-17-2641-2025.svg)](https://doi.org/10.5194/essd-17-2641-2025) | [Smith et al. (2025)](https://doi.org/10.5281/zenodo.7883757) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15639576.svg)](https://doi.org/10.5281/zenodo.15639576) |
+
 
 Note:
 - The **GitHub Code Release** links to the specific release version of the code and results in this repository used to generate results and figures. The generating code here does not have a **DOI**.
