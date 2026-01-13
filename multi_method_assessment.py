@@ -1144,8 +1144,16 @@ if __name__ == '__main__':
     ###########################################################################
     # Calculate linear extrapolation for next year ############################
     ###########################################################################
-    extrap_times = [f'{end_yr}', f'{end_yr-9}\N{EN DASH}{end_yr}']
-    extrap_times_new = [f'{end_yr+1}', f'{end_yr+1-9}\N{EN DASH}{end_yr+1}']
+    extrap_times = [
+        f'{end_yr}',
+        f'{end_yr} (SR15 definition)',
+        f'{end_yr-9}\N{EN DASH}{end_yr}'
+        ]
+    extrap_times_new = [
+        f'{end_yr+1}',
+        f'{end_yr+1} (SR15 definition)',
+        f'{end_yr+1-9}\N{EN DASH}{end_yr+1}'
+        ]
     extrap_var = 'Ant'
     extrap_sigmas = ['5', '50', '95']
     dict_extrap = {}
