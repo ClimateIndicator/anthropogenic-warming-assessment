@@ -7,6 +7,8 @@ import xarray as xr
 import glob
 from pathlib import Path
 import pymagicc
+import time
+from urllib.error import HTTPError, URLError
 
 
 ###############################################################################
@@ -73,10 +75,21 @@ def load_ERF_CMIP6(indicator_year):
 def load_HadCRUT(start_pi, end_pi, start_yr, end_yr):
     """Load HadCRUT5 observations and remove PI baseline."""
     here = Path(__file__).parent
-    temp_ens_Path = (
-        '../data/Temp/HadCRUT/' +
-        'HadCRUT.5.0.2.0.analysis.ensemble_series.global.annual.csv')
-    temp_ens_Path = here / temp_ens_Path
+    temp_dir = here / f'../data/Temp/HadCRUT/'
+    matches = sorted(
+        temp_dir.glob('HadCRUT.*.analysis.ensemble_series.global.annual.csv')
+    )
+    if not matches:
+        raise FileNotFoundError(
+            f'No HadCRUT file found in {temp_dir} matching pattern '
+            "'HadCRUT.*.analysis.ensemble_series.global.annual.csv'."
+        )
+    if len(matches) > 1:
+        raise ValueError(
+            f'Multiple HadCRUT files found in {temp_dir}; expected one match: '
+            f'{[m.name for m in matches]}'
+        )
+    temp_ens_Path = matches[0]
     # read temp_Path into pandas dataframe, rename column 'Time' to 'Year'
     # and set the index to 'Year', keeping only columns with 'Realization' in
     # the column name, since these are the ensembles
@@ -106,16 +119,18 @@ def load_HadCRUT(start_pi, end_pi, start_yr, end_yr):
     return df_temp_Obs
 
 
-def load_Temp_IGCC(start_pi, end_pi):
+def load_Temp_IGCC(start_pi, end_pi, end_yr):
     """Load IGCC observations and remove PI baseline."""
     here = Path(__file__).parent
     temp_Path = (
         '../data/Temp/IGCC/' +
-        'IGCC_data_series_2024.csv'
+        f'IGCC_data_series_{end_yr}.csv'
     )
     temp_Path = here / temp_Path
-    # read temp_Path into pandas dataframe
-    df_temp_Obs = pd.read_csv(temp_Path).set_index('Year')
+    # Read CSV and normalize headers to handle incidental whitespace.
+    df_temp_Obs = pd.read_csv(temp_Path)
+    df_temp_Obs.columns = df_temp_Obs.columns.str.strip()
+    df_temp_Obs = df_temp_Obs.set_index('Year')
     # Select the column named 'GMST'
     df_temp_Obs = df_temp_Obs[['GMST']]
     # Calculate the mean of the years 1850-1900:
@@ -342,8 +357,9 @@ def rate_HadCRUT5(start_pi, end_pi, start_yr, end_yr, sigmas_all):
     df_rates = pd.concat(dfs_rates, axis=0)
     return df_rates
 
+
 def rate_IGCC(start_pi, end_pi, start_yr, end_yr):
-    df_temp_Obs = load_Temp_IGCC(start_pi, end_pi)
+    df_temp_Obs = load_Temp_IGCC(start_pi, end_pi, end_yr)
     temp_Yrs = df_temp_Obs.index.values
     arr_temp_Obs = df_temp_Obs.values
     # Apply the function defs.rate_calc to each column of this dataframe
@@ -362,6 +378,7 @@ def rate_IGCC(start_pi, end_pi, start_yr, end_yr):
         dfs_rates.append(df_rates_i)
         df_rates = pd.concat(dfs_rates, axis=0)
     return df_rates
+
 
 def rate_ERF(end_yr, sigmas_all):
     rate_vars = ['Nat', 'GHG', 'OHF', 'Ant', 'Tot']
@@ -447,3 +464,36 @@ def un_en_dash_ify(df):
         index={r: r.replace('\N{EN DASH}', '-') for r in rows_to_rename},
         inplace=True)
     return df
+
+
+def read_csv_with_retries(
+    file_location, retries=5, base_wait_seconds=1, **kwargs
+):
+    """Read a CSV with retry/backoff for transient remote fetch failures."""
+    for attempt in range(retries):
+        try:
+            return pd.read_csv(file_location, **kwargs)
+        except HTTPError as err:
+            is_last_attempt = attempt == retries - 1
+            if err.code != 429 or is_last_attempt:
+                raise
+            wait_seconds = base_wait_seconds * (2 ** attempt)
+            print(
+                f'HTTP 429 while fetching {file_location}; '
+                f'retrying in {wait_seconds}s...'
+            )
+            time.sleep(wait_seconds)
+        except URLError:
+            if attempt == retries - 1:
+                raise
+            wait_seconds = base_wait_seconds * (2 ** attempt)
+            print(
+                f'Network error while fetching {file_location}; '
+                f'retrying in {wait_seconds}s...'
+            )
+            time.sleep(wait_seconds)
+
+    # Defensive fallback; the loop should have returned or raised.
+    raise RuntimeError(
+        f'Unable to fetch CSV after {retries} attempts: {file_location}'
+    )

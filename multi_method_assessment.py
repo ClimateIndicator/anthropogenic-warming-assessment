@@ -28,7 +28,7 @@ if __name__ == '__main__':
     ###########################################################################
 
     start_pi, end_pi = 1850, 1900
-    start_yr, end_yr = 1850, 2024
+    start_yr, end_yr = 1850, 2025
 
     # Temperature dataset
     df_temp_Obs = defs.load_HadCRUT(start_pi, end_pi, start_yr, end_yr)
@@ -56,7 +56,7 @@ if __name__ == '__main__':
             index_col=0,  header=[0, 1], skiprows=skiprows)
         if method == 'Walsh':
             n = file_ts.split('.csv')[0].split('_')[-1]
-        df_method_hl - defs.en_dash_ify(df_method_hl)
+        df_method_hl = defs.en_dash_ify(df_method_hl)
 
         dict_updates_hl[method] = df_method_hl
         dict_updates_ts[method] = df_method_ts
@@ -68,6 +68,17 @@ if __name__ == '__main__':
         dict_updates_ts['Gillett'].loc[:, ('Nat', '50')]
         )
 
+    # Select only the following variables for each method:
+    # This is required in case some methods have extra variables, such as
+    # full component-wise warming
+    assess_vars = ['Tot', 'Ant', 'GHG', 'Nat', 'OHF']
+    for method in dict_updates_ts.keys():
+        _df = dict_updates_ts[method]
+        _df = _df.loc[:, (assess_vars, slice(None))]
+    for method in dict_updates_hl.keys():
+        _df = dict_updates_hl[method]
+        _df = _df.loc[:, (assess_vars, slice(None))]
+
     # MULTI-METHOD ASSESSMENT - AR6 STYLE - TIMESERIES ########################
     # Conclusion: no uncertainty plumes available at time of writing for ROF
     # (Gillett) method, so a multi-method timeseries is not created here.
@@ -78,11 +89,11 @@ if __name__ == '__main__':
     # Create a list of the variables in df_Walsh_hl
     list_of_dfs = []
     periods_to_assess = ['2010\N{EN DASH}2019',
-                         '2015\N{EN DASH}2024',
+                         '2016\N{EN DASH}2025',
                          '2017',
-                         '2024',
+                         '2025',
                          '2017 (SR15 definition)',
-                         '2024 (SR15 definition)']
+                         '2025 (SR15 definition)']
     for period in periods_to_assess:
         dict_updates_Assessment = {}
 
@@ -137,32 +148,33 @@ if __name__ == '__main__':
     unendashed_assessment = defs.un_en_dash_ify(
         dict_updates_hl['Assessment'].copy())
     unendashed_assessment.to_csv(
-            'results/Assessment-Update-2024_GMST_headlines.csv')
+            'results/Assessment-Update-2025_GMST_headlines.csv')
 
     # OBSERVATIONS ############################################################
     # Add updated observation results from the annual updates paper section 4
     df_update_Obs_repeat = pd.DataFrame({
         # (VARIABLE, PERCENTILE): VALUE
-        # 2010-2019 (2023 analysis): 1.07 [0.89-1.22] From Blair, paper Sect. 7
+        # 2010-2019 (2025 analysis): 1.055 [0.89-1.22] From Blair, paper Sect. 7
+        # 2010-2019 (2024 analysis): 1.07 [0.89-1.22] From Blair, paper Sect. 7
         # 2010-2019 (2023 analysis): 1.07 [0.89-1.22] From Blair, paper Sect. 6
         # 2010-2019 (2022 analysis): 1.07 [0.89-1.22] From Blair, paper Sect. 4
-        # TODO: Update this to be from the 2024 data from Blair.
-        ('Obs', '50'): 1.07,
-        ('Obs',  '5'): 0.89,
-        ('Obs', '95'): 1.22
+        ('Obs', '50'): 1.055,
+        ('Obs',  '5'): 0.89,  # TODO Blair checking whether this needs updating
+        ('Obs', '95'): 1.22   # TODO Blair checking whether this needs updating
     }, index=['2010\N{EN DASH}2019'])
     df_update_Obs_repeat.columns.names = ['variable', 'percentile']
     df_update_Obs_repeat.index.name = 'Year'
 
     df_update_Obs_update = pd.DataFrame({
         # (VARIABLE, PERCENTILE): VALUE
-        # 2015-2024 (2024 analysis): 1.24 [1.11–1.35] From Blair, paper Sect. 7
+        # 2016-2025 (2025 analysis): 1.26 [1.13-1.36] From Blair, paper Sect. 7
+        # 2015-2024 (2024 analysis): 1.24 [1.11-1.35] From Blair, paper Sect. 7
         # 2014-2023 (2023 analysis): 1.19 [1.06-1.30] From Blair, paper Sect. 6
         # 2013-2022 (2022 analysis): 1.14 [1.00-1.25] From Blair, paper Sect. 4
-        ('Obs', '50'): 1.24,
-        ('Obs',  '5'): 1.11,
-        ('Obs', '95'): 1.35,
-    }, index=['2015\N{EN DASH}2024'])
+        ('Obs', '50'): 1.26,
+        ('Obs',  '5'): 1.13,
+        ('Obs', '95'): 1.36,
+    }, index=['2016\N{EN DASH}2025'])
 
     df_update_Obs_update.columns.names = ['variable', 'percentile']
     df_update_Obs_update.index.name = 'Year'
@@ -520,19 +532,19 @@ if __name__ == '__main__':
     ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
     ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
     gr.Fig_SPM2_plot(
-        ax0, ['Obs'], ['2010\N{EN DASH}2019', '2015\N{EN DASH}2024'],
+        ax0, ['Obs'], ['2010\N{EN DASH}2019', '2016\N{EN DASH}2025'],
         dict_IPCC_hl, dict_updates_Obs_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
         ax1,
         ['Ant', 'GHG', 'OHF', 'Nat'],
-        ['2010\N{EN DASH}2019', '2015\N{EN DASH}2024'],
+        ['2010\N{EN DASH}2019', '2016\N{EN DASH}2025'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
         ax2,
         ['Ant', 'GHG', 'OHF', 'Nat'],
-        ['2017 (SR15 definition)', '2024 (SR15 definition)'],
+        ['2017 (SR15 definition)', '2025 (SR15 definition)'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
 
@@ -619,19 +631,19 @@ if __name__ == '__main__':
     ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
     ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
     gr.Fig_SPM2_plot(
-        ax0, ['Obs'], ['2015\N{EN DASH}2024'],
+        ax0, ['Obs'], ['2016\N{EN DASH}2025'],
         dict_IPCC_hl, dict_updates_Obs_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
         ax1,
         ['Ant', 'GHG', 'OHF', 'Nat'],
-        ['2015\N{EN DASH}2024'],
+        ['2016\N{EN DASH}2025'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
         ax2,
         ['Ant', 'GHG', 'OHF', 'Nat'],
-        ['2024 (SR15 definition)'],
+        ['2025 (SR15 definition)'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
 
@@ -675,7 +687,7 @@ if __name__ == '__main__':
              fontweight='bold'
              )
     fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
-             ('(b) AR6 Update: 2015\N{EN DASH}2024 decade-average warming'
+             ('(b) AR6 Update: 2016\N{EN DASH}2025 decade-average warming'
               '\n      '
               'contributions assessed from attribution studies'),
              fontsize=matplotlib.rcParams['font.size'],
@@ -724,9 +736,9 @@ if __name__ == '__main__':
     if os.path.exists('./results/anciliary/Table_GMST_all_methods.csv'):
         os.remove('./results/anciliary/Table_GMST_all_methods.csv')
     with open('./results/anciliary/Table_GMST_all_methods.csv', 'w+') as f:
-        times = ['2010\N{EN DASH}2019', '2015\N{EN DASH}2024',
-                 '2017', '2024',
-                 '2017 (SR15 definition)', '2024 (SR15 definition)']
+        times = ['2010\N{EN DASH}2019', '2016\N{EN DASH}2025',
+                 '2017', '2025',
+                 '2017 (SR15 definition)', '2025 (SR15 definition)']
         f.write('variable, method, ' + ', '.join(times) + '\n')
         for v in ['Ant', 'GHG', 'OHF', 'Nat']:
             for m in ['Walsh', 'Ribes', 'Gillett', 'Assessment']:
@@ -759,8 +771,8 @@ if __name__ == '__main__':
     Gillet_GSAT = defs.en_dash_ify(Gillet_GSAT)
 
     with open('./results/anciliary/Table_GSAT_ROF_method.csv', 'w+') as f:
-        times = ['2010\N{EN DASH}2019', '2015\N{EN DASH}2024',
-                 '2017 (SR15 definition)', '2024 (SR15 definition)']
+        times = ['2010\N{EN DASH}2019', '2016\N{EN DASH}2025',
+                 '2017 (SR15 definition)', '2025 (SR15 definition)']
         f.write('variable, ' + ', '.join(times) + '\n')
         for v in ['Ant', 'GHG', 'OHF', 'Nat']:
             line = [v]
@@ -852,7 +864,7 @@ if __name__ == '__main__':
             index_col=0,  header=[0, 1], skiprows=0)
     else:
         print('Calculating IGCC rate dataset.')
-        df_Obs_IGCC = defs.load_Temp_IGCC(start_pi, end_pi)
+        df_Obs_IGCC = defs.load_Temp_IGCC(start_pi, end_pi, end_yr)
         df_Obs_IGCC_rate = defs.rate_IGCC(start_pi, end_pi, start_yr, end_yr)
         df_Obs_IGCC_rate.to_csv('./results/anciliary/Rates_Obs_IGCC.csv')
 
@@ -963,7 +975,7 @@ if __name__ == '__main__':
     ###########################################################################
     # Load the assessment results
     df_headlines = pd.read_csv(
-        "results/Assessment-Update-2024_GMST_headlines.csv",
+        "results/Assessment-Update-2025_GMST_headlines.csv",
         index_col=0,  header=[0, 1], skiprows=0
     )
     df_headlines = defs.en_dash_ify(df_headlines)
@@ -1027,7 +1039,11 @@ if __name__ == '__main__':
                 directory = f'https://raw.githubusercontent.com/ClimateIndicator/anthropogenic-warming-assessment/IGCC-{year}/results/'
                 file_ts = f'{method}_GMST_timeseries.csv'
                 file_location = f'{directory}{file_ts}'
-                df_ = pd.read_csv(file_location, index_col=0,  header=[0, 1])
+                df_ = defs.read_csv_with_retries(
+                    file_location,
+                    index_col=0,
+                    header=[0, 1],
+                )
                 if method == 'Gillett':
                     # No Tot warming provided for ROF, so include an indicative
                     # approximation as the sum of Ant and Nat warming
@@ -1080,8 +1096,8 @@ if __name__ == '__main__':
         'Average': 'Multi-method Average'
     }
     year_colours = {
-        '2024': 'xkcd:teal',
-        '2023': 'xkcd:tomato',
+        '2025': 'xkcd:teal',
+        '2024': 'xkcd:tomato',
     }
     for year in compare_years:
         # TIMESERIES
@@ -1122,22 +1138,23 @@ if __name__ == '__main__':
             a = dict_analysis_ts[method][compare_years[-1]].loc[int(compare_years[-1]), ('Ant', '50')]
         print(a)
 
-        print(f'  {compare_years[0]} analysis gives results for year {compare_years[-1]}:', end=' ')
+        print(f'  {compare_years[-2]} analysis gives results for year {compare_years[-1]}:', end=' ')
         if method == 'Average':
-            b = dict_analysis_ts[method][compare_years[0]][int(compare_years[-1])]
+            b = dict_analysis_ts[method][compare_years[-2]][int(compare_years[-1])]
         else:
-            b = dict_analysis_ts[method][compare_years[0]].loc[int(compare_years[-1]), ('Ant', '50')]
+            b = dict_analysis_ts[method][compare_years[-2]].loc[int(compare_years[-1]), ('Ant', '50')]
         print(b)
 
         print(f'  {compare_years[0]} analysis gives results for year {compare_years[0]}:', end=' ')
         if method == 'Average':
-            c = dict_analysis_ts[method][compare_years[0]][int(compare_years[0])]
+            c = dict_analysis_ts[method][compare_years[-2]][int(compare_years[-2])]
         else:
-            c = dict_analysis_ts[method][compare_years[0]].loc[int(compare_years[0]), ('Ant', '50')]
+            c = dict_analysis_ts[method][compare_years[-2]].loc[int(compare_years[-2]), ('Ant', '50')]
         print(c)
 
         print(f'  Therefore the {compare_years[-1]} revision is: {b-a}')
-        print(f'  Therefore the {compare_years[0]} increase is: {c-b}')
+        print(f'  Therefore the {compare_years[-2]} forced increase is: {c-b}')
+        print(f'  Therefore the overall year-on-year change is: {c-a}')
 
     print('\n')
 
