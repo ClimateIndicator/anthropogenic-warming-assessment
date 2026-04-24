@@ -87,10 +87,13 @@ if __name__ == '__main__':
     assess_vars = ['Tot', 'Ant', 'GHG', 'Nat', 'OHF']
     for method in dict_updates_ts.keys():
         _df = dict_updates_ts[method]
-        _df = _df.loc[:, (assess_vars, slice(None))]
+        # Use get_level_values(0).isin(...) to avoid Pandas MultiIndex FutureWarning
+        # when a specific variable from assess_vars might be missing in the dataframe.
+        # Also assign the filtered dataframe back to the dictionary.
+        dict_updates_ts[method] = _df.loc[:, _df.columns.get_level_values(0).isin(assess_vars)]
     for method in dict_updates_hl.keys():
         _df = dict_updates_hl[method]
-        _df = _df.loc[:, (assess_vars, slice(None))]
+        dict_updates_hl[method] = _df.loc[:, _df.columns.get_level_values(0).isin(assess_vars)]
 
     # MULTI-METHOD ASSESSMENT - AR6 STYLE - TIMESERIES ########################
     # Conclusion: no uncertainty plumes available at time of writing for ROF

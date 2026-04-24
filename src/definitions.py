@@ -9,7 +9,18 @@ from pathlib import Path
 import pymagicc
 import time
 from urllib.error import HTTPError, URLError
+import ssl
 
+# Pandas read_csv uses urllib to fetch data from remote URLs (like GitHub).
+# In some Conda/Micromamba environments, the CA certificates are missing or
+# not properly linked to Python's SSL module, causing SSLCertVerificationError.
+# Overriding the default HTTPS context prevents these fetch errors.
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
 
 SUB_VAR_MAPPING = {
     'GHG': ['co2', 'ch4', 'n2o', 'halogen'],
