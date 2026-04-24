@@ -6,6 +6,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import scipy.stats as ss
 import seaborn as sns
+from src import definitions as defs
 # from src.definitions import moving_average
 import sys
 
@@ -68,13 +69,22 @@ def overall_legend(fig, loc, ncol, nrow=False, reorder=None):
             labels.extend(ls)
 
     by_label = dict(zip(labels, handles))
-    if reorder is None:
-        order = np.arange(len(by_label))
-    else:
-        order = reorder
+    key_list = list(by_label.keys())
+    val_list = list(by_label.values())
+    n_items = len(by_label)
 
-    fig.legend([list(by_label.values())[i] for i in order],
-               [list(by_label.keys())[i] for i in order],
+    if reorder is None:
+        order = list(np.arange(n_items))
+    else:
+        # Allow callers to pass stale hard-coded indices without crashing.
+        order = [i for i in reorder if isinstance(i, (int, np.integer))
+                 and 0 <= i < n_items]
+        # De-duplicate while preserving order, then append any missing items.
+        order = list(dict.fromkeys(order))
+        order.extend([i for i in range(n_items) if i not in order])
+
+    fig.legend([val_list[i] for i in order],
+               [key_list[i] for i in order],
                loc=loc, ncol=ncol)
 
     ## rect = (left, bottom, right, top)
@@ -83,6 +93,107 @@ def overall_legend(fig, loc, ncol, nrow=False, reorder=None):
     # elif loc == 'lower center':
     #     # fig.tight_layout(rect=(0.02, 0.12, 0.98, 0.94))
     #     fig.tight_layout(rect=(0.0, 0.12, 1.0, 0.94))
+
+
+def get_variable_linestyle(var):
+    """Get a deterministic linestyle based on hierarchy position."""
+    if var in defs.SUB_VAR_MAPPING:
+        return 'solid'
+
+    linestyles = [
+        '--',
+        ':',
+        '-.',
+        (0, (1, 1)),
+        (0, (5, 1)),
+        (0, (3, 1, 1, 1)),
+        (0, (3, 5, 1, 5)),
+        (0, (5, 5)),
+        (0, (1, 5)),
+        (0, (3, 1, 1, 1, 1, 1))
+    ]
+
+    for _, children in defs.SUB_VAR_MAPPING.items():
+        if var in children:
+            idx = children.index(var)
+            return linestyles[idx % len(linestyles)]
+
+    return 'solid'
+
+
+def get_dynamic_linestyles(plot_vars):
+    """Get per-variable linestyles for the plotting variable list."""
+    return {var: get_variable_linestyle(var) for var in plot_vars}
+
+
+def get_subvariable_indented_labels(var_names, indent_prefix='-> '):
+    """Return legend labels with an indent marker for leaf sub-variables."""
+    labels = var_names.copy()
+    aggregate_vars = set(defs.SUB_VAR_MAPPING.keys())
+
+    for parent in ['GHG', 'OHF', 'Nat']:
+        for sub_var in defs.SUB_VAR_MAPPING.get(parent, []):
+            if sub_var in aggregate_vars:
+                continue
+            base_label = labels.get(sub_var, sub_var)
+            labels[sub_var] = f'{indent_prefix}{base_label}'
+
+    return labels
+
+
+def get_full_variable_legend_order(plot_vars):
+    """Return preferred legend order for full-variable plots."""
+    order = []
+
+    for parent in ['GHG', 'OHF', 'Nat']:
+        order.append(parent)
+        order.extend(defs.SUB_VAR_MAPPING.get(parent, []))
+
+    order.extend(['Ant', 'Tot', 'Res', 'Obs', 'PiC'])
+
+    present = set(plot_vars)
+    ordered_present = [var for var in order if var in present]
+    ordered_present.extend(
+        [var for var in plot_vars if var not in ordered_present]
+    )
+    return ordered_present
+
+
+def get_legend_reorder_indices(fig, label_to_var=None, ordered_vars=None):
+    """Return legend index order based on variable hierarchy."""
+    all_labels = []
+    for ax in fig.axes:
+        _, labels = ax.get_legend_handles_labels()
+        all_labels.extend(labels)
+
+    unique_labels = []
+    seen = set()
+    for label in all_labels:
+        if label not in seen:
+            unique_labels.append(label)
+            seen.add(label)
+
+    if label_to_var is None:
+        label_to_var = {label: label for label in unique_labels}
+
+    if ordered_vars is None:
+        ordered_vars = get_full_variable_legend_order(
+            [label_to_var.get(label, label) for label in unique_labels]
+        )
+
+    desired_indices = []
+    for var in ordered_vars:
+        for idx, label in enumerate(unique_labels):
+            if idx in desired_indices:
+                continue
+            if label_to_var.get(label, label) == var:
+                desired_indices.append(idx)
+                break
+
+    desired_indices.extend(
+        [idx for idx in range(len(unique_labels)) if idx not in desired_indices]
+    )
+    return desired_indices
 
 
 def running_mean_internal_variability(
@@ -187,28 +298,53 @@ def plot_internal_variability_sample(
 
 
 def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
-                   plot_vars, plot_cols, sigmas='all', labels=True):
+                   plot_vars, plot_cols, sigmas='all', labels=True,
+                   hatch=None, linestyle='solid', plume_vars=None,
+                   ylabel=None):
     """Plot the GWI timeseries for the given variables."""
-    ax.set_ylabel(
-        'Attributable change in surface temperature since 1850\N{EN DASH}1900 (°C)'
-        )
+    if df_Results_ts is not None:
+        all_vars = df_Results_ts.columns.get_level_values('variable').unique()
+    else:
+        all_vars = []
+
+    if plume_vars is None:
+        plume_vars = plot_vars
+
+    if ylabel is None:
+        ylabel = ('Attributable change in surface temperature since '
+                  '1850\N{EN DASH}1900 (°C)')
+    ax.set_ylabel(ylabel)
+
     fill_alpha = 0.25
     line_alpha = 0.7
-    if sigmas == 'all':
+    if (sigmas == 'all') and (df_Results_ts is not None):
         sigmas = df_Results_ts.columns.get_level_values('percentile').unique()
+
+    def format_label(var):
+        if isinstance(labels, dict):
+            return labels.get(var, var)
+        if labels:
+            return var
+        return None
+
     # Shade the pre-industrial period
     ax.fill_between([1850, 1900], [-5, -5], [+5, +5],
                     color='#f4f2f1')
 
     # Plot the observations
-    err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
-               df_temp_Obs.quantile(q=0.5, axis=1))
-    err_neg = (df_temp_Obs.quantile(q=0.5, axis=1) -
-               df_temp_Obs.quantile(q=0.05, axis=1))
-    ax.errorbar(df_temp_Obs.index, df_temp_Obs.quantile(q=0.5, axis=1),
-                yerr=(err_neg, err_pos),
-                fmt='o', color=plot_cols['Obs'], ms=2.5, lw=1,
-                label=labels*'Reference Temp: HadCRUT5')
+    if df_temp_Obs is not None:
+        err_pos = (df_temp_Obs.quantile(q=0.95, axis=1) -
+                   df_temp_Obs.quantile(q=0.5, axis=1))
+        err_neg = (df_temp_Obs.quantile(q=0.5, axis=1) -
+                   df_temp_Obs.quantile(q=0.05, axis=1))
+        obs_label = ('Reference Temp: HadCRUT5'
+                     if not isinstance(labels, dict)
+                     else labels.get('Obs', 'Reference Temp: HadCRUT5'))
+        ax.errorbar(df_temp_Obs.index, df_temp_Obs.quantile(q=0.5, axis=1),
+                    yerr=(err_neg, err_pos),
+                    fmt='o', color=plot_cols['Obs'], ms=2.5, lw=1,
+                    label=obs_label if labels else None)
+
     if df_temp_PiC is not None:
         if len(sigmas) > 1:
             for s in range(len(sigmas)//2):
@@ -218,32 +354,53 @@ def gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, df_Results_ts,
                         df_temp_PiC.quantile(q=float(sigmas[s])/100, axis=1),
                         df_temp_PiC.quantile(q=float(sigmas[-(s+2)])/100, axis=1),
                         color=plot_cols['PiC'], alpha=fill_alpha, linewidth=0.0)
+        pic_label = ('CMIP6 piControl' if not isinstance(labels, dict)
+                     else labels.get('PiC', 'CMIP6 piControl'))
         ax.plot(df_temp_PiC.index, df_temp_PiC.quantile(q=0.5, axis=1),
                 color=plot_cols['PiC'], alpha=line_alpha,
-                label=labels*'CMIP6 piControl')
+                label=pic_label if labels else None)
 
-    for s in range(max(len(sigmas)//2, 1)):  # max to enable 50% only
-        # Plot the GWI timeseries
-        for var in plot_vars:
+    if df_Results_ts is not None:
+        vars_to_plot = [var for var in plot_vars if var in all_vars]
 
-            # Because ROF (Gillett) method has different percentile results
-            # available for different variables (ie Tot only has 50th), check
-            # for each variable first whether to plot plume.
-            var_sigmas = df_Results_ts.iloc[\
-                :, df_Results_ts.columns.get_level_values('variable') == var
-                ].columns.get_level_values('percentile').unique()
-            if len(var_sigmas) > 1:
-                ax.fill_between(
-                    df_Results_ts.index,
-                    df_Results_ts.loc[:, (var, sigmas[s])].values,
-                    df_Results_ts.loc[:, (var, sigmas[-(s+2)])].values,
-                    color=plot_cols[var], alpha=fill_alpha, linewidth=0.0)
-            ax.plot(df_Results_ts.index,
-                    df_Results_ts.loc[:, (var, sigmas[-1])].values,
-                    color=plot_cols[var], alpha=line_alpha, label=labels*var)
+        for s in range(max(len(sigmas)//2, 1)):  # max to enable 50% only
+            # Plot the GWI timeseries
+            for var in vars_to_plot:
+                if isinstance(linestyle, dict):
+                    ls = linestyle.get(var, 'solid')
+                else:
+                    ls = linestyle
 
-    ax.set_xticks([1850, 1900, 1950, 2000, df_temp_Obs.index[-1]],
-                  [1850, 1900, 1950, 2000, df_temp_Obs.index[-1]])
+                # Because ROF (Gillett) method has different percentile results
+                # available for different variables (ie Tot only has 50th), check
+                # for each variable first whether to plot plume.
+                var_sigmas = df_Results_ts.iloc[\
+                    :, df_Results_ts.columns.get_level_values('variable') == var
+                    ].columns.get_level_values('percentile').unique()
+                if (len(var_sigmas) > 1) and (var in plume_vars):
+                    ax.fill_between(
+                        df_Results_ts.index,
+                        df_Results_ts.loc[:, (var, sigmas[s])].values,
+                        df_Results_ts.loc[:, (var, sigmas[-(s+2)])].values,
+                        color=plot_cols[var], alpha=fill_alpha, linewidth=0.0,
+                        hatch=hatch, linestyle=ls)
+                ax.plot(df_Results_ts.index,
+                        df_Results_ts.loc[:, (var, sigmas[-1])].values,
+                        color=plot_cols[var], alpha=line_alpha,
+                        linestyle=ls,
+                        label=format_label(var))
+
+    if df_Results_ts is not None:
+        end_tick = df_Results_ts.index[-1]
+    elif df_temp_Obs is not None:
+        end_tick = df_temp_Obs.index[-1]
+    elif df_temp_PiC is not None:
+        end_tick = df_temp_PiC.index[-1]
+    else:
+        end_tick = 2000
+
+    ax.set_xticks([1850, 1900, 1950, 2000, end_tick],
+                  [1850, 1900, 1950, 2000, end_tick])
 
 
 def gwi_residuals(ax, df_Results_ts):
@@ -650,9 +807,10 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
                   f'\n{end_yr} observation:\n{value}')
     ax1.annotate(
         annotation,
-        xy=(df_temp_Obs.index[-1], middle[end_yr]),
+        xy=(df_temp_Obs.index[-1] + 0.09,
+            middle[end_yr] - 0.006),
         xytext=(df_temp_Obs.index[-1] + text_offset,
-                middle[end_yr]),
+                middle[end_yr] - 0.05),
         color=var_colours['Obs'],
         fontweight='regular',
         arrowprops=dict(
@@ -660,7 +818,7 @@ def definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
             arrowstyle='->',
             # Add a straight horizontal line between the xy and xytext using
             # connectionstyle=f"angle,angleA=0,angleB=0,rad={rad}"
-            connectionstyle="arc3,rad=0.0"
+            connectionstyle=f"angle,angleA=0,angleB=-45,rad={rad}"
             ),
         verticalalignment='center'
         )
@@ -824,9 +982,10 @@ def GWI_definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
                   f'\n{end_yr} observation:\n{value}')
     ax1.annotate(
         annotation,
-        xy=(df_temp_Obs.index[-1], middle[end_yr]),
+        xy=(df_temp_Obs.index[-1] + 0.09,
+            middle[end_yr] + 0.006),
         xytext=(df_temp_Obs.index[-1] + text_offset,
-                middle[end_yr]),
+                middle[end_yr] + 0.1),
         color=var_colours['Obs'],
         fontweight='regular',
         arrowprops=dict(
@@ -834,7 +993,7 @@ def GWI_definition_diagram(ax1, end_yr, df_headlines, df_temp_Obs, df_temp_Att,
             arrowstyle='->',
             # Add a straight horizontal line between the xy and xytext using
             # connectionstyle=f"angle,angleA=0,angleB=0,rad={rad}"
-            connectionstyle="arc3,rad=0.0"
+            connectionstyle=f"angle,angleA=0,angleB=45,rad={rad}"
             ),
         verticalalignment='center'
         )

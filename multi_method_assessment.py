@@ -1,5 +1,5 @@
 import os
-import sys
+import argparse
 
 import numpy as np
 import pandas as pd
@@ -23,6 +23,19 @@ from src import definitions as defs
 # 2. IPCC Quoted reults (never update; they are quotes from IPCC AR6 and SR1.5)
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--refresh-ancillary-data',
+        dest='refresh_ancillary_data',
+        action='store_true',
+        help=(
+            'Recompute and overwrite all files in results/ancillary that this '
+            'script manages.'
+        )
+    )
+    args = parser.parse_args()
+    refresh_ancillary_data = args.refresh_ancillary_data
+
     ###########################################################################
     # LOAD DATA ###############################################################
     ###########################################################################
@@ -365,14 +378,27 @@ if __name__ == '__main__':
         'Res': '#9893a5',
         'Obs': '#797593',
         'PiC': '#cecacd'}
-    var_names = {
-        'Obs': 'Observed Warming',
-        'Ant': 'Total Human-induced Warming',
-        'GHG': 'Well-mixed Greenhouse Gases',
-        'OHF': 'Other Human Forcings',
-        'Nat': 'Natural Forcings',
-        'Tot': 'Total Attributable Warming'
-        }
+    var_names = defs.VAR_NAMES.copy()
+
+    # Colour-code sub-variables using the corresponding aggregate category.
+    flatten_sub_vars = {
+        sub: parent
+        for parent, children in defs.SUB_VAR_MAPPING.items()
+        for sub in children
+    }
+    for sub_var, parent_var in flatten_sub_vars.items():
+        # Preserve original aggregate colours; only assign inherited colours
+        # to variables that do not already have an explicit palette entry.
+        if (sub_var not in var_colours) and (parent_var in var_colours):
+            var_colours[sub_var] = var_colours[parent_var]
+
+    def get_plot_colour(var):
+        if var in var_colours:
+            return var_colours[var]
+        mapped = defs.map_var_to_regression_aggregate(
+            [var], regress_vars=['GHG', 'OHF', 'Nat']
+        ).get(var, var)
+        return var_colours.get(mapped, var_colours['Res'])
 
     source_markers = {
         'Haustein': 'o',  # Walsh and Haustein are both GWI so get same symbol.
@@ -394,22 +420,92 @@ if __name__ == '__main__':
         os.makedirs(plot_folder)
 
     # PLOT TIMESERIES FOR EACH METHOD #########################################
+    main_plot_vars = ['Ant', 'GHG', 'Nat', 'OHF']
     for method in dict_updates_ts.keys():
         print(f'Creating {method} Simple Plot...')
-        plot_vars = ['Ant', 'GHG', 'Nat', 'OHF']
-        fig = plt.figure(figsize=(12, 8))
-        ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
-        gr.gwi_timeseries(
-            ax, df_temp_Obs, df_temp_PiC, dict_updates_ts[method], plot_vars,
-            var_colours, sigmas=['5', '95', '50'])
-        ax.set_ylim(-1, 2)
-        ax.set_xlim(start_yr, end_yr)
-        ax.text(1875, -0.85, '1850\N{EN DASH}1900\nPreindustrial Baseline',
-                ha='center')
-        gr.overall_legend(fig, 'lower center', 6)
-        fig.suptitle(f'{method} Timeseries Plot')
-        fig.savefig(f'{plot_folder}/2_{method}_timeseries.png')
-        fig.savefig(f'{plot_folder}/2_{method}_timeseries.pdf')
+        df_method_ts = dict_updates_ts[method]
+        all_data_vars = (
+            df_method_ts.columns.get_level_values(0).unique().to_list()
+        )
+        all_plot_vars = [v for v in all_data_vars if v != 'Obs']
+        plume_vars = [v for v in ['Tot', 'Ant', 'GHG', 'OHF', 'Nat', 'Res']
+                      if v in all_data_vars]
+
+        plot_configs = [
+            {
+                'name': 'main',
+                'vars': [v for v in main_plot_vars if v in all_data_vars],
+                'suffix': '',
+                'legend_loc': 'lower center',
+                'legend_ncol': 6,
+                'linestyle': 'solid',
+            },
+            {
+                'name': 'all-vars',
+                'vars': all_plot_vars,
+                'suffix': '_all-vars',
+                'legend_loc': 'center right',
+                'legend_ncol': 1,
+                'linestyle': gr.get_dynamic_linestyles(all_plot_vars),
+            },
+        ]
+
+        for cfg in plot_configs:
+            fig = plt.figure(figsize=(12, 8))
+            ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1,
+                                  colspan=1)
+
+            if cfg['name'] == 'all-vars':
+                label_map = gr.get_subvariable_indented_labels(var_names)
+                label_map.update({
+                    'Obs': 'Reference temperatures: HadCRUT5'
+                })
+                legend_order_vars = gr.get_full_variable_legend_order(
+                    cfg['vars'] + ['Obs']
+                )
+            else:
+                label_map = var_names
+                legend_order_vars = None
+
+            gr.gwi_timeseries(
+                ax, df_temp_Obs, None, df_method_ts,
+                cfg['vars'],
+                {var: get_plot_colour(var) for var in cfg['vars'] + ['Obs']},
+                sigmas=['5', '95', '50'],
+                labels=label_map,
+                linestyle=cfg['linestyle'],
+                plume_vars=plume_vars,
+            )
+
+            ax.set_ylim(-1, 2)
+            ax.set_xlim(start_yr, end_yr)
+            ax.text(1875, -0.85, '1850\N{EN DASH}1900\nPreindustrial Baseline',
+                    ha='center')
+
+            if cfg['name'] == 'all-vars':
+                label_to_var = {v: k for k, v in label_map.items()}
+                gr.overall_legend(
+                    fig, cfg['legend_loc'], cfg['legend_ncol'],
+                    reorder=gr.get_legend_reorder_indices(
+                        fig,
+                        label_to_var=label_to_var,
+                        ordered_vars=legend_order_vars
+                    )
+                )
+                fig.tight_layout(rect=(0.02, 0.02, 0.74, 0.96))
+                fig.suptitle(f'{method} Timeseries Plot (All Variables)')
+            else:
+                gr.overall_legend(fig, cfg['legend_loc'], cfg['legend_ncol'])
+                fig.suptitle(f'{method} Timeseries Plot')
+
+            fig.savefig(
+                f'{plot_folder}/2_{method}_timeseries{cfg["suffix"]}.png'
+            )
+            fig.savefig(
+                f'{plot_folder}/2_{method}_timeseries{cfg["suffix"]}.pdf'
+            )
+
+    plot_vars = main_plot_vars
 
     # PLOT THE MULTI-METHOD TIMESERIES IN SINGLE FIGURE #######################
     print('Creating Multi-Method Stacked Plot...')
@@ -417,7 +513,7 @@ if __name__ == '__main__':
     ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0), rowspan=1, colspan=1)
 
     # Plot simplified (5-95% only) plumes for GWI method.
-    gr.gwi_timeseries(ax, df_temp_Obs, df_temp_PiC, dict_updates_ts['Walsh'],
+    gr.gwi_timeseries(ax, df_temp_Obs, None, dict_updates_ts['Walsh'],
                       ['Ant', 'GHG', 'Nat', 'OHF'],
                       var_colours, sigmas=['5', '95', '50'],
                       labels=True)
@@ -442,7 +538,7 @@ if __name__ == '__main__':
                  'in the assessment of contributions to observed warming')
     fig.tight_layout(rect=(0.02, 0.08, 0.98, 0.98))
     gr.overall_legend(fig, 'lower center', 3,
-                      reorder=[8, 0, 1, 2, 3, 4, 5, 6, 7])
+                      reorder=[0, 1, 2, 3, 4, 5, 6, 7])
     fig.savefig(f'{plot_folder}/2_stacked-multi_method_timeseries.png')
     fig.savefig(f'{plot_folder}/2_stacked-multi_method_timeseries.pdf')
 
@@ -694,7 +790,7 @@ if __name__ == '__main__':
              fontweight='regular'
              )
     fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
-             ('(c) SR1.5 Update: 2014 present-day warming'
+             ('(c) SR1.5 Update: 2025 present-day warming'
               '\n      '
               'contributions assessed from attribution studies'),
              fontsize=matplotlib.rcParams['font.size'],
@@ -728,39 +824,46 @@ if __name__ == '__main__':
     fig.savefig(f'{plot_folder}/4_SPM2_Results_Updates-Only.pdf')
 
     # CREATE APPENDIX-LAYOUT ABLES FOR RESULTS ################################
-    if not os.path.exists('./results/anciliary'):
-        os.makedirs('./results/anciliary')
+    if not os.path.exists('./results/ancillary'):
+        os.makedirs('./results/ancillary')
     # 1. Table for all methods
     print('Creating tables for appendix')
     # Check if the table file already exists and remove it
-    if os.path.exists('./results/anciliary/Table_GMST_all_methods.csv'):
-        os.remove('./results/anciliary/Table_GMST_all_methods.csv')
-    with open('./results/anciliary/Table_GMST_all_methods.csv', 'w+') as f:
-        times = ['2010\N{EN DASH}2019', '2016\N{EN DASH}2025',
-                 '2017', '2025',
-                 '2017 (SR15 definition)', '2025 (SR15 definition)']
-        f.write('variable, method, ' + ', '.join(times) + '\n')
-        for v in ['Ant', 'GHG', 'OHF', 'Nat']:
-            for m in ['Walsh', 'Ribes', 'Gillett', 'Assessment']:
-                line = [v, m]
-                if m == 'Assessment':
-                    data = ["{:0.2f} ({:0.1f} to {:0.1f})".format(
-                        dict_updates_hl[m].loc[t, (v, '50')],
-                        dict_updates_hl[m].loc[t, (v, '5')],
-                        dict_updates_hl[m].loc[t, (v, '95')]
-                        )
-                            for t in times]
-                else:
-                    data = ["{:0.2f} ({:0.2f} to {:0.2f})".format(
-                        dict_updates_hl[m].loc[t, (v, '50')],
-                        dict_updates_hl[m].loc[t, (v, '5')],
-                        dict_updates_hl[m].loc[t, (v, '95')]
-                        )
-                            for t in times]
+    table_gmst_path = './results/ancillary/Table_GMST_all_methods.csv'
+    write_table_gmst = (
+        refresh_ancillary_data or (not os.path.exists(table_gmst_path))
+    )
+    if write_table_gmst:
+        if refresh_ancillary_data and os.path.exists(table_gmst_path):
+            os.remove(table_gmst_path)
+        with open(table_gmst_path, 'w+') as f:
+            times = ['2010\N{EN DASH}2019', '2016\N{EN DASH}2025',
+                     '2017', '2025',
+                     '2017 (SR15 definition)', '2025 (SR15 definition)']
+            f.write('variable, method, ' + ', '.join(times) + '\n')
+            for v in ['Ant', 'GHG', 'OHF', 'Nat']:
+                for m in ['Walsh', 'Ribes', 'Gillett', 'Assessment']:
+                    line = [v, m]
+                    if m == 'Assessment':
+                        data = ["{:0.2f} ({:0.1f} to {:0.1f})".format(
+                            dict_updates_hl[m].loc[t, (v, '50')],
+                            dict_updates_hl[m].loc[t, (v, '5')],
+                            dict_updates_hl[m].loc[t, (v, '95')]
+                            )
+                                for t in times]
+                    else:
+                        data = ["{:0.2f} ({:0.2f} to {:0.2f})".format(
+                            dict_updates_hl[m].loc[t, (v, '50')],
+                            dict_updates_hl[m].loc[t, (v, '5')],
+                            dict_updates_hl[m].loc[t, (v, '95')]
+                            )
+                                for t in times]
 
-                line.extend(data)
-                line = ', '.join([str(x) for x in line]) + '\n'
-                f.write(line)
+                    line.extend(data)
+                    line = ', '.join([str(x) for x in line]) + '\n'
+                    f.write(line)
+    else:
+        print('Reusing existing ancillary table:', table_gmst_path)
 
     # 2. Table for ROF GSAT only
     # Load the Gillet dataset called results/Gillett_GSAT_headlines.csv to
@@ -770,57 +873,114 @@ if __name__ == '__main__':
             index_col=0,  header=[0, 1], skiprows=skiprows)
     Gillet_GSAT = defs.en_dash_ify(Gillet_GSAT)
 
-    with open('./results/anciliary/Table_GSAT_ROF_method.csv', 'w+') as f:
-        times = ['2010\N{EN DASH}2019', '2016\N{EN DASH}2025',
-                 '2017 (SR15 definition)', '2025 (SR15 definition)']
-        f.write('variable, ' + ', '.join(times) + '\n')
-        for v in ['Ant', 'GHG', 'OHF', 'Nat']:
-            line = [v]
-            data = ["{:0.2f} ({:0.2f} to {:0.2f})".format(
-                Gillet_GSAT.loc[t, (v, '50')],
-                Gillet_GSAT.loc[t, (v, '5')],
-                Gillet_GSAT.loc[t, (v, '95')]
-                )
-                    for t in times]
+    table_gsat_path = './results/ancillary/Table_GSAT_ROF_method.csv'
+    write_table_gsat = (
+        refresh_ancillary_data or (not os.path.exists(table_gsat_path))
+    )
+    if write_table_gsat:
+        if refresh_ancillary_data and os.path.exists(table_gsat_path):
+            os.remove(table_gsat_path)
+        with open(table_gsat_path, 'w+') as f:
+            times = ['2010\N{EN DASH}2019', '2016\N{EN DASH}2025',
+                     '2017 (SR15 definition)', '2025 (SR15 definition)']
+            f.write('variable, ' + ', '.join(times) + '\n')
+            for v in ['Ant', 'GHG', 'OHF', 'Nat']:
+                line = [v]
+                data = ["{:0.2f} ({:0.2f} to {:0.2f})".format(
+                    Gillet_GSAT.loc[t, (v, '50')],
+                    Gillet_GSAT.loc[t, (v, '5')],
+                    Gillet_GSAT.loc[t, (v, '95')]
+                    )
+                        for t in times]
 
-            line.extend(data)
-            line = ', '.join([str(x) for x in line]) + '\n'
-            f.write(line)
+                line.extend(data)
+                line = ', '.join([str(x) for x in line]) + '\n'
+                f.write(line)
+    else:
+        print('Reusing existing ancillary table:', table_gsat_path)
 
     ###########################################################################
     # PLOT THE RATES ##########################################################
     ###########################################################################
     print('Creating rate plots...')
-    fig = plt.figure(figsize=(14, 7))
-    ax1 = plt.subplot2grid((1, 2), (0, 0), colspan=1)
-    ax2 = plt.subplot2grid((1, 2), (0, 1), colspan=1)
-
     sigmas = [[17, 83], [5, 95]]
     sigmas_all = list(
         np.concatenate((np.sort(np.ravel(sigmas)), [50]), axis=0)
         )
-    rate_vars = ['Ant', 'GHG', 'OHF', 'Nat']
+    main_rate_vars = ['Ant', 'GHG', 'OHF', 'Nat']
+    # Toggle uncertainty shading in the all-variable rate plots.
+    show_all_vars_rate_plumes = False
+
+    def plot_rate_panel(
+        ax,
+        df_rates,
+        plot_vars,
+        linestyle_map,
+        plume_vars,
+        plume_sigma_pairs=None,
+        label_map=None
+    ):
+        times_local = [int(y.split(' ')[0].split('-')[1]) for y in df_rates.index]
+
+        if plume_sigma_pairs is None:
+            plume_sigma_pairs = [
+                (str(sigmas_all[s]), str(sigmas_all[-(s+2)]))
+                for s in range(len(sigmas_all)//2)
+            ]
+
+        reg_map = defs.map_var_to_regression_aggregate(
+            plot_vars, regress_vars=['GHG', 'OHF', 'Nat']
+        )
+        for var in plot_vars:
+            if (var, '50') not in df_rates.columns:
+                continue
+
+            colour_var = var_colours.get(var)
+            if colour_var is None:
+                colour_var = var_colours.get(reg_map.get(var, var), '#444444')
+
+            ax.plot(
+                times_local,
+                df_rates[(var, '50')] * 10,
+                label=(label_map or var_names).get(var, var),
+                color=colour_var,
+                linestyle=linestyle_map.get(var, 'solid')
+            )
+
+            if var in plume_vars:
+                for low, high in plume_sigma_pairs:
+                    if ((var, low) in df_rates.columns
+                            and (var, high) in df_rates.columns):
+                        ax.fill_between(
+                            times_local,
+                            df_rates[(var, low)] * 10,
+                            df_rates[(var, high)] * 10,
+                            alpha=0.2,
+                            color=colour_var,
+                            linewidth=0.0
+                        )
+
+        return times_local
+
+    def full_erf_schema_valid(df_erf_rates):
+        all_vars = set(df_erf_rates.columns.get_level_values(0).unique())
+        required_aggregates = {'GHG', 'OHF', 'Nat', 'Ant', 'Tot'}
+        expected_subs = {
+            sub_var
+            for parent, children in defs.SUB_VAR_MAPPING.items()
+            if parent in {'GHG', 'OHF', 'Nat'}
+            for sub_var in children
+        }
+        return (required_aggregates.issubset(all_vars)
+                and not all_vars.isdisjoint(expected_subs))
 
     # Plot attributed warming rates ###########################################
     # Import the rates csv file (files are a list to facilitate comparing
     # multiple samplings by plotting them atop each other).
-    files = ['./results/Walsh_GMST_rates.csv']
-
-    for file in files:
-        df_rates_GWI = pd.read_csv(
-            file, index_col=0,  header=[0, 1], skiprows=0)
-        times = [int(y.split(' ')[0].split('-')[1])
-                 for y in df_rates_GWI.index]
-        for var in rate_vars:
-            ax1.plot(times, df_rates_GWI[(var, '50')]*10,
-                     label=var_names[var], color=var_colours[var])
-            for s in range(len(sigmas_all)//2):
-                ax1.fill_between(
-                    times,
-                    df_rates_GWI[(var, str(sigmas_all[s]))]*10,
-                    df_rates_GWI[(var, str(sigmas_all[-(s+2)]))]*10,
-                    alpha=0.2, color=var_colours[var], linewidth=0.0
-                    )
+    df_rates_walsh = pd.read_csv(
+        './results/Walsh_GMST_rates.csv',
+        index_col=0, header=[0, 1], skiprows=0
+    )
     # # plot the olf GWI trend values from Chris' plot
     # This code is copied from https://github.com/ClimateIndicator/forcing-timeseries/blob/main/notebooks/decadal-trends.ipynb
     # Read in the CSV file with the temperature data
@@ -840,90 +1000,231 @@ if __name__ == '__main__':
     #          marker='+', color='red', linestyle='None')
 
     # Plot HadCRUT5 rates #####################################################
-    # Check whether './results/anciliary/HadCRUT_rates_Obs.csv' exists:
+    # Check whether './results/ancillary/HadCRUT_rates_Obs.csv' exists:
     # If it does, read it in. If it doesn't, calculate the rates and save them.
-    if os.path.exists('./results/anciliary/Rates_Obs_HadCRUT5.csv'):
+    hadcrut_rate_cache = './results/ancillary/Rates_Obs_HadCRUT5.csv'
+    if (not refresh_ancillary_data) and os.path.exists(hadcrut_rate_cache):
         # print('Reading existing HadCRUT rate dataset.')
         df_rates_GWI = pd.read_csv(
-            './results/anciliary/Rates_Obs_HadCRUT5.csv',
+            hadcrut_rate_cache,
             index_col=0,  header=[0, 1], skiprows=0)
     else:
         print('Calculating HadCRUT rate dataset.')
         df_rates_GWI = defs.rate_HadCRUT5(
             start_pi, end_pi, start_yr, end_yr, sigmas_all)
-        df_rates_GWI.to_csv('./results/anciliary/Rates_Obs_HadCRUT5.csv')
+        df_rates_GWI.to_csv(hadcrut_rate_cache)
 
     # Calculate the rates for IGCC temperature dataset ########################
     # Import IGCC temperature data
-    # Check whether './results/anciliary/IGCC_rates_Obs.csv' exists:
+    # Check whether './results/ancillary/IGCC_rates_Obs.csv' exists:
     # If it does, read it in. If it doesn't, calculate the rates and save them.
-    if os.path.exists('./results/anciliary/Rates_Obs_IGCC.csv'):
+    igcc_rate_cache = './results/ancillary/Rates_Obs_IGCC.csv'
+    if (not refresh_ancillary_data) and os.path.exists(igcc_rate_cache):
         # print('Reading existing IGCC rate dataset.')
         df_Obs_IGCC = pd.read_csv(
-            './results/anciliary/Rates_Obs_IGCC.csv',
+            igcc_rate_cache,
             index_col=0,  header=[0, 1], skiprows=0)
     else:
         print('Calculating IGCC rate dataset.')
         df_Obs_IGCC = defs.load_Temp_IGCC(start_pi, end_pi, end_yr)
         df_Obs_IGCC_rate = defs.rate_IGCC(start_pi, end_pi, start_yr, end_yr)
-        df_Obs_IGCC_rate.to_csv('./results/anciliary/Rates_Obs_IGCC.csv')
+        df_Obs_IGCC_rate.to_csv(igcc_rate_cache)
 
     # ax1.plot(times,  df_Obs_IGCC_rate[('Obs', '50')]*10,
     #          color='black',
     #          label='Reference Observations: IGCC',
     #          lw=2)
 
-    # Plot the observed rates
-    err_pos = df_rates_GWI[('Obs', '95')]*10 - df_rates_GWI[('Obs', '50')]*10
-    err_neg = df_rates_GWI[('Obs', '50')]*10 - df_rates_GWI[('Obs', '5')]*10
-    ax1.errorbar(times,  df_rates_GWI[('Obs', '50')]*10,
-                 yerr=(err_neg, err_pos),
-                 fmt='o', color=var_colours['Obs'], ms=2.5, lw=1,
-                 label='Reference Observations: HadCRUT5')
-
-    # Add a line along the y=0 line
-    ax1.axhline(0, color='black', lw=0.5)
-    ax1.set_xlim([1950, end_yr+1])
-    ax1.set_title('(a) Attributed Global Warming',
-                  loc='left',
-                  fontweight='regular',
-                  fontsize=matplotlib.rcParams['font.size'],
-                  y=1.02
-                  )
-    ax1.set_ylabel('Decadal trend (°C decade$^{-1}$)')
-    ax1.set_xlabel('End year of trend decade')
-    ax1.set_ylim(-0.3, 0.5)
     rate_ticks = list(np.arange(1950, end_yr+1, 20))
     rate_ticks.append(end_yr)
-    ax1.set_xticks(rate_ticks)
 
     # Plot ERF Rates ##########################################################
-    # Check whether './results/anciliary/ERF_rates_results.csv' exists:
-    # If it does, read it in
-    # If it doesn't, calculate the rates and save them
-    if os.path.exists('./results/anciliary/Rates_results_ERF.csv'):
-        # print('Reading existing ERF rate dataset.')
-        df_forc_rates = pd.read_csv(
-            './results/anciliary/Rates_results_ERF.csv',
-            index_col=0,  header=[0, 1], skiprows=0)
+    erf_cache_main = './results/ancillary/Rates_results_ERF.csv'
+    erf_cache_full = './results/ancillary/Rates_results_ERF_full-vars.csv'
+
+    if (not refresh_ancillary_data) and os.path.exists(erf_cache_main):
+        df_forc_rates_main = pd.read_csv(
+            erf_cache_main, index_col=0, header=[0, 1], skiprows=0)
     else:
-        print('Calculating ERF rate dataset.')
-        # Load the ERF dataset
-        df_forc_rates = defs.rate_ERF(end_yr, sigmas_all)
-        df_forc_rates.to_csv('./results/anciliary/Rates_results_ERF.csv')
+        print('Calculating ERF aggregate rate dataset.')
+        df_forc_rates_main = defs.rate_ERF(
+            end_yr, sigmas_all, variable_mode='aggregate'
+        )
+        df_forc_rates_main.to_csv(erf_cache_main)
 
-    times = [int(y.split(' ')[0].split('-')[1])
-             for y in df_forc_rates.index]
+    regenerate_full_erf = refresh_ancillary_data
+    if (not regenerate_full_erf) and os.path.exists(erf_cache_full):
+        df_forc_rates_full = pd.read_csv(
+            erf_cache_full, index_col=0, header=[0, 1], skiprows=0)
+        regenerate_full_erf = not full_erf_schema_valid(df_forc_rates_full)
+    elif (not regenerate_full_erf) and (not os.path.exists(erf_cache_full)):
+        regenerate_full_erf = True
 
-    for var in rate_vars:
-        ax2.plot(times, df_forc_rates[(var, '50')]*10,
-                 label=var_names[var], color=var_colours[var])
-        for s in range(len(sigmas_all)//2):
-            ax2.fill_between(
-                times,
-                df_forc_rates[(var, str(sigmas_all[s]))]*10,
-                df_forc_rates[(var, str(sigmas_all[-(s+2)]))]*10,
-                alpha=0.2, color=var_colours[var], linewidth=0.0)
+    if regenerate_full_erf:
+        print('Calculating ERF full-variable rate dataset.')
+        df_forc_rates_full = defs.rate_ERF(
+            end_yr, sigmas_all, variable_mode='all'
+        )
+        df_forc_rates_full.to_csv(erf_cache_full)
+
+    rate_plot_configs = [
+        {
+            'name': 'main',
+            'suffix': '',
+            'gwi_vars': [
+                var for var in main_rate_vars
+                if (var, '50') in df_rates_walsh.columns
+            ],
+            'erf_rates_df': df_forc_rates_main,
+            'erf_vars': [
+                var for var in main_rate_vars
+                if (var, '50') in df_forc_rates_main.columns
+            ],
+            'legend_loc': 'lower center',
+            'legend_ncol': 5,
+        },
+        {
+            'name': 'all-vars',
+            'suffix': '_all-vars',
+            'gwi_vars': [
+                var for var in df_rates_walsh.columns.get_level_values(0).unique()
+                if var != 'Obs'
+            ],
+            'erf_rates_df': df_forc_rates_full,
+            'erf_vars': [
+                var for var in df_forc_rates_full.columns.get_level_values(0).unique()
+                if var != 'Obs'
+            ],
+            'legend_loc': 'center right',
+            'legend_ncol': 1,
+        },
+    ]
+
+    for cfg in rate_plot_configs:
+        fig = plt.figure(figsize=(14, 7))
+        ax1 = plt.subplot2grid((1, 2), (0, 0), colspan=1)
+        ax2 = plt.subplot2grid((1, 2), (0, 1), colspan=1)
+
+        if cfg['name'] == 'all-vars':
+            rate_label_map = gr.get_subvariable_indented_labels(var_names)
+            rate_label_map.update({
+                'Obs': 'Reference temperatures: HadCRUT5'
+            })
+            legend_order_vars = gr.get_full_variable_legend_order(
+                cfg['gwi_vars'] + cfg['erf_vars'] + ['Obs']
+            )
+        else:
+            rate_label_map = var_names
+            legend_order_vars = None
+
+        main_plume_vars = ['Tot', 'Ant', 'GHG', 'OHF', 'Nat']
+        if cfg['name'] == 'all-vars':
+            if show_all_vars_rate_plumes:
+                plume_sigma_pairs = [('5', '95')]
+                gwi_plume_vars = [
+                    v for v in main_plume_vars if v in cfg['gwi_vars']
+                ]
+                erf_plume_vars = [
+                    v for v in main_plume_vars if v in cfg['erf_vars']
+                ]
+            else:
+                plume_sigma_pairs = None
+                gwi_plume_vars = []
+                erf_plume_vars = []
+        else:
+            plume_sigma_pairs = None
+            gwi_plume_vars = [
+                v for v in ['Tot', 'Ant', 'GHG', 'OHF', 'Nat', 'Res']
+                if v in cfg['gwi_vars']
+            ]
+            erf_plume_vars = [v for v in main_plume_vars if v in cfg['erf_vars']]
+        gwi_linestyle = gr.get_dynamic_linestyles(cfg['gwi_vars'])
+        erf_linestyle = gr.get_dynamic_linestyles(cfg['erf_vars'])
+
+        times_gwi = plot_rate_panel(
+            ax1,
+            df_rates_walsh,
+            cfg['gwi_vars'],
+            gwi_linestyle,
+            gwi_plume_vars,
+            plume_sigma_pairs,
+            rate_label_map
+        )
+
+        # Plot the observed rates
+        err_pos = df_rates_GWI[('Obs', '95')] * 10 - df_rates_GWI[('Obs', '50')] * 10
+        err_neg = df_rates_GWI[('Obs', '50')] * 10 - df_rates_GWI[('Obs', '5')] * 10
+        obs_label = rate_label_map.get('Obs', 'Reference Observations: HadCRUT5')
+        ax1.errorbar(
+            times_gwi, df_rates_GWI[('Obs', '50')] * 10,
+            yerr=(err_neg, err_pos),
+            fmt='o', color=var_colours['Obs'], ms=2.5, lw=1,
+            label=obs_label
+        )
+
+        # Add a line along the y=0 line
+        ax1.axhline(0, color='black', lw=0.5)
+        ax1.set_xlim([1950, end_yr+1])
+        ax1.set_title('(a) Attributed Global Warming',
+                      loc='left',
+                      fontweight='regular',
+                      fontsize=matplotlib.rcParams['font.size'],
+                      y=1.02
+                      )
+        ax1.set_ylabel('Decadal trend (°C decade$^{-1}$)')
+        ax1.set_xlabel('End year of trend decade')
+        ax1.set_ylim(-0.3, 0.5)
+        ax1.set_xticks(rate_ticks)
+
+        plot_rate_panel(
+            ax2,
+            cfg['erf_rates_df'],
+            cfg['erf_vars'],
+            erf_linestyle,
+            erf_plume_vars,
+            plume_sigma_pairs,
+            rate_label_map
+        )
+
+        ax2.axhline(0, color='black', lw=0.5)
+        ax2.set_xlim([1950, end_yr+1])
+        ax2.set_ylim([-1.5, 2.5])
+        ax2.set_title('(b) Effective Radiative Forcing',
+                      loc='left',
+                      fontweight='regular',
+                      fontsize=matplotlib.rcParams['font.size'],
+                      y=1.02
+                      )
+
+        ax2.set_ylabel('Decadal trend (Wm$^{-2}$decade$^{-1}$)')
+        ax2.set_xlabel('End year of trend decade')
+        ax2.set_xticks(rate_ticks)
+
+        if cfg['name'] == 'all-vars':
+            label_to_var = {v: k for k, v in rate_label_map.items()}
+            gr.overall_legend(
+                fig, cfg['legend_loc'], ncol=cfg['legend_ncol'],
+                reorder=gr.get_legend_reorder_indices(
+                    fig,
+                    label_to_var=label_to_var,
+                    ordered_vars=legend_order_vars
+                )
+            )
+            fig.tight_layout(rect=(0.02, 0.06, 0.80, 0.90))
+        else:
+            gr.overall_legend(fig, cfg['legend_loc'], ncol=cfg['legend_ncol'])
+            fig.tight_layout(rect=(0.02, 0.06, 0.98, 0.90))
+
+        fig.text(
+            ax1.get_position().x0,
+            ax1.get_position().y1+0.08,
+            ('Decadal rates of change for contributions to ' +
+             'Attributed Global Warming and Effective Radiative Forcing'),
+            fontweight='bold',
+            fontsize=matplotlib.rcParams['axes.titlesize'],
+            )
+        fig.savefig(f'{plot_folder}/5_Rates_timeseries{cfg["suffix"]}.png')
+        fig.savefig(f'{plot_folder}/5_Rates_timeseries{cfg["suffix"]}.pdf')
 
     # PLOT THE 2022 results for comparison ####################################
     # This code is copied from https://github.com/ClimateIndicator/forcing-timeseries/blob/main/notebooks/decadal-trends.ipynb
@@ -941,34 +1242,6 @@ if __name__ == '__main__':
     # # Plot each series on its respective axis
     # ax2.plot(x,y,marker='o', linestyle='None',label='2022 analysis')
     # ax2.plot(x[-4:], y[-4:], marker='o', color='red', linestyle='None')
-
-    ax2.axhline(0, color='black', lw=0.5)
-    ax2.set_xlim([1950, end_yr+1])
-    ax2.set_ylim([-1.5, 2.5])
-    ax2.set_title('(a) Effective Radiative Forcing',
-                  loc='left',
-                  fontweight='regular',
-                  fontsize=matplotlib.rcParams['font.size'],
-                  y=1.02
-                  )
-
-    ax2.set_ylabel('Decadal trend (Wm$^{-2}$decade$^{-1}$)')
-    ax2.set_xlabel('End year of trend decade')
-    ax2.set_xticks(rate_ticks)
-
-    gr.overall_legend(fig, 'lower center', ncol=5)
-    fig.tight_layout(rect=(0.02, 0.06, 0.98, 0.90))
-
-    fig.text(
-        ax1.get_position().x0,
-        ax1.get_position().y1+0.08,
-        ('Decadal rates of change for contributions to ' +
-         'Attributed Global Warming and Effective Radiative Forcing'),
-        fontweight='bold',
-        fontsize=matplotlib.rcParams['axes.titlesize'],
-        )
-    fig.savefig(f'{plot_folder}/5_Rates_timeseries.png')
-    fig.savefig(f'{plot_folder}/5_Rates_timeseries.pdf')
 
     ###########################################################################
     # Plot definition diagram #################################################
@@ -1052,7 +1325,7 @@ if __name__ == '__main__':
                 dict_analysis_ts[method][year] = df_
 
         # Plot the ('Ant', '50') columns of timeseries against each other
-        for var in ['Ant', 'Nat', 'GHG', 'OHF']:
+        for var in ['Ant', 'Nat', 'GHG', 'OHF', 'Tot']:
             selected_years = (
                 dict_analysis_ts[method][max(compare_years)].index <=
                 int(min(compare_years)))
@@ -1070,6 +1343,7 @@ if __name__ == '__main__':
     # Set the xticks to be at 50 year intervals
     ax.set_xticks(np.append(np.arange(1850, int(min(compare_years))+1, 50),
                   int(min(compare_years))))
+    ax.set_yticks(np.arange(-0.05, 0.05, 0.005))
 
     ax.fill_between([1850, 1900], [-5, -5], [+5, +5], color='#f4f2f1')
     ax.text(1875, -0.055, '1850\N{EN DASH}1900\nPreindustrial Baseline',
@@ -1082,6 +1356,17 @@ if __name__ == '__main__':
     plt.suptitle('Difference between analysis years')
     plt.savefig(f'{plot_folder}/6_analysis_components_comparison.png')
     plt.savefig(f'{plot_folder}/6_analysis_components_comparison.pdf')
+
+    # Print out the average of 1850-1900 for the 50th percentile of each variable each method and variable
+    for method in sorted(dict_analysis_ts.keys()):
+        print(f'Average of 1850-1900 for {method}:')
+        for var in ['Ant', 'Nat', 'GHG', 'OHF', 'Tot']:
+            avg_1850_1900 = dict_analysis_ts[method][max(compare_years)].loc[
+                (dict_analysis_ts[method][max(compare_years)].index >= 1850) &
+                (dict_analysis_ts[method][max(compare_years)].index <= 1900),
+                (var, '50')
+            ].mean()
+            print(f'  {var}: {avg_1850_1900:.8f} °C')
 
     ###########################################################################
     # Multi-method timeseries to see where changes come from each year ########

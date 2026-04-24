@@ -11,58 +11,78 @@ import time
 from urllib.error import HTTPError, URLError
 
 
+SUB_VAR_MAPPING = {
+    'GHG': ['co2', 'ch4', 'n2o', 'halogen'],
+    'OHF': ['aerosol-radiation_interactions', 'aerosol-cloud_interactions',
+            'contrails', 'land_use', 'bc_snow', 'h2o_strat', 'o3'],
+    'Nat': ['solar', 'volcanic'],
+    'Ant': ['GHG', 'OHF'],
+    'Tot': ['Ant', 'Nat']
+}
+
+
+VAR_NAMES = {
+    'Obs': 'Observed warming',
+    'Tot': 'Total forced warming',
+    'Ant': 'Human-induced warming',
+    'GHG': 'Well-mixed greenhouse gases',
+    'OHF': 'Other human forcings',
+    'Nat': 'All natural drivers',
+    'Res': 'Residual (Internal variability)',
+    'co2': 'Carbon dioxide',
+    'ch4': 'Methane',
+    'n2o': 'Nitrous oxide',
+    'halogen': 'Halogenated gases',
+    'aerosol-radiation_interactions': 'Aerosol-radiation interactions',
+    'aerosol-cloud_interactions': 'Aerosol-cloud interactions',
+    'land_use': 'Land-use reflectance',
+    'bc_snow': 'Black carbon on snow',
+    'h2o_strat': 'Stratospheric water vapour',
+    'o3': 'Ozone',
+    'solar': 'Solar',
+    'volcanic': 'Volcanic',
+    'contrails': 'Aviation contrails'
+}
+
+
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
 ###############################################################################
-# def load_ERF_Old(end_yr):
-#     """Load the ERFs from Stuart's ERF datasets."""
-#     here = Path(__file__).parent
-#     forc_Path = here / '../data/ERF Samples/Stuart/'
-#     # list_ERF = ['_'.join(file.split('_')[1:-1])
-#     #             for file in os.listdir(forc_Path)
-#     #             if '.csv' in file]
-#     forc_Group = {
-#                 #   'Ant': {'Consists': ['ant'], 'Colour': 'green'},
-#                 'Nat': {'Consists': ['nat'],
-#                         'Colour': 'green'},
-#                 'GHG': {'Consists': ['co2', 'ch4', 'n2o', 'other_wmghg'],
-#                         'Colour': 'orange'},
-#                 'OHF': {'Consists': ['ari', 'aci', 'bc_on_snow', 'contrails',
-#                                      'o3_tropospheric', 'o3_stratospheric',
-#                                      'h2o_stratospheric', 'land_use'],
-#                         'Colour': 'blue'}
-#                 }
-
-#     for grouping in forc_Group:
-#         list_df = []
-#         for element in forc_Group[grouping]['Consists']:
-#             _df = pd.read_csv(
-#                 forc_Path + f'rf_{element}_200samples.csv',
-#                 skiprows=[1]
-#                             ).rename(columns={'Unnamed: 0': 'Year'}
-#                             ).set_index('Year')
-#             list_df.append(_df.loc[_df.index <= end_yr])
-
-#         forc_Group[grouping]['df'] = functools.reduce(lambda x, y: x.add(y),
-#                                                       list_df)
-#     return forc_Group
 
 
-def load_ERF_CMIP6(indicator_year):
-    """Load the ERFs from Chris."""
+def load_ERF_CMIP6(indicator_year, full_version=False):
+    """Load the ERFs from Chris.
+
+    Args:
+        indicator_year (int): Final year of ERF file.
+        full_version (bool): If True, require the *_full.nc dataset.
+    """
     # ERF location
     here = Path(__file__).parent
-    file_ERF = here / f'../data/ERF Samples/Chris/ERF_DAMIP_1000_1750-{indicator_year}.nc'
+    if full_version:
+        file_ERF = here / (
+            f'../data/ERF Samples/Chris/ERF_DAMIP_1000_1750-{indicator_year}_full.nc'
+        )
+    else:
+        file_ERF = here / (
+            f'../data/ERF Samples/Chris/ERF_DAMIP_1000_1750-{indicator_year}.nc'
+        )
+
+    if not file_ERF.exists():
+        raise FileNotFoundError(f'ERF file not found: {file_ERF}')
+
     # import ERF_file to xarray dataset and convert to pandas dataframe
     df_ERF = xr.open_dataset(file_ERF).to_dataframe()
     # assign the columns the name 'variable'
     df_ERF.columns.names = ['variable']
     # remove the column called 'total' from df_ERF
-    df_ERF = df_ERF.drop(columns='total')
+    df_ERF = df_ERF.drop(columns='total', errors='ignore')
     # rename the variable columns
-    df_ERF = df_ERF.rename(columns={'wmghg': 'GHG',
-                                    'other_ant': 'OHF',
-                                    'natural':'Nat'})
+    df_ERF = df_ERF.rename(columns={
+        'wmghg': 'GHG',
+        'other_ant': 'OHF',
+        'natural': 'Nat'
+    })
     # move the multi-index 'ensemble' level to a column,
     # and then set the 'ensemble' column to second column level
     df_ERF = df_ERF.reset_index(level='ensemble')
@@ -139,40 +159,6 @@ def load_Temp_IGCC(start_pi, end_pi, end_yr):
         (df_temp_Obs.index <= end_pi),
         'GMST'].mean(axis=0)
     return df_temp_Obs
-
-# def load_PiC_Old(n_yrs):
-#     """Load piControl data from Stuart's ERF datasets."""
-#     here = Path(__file__).parent
-#     file_PiC = here / '../data/piControl/piControl.csv'
-
-#     df_temp_PiC = pd.read_csv(file_PiC
-#                           ).rename(columns={'year': 'Year'}
-#                                    ).set_index('Year')
-#     # model_names = list(set(['_'.join(ens.split('_')[:1])
-#     #                         for ens in list(df_temp_PiC)]))
-
-#     temp_IV_Group = {}
-
-#     for ens in list(df_temp_PiC):
-#         # pi Control data located all over the place in csv; the following
-#         # lines strip the NaN values, and limits slices to the same length as
-#         # observed temperatures
-#         temp = df_temp_PiC[ens].dropna().to_numpy()[:n_yrs]
-
-#         # Remove pre-industrial mean period; this is done because the models
-#         # use different "zero" temperatures (eg 0, 100, 287, etc).
-#         # An alternative approach would be to simply subtract the first value
-#         # to start all models on 0; the removal of the first 50 years
-#         # is used here in case the models don't start in equilibrium (and
-#         # jump up by x degrees at the start, for example), and the baseline
-#         # period is just defined as the same as for the observation PI
-#         # period.
-#         temp -= temp[:start_pi-end_pi+1].mean()
-
-#         if len(temp) == n_yrs:
-#             temp_IV_Group[ens] = temp
-
-#     return pd.DataFrame(temp_IV_Group)
 
 
 def load_PiC_CMIP6(n_yrs, start_pi, end_pi):
@@ -380,29 +366,100 @@ def rate_IGCC(start_pi, end_pi, start_yr, end_yr):
     return df_rates
 
 
-def rate_ERF(end_yr, sigmas_all):
-    rate_vars = ['Nat', 'GHG', 'OHF', 'Ant', 'Tot']
-    df_forc = load_ERF_CMIP6(end_yr)
+def extra_vars(regress_vars):
+    """Return aggregate variables that sit above regress_vars in hierarchy."""
+    regress_vars = set(regress_vars)
+    extra = set()
+
+    changed = True
+    while changed:
+        changed = False
+        for parent, children in SUB_VAR_MAPPING.items():
+            if parent in regress_vars or parent in extra:
+                continue
+            if any((child in regress_vars) or (child in extra)
+                   for child in children):
+                extra.add(parent)
+                changed = True
+
+    return list(extra)
+
+
+def map_var_to_regression_aggregate(var_list_ERF, regress_vars):
+    """Map each ERF variable to the highest relevant regression aggregate."""
+    extra_vars_list = extra_vars(regress_vars)
+    reduced_mapping = {k: v for k, v in SUB_VAR_MAPPING.items()
+                       if k not in extra_vars_list}
+
+    def get_highest_parent(target, mapping):
+        for parent, children in mapping.items():
+            if target in children:
+                return get_highest_parent(parent, mapping)
+        return target
+
+    mapped = {}
+    for var in var_list_ERF:
+        mapped[var] = get_highest_parent(var, reduced_mapping)
+
+    for reg_var in regress_vars:
+        mapped[reg_var] = reg_var
+
+    return mapped
+
+
+def rate_ERF(end_yr, sigmas_all, variable_mode='aggregate',
+             regress_vars=None):
+    if regress_vars is None:
+        regress_vars = ['GHG', 'OHF', 'Nat']
+
+    df_forc = load_ERF_CMIP6(
+        end_yr, full_version=(variable_mode == 'all')
+    )
     forc_Group_names = sorted(
         df_forc.columns.get_level_values('variable').unique())
     forc_Ens_names = sorted(
         df_forc.columns.get_level_values('ensemble').unique())
     forc_Yrs = df_forc.index.values
 
-    # Apply the function defs.rate_calc to each column of this dataframe
+    forc_arrays = {var: df_forc[var].values for var in forc_Group_names}
+    var_to_reg = map_var_to_regression_aggregate(forc_Group_names, regress_vars)
+
+    # Build missing regression aggregates from children if needed.
+    for reg_var in regress_vars:
+        if reg_var not in forc_arrays:
+            children = [var for var, parent in var_to_reg.items()
+                        if parent == reg_var and var in forc_arrays]
+            if children:
+                forc_arrays[reg_var] = np.sum(
+                    [forc_arrays[var] for var in children], axis=0
+                )
+
+    if ('GHG' in forc_arrays) and ('OHF' in forc_arrays):
+        forc_arrays['Ant'] = forc_arrays['GHG'] + forc_arrays['OHF']
+
+    if ('Ant' in forc_arrays) and ('Nat' in forc_arrays):
+        forc_arrays['Tot'] = forc_arrays['Ant'] + forc_arrays['Nat']
+
+    if variable_mode == 'aggregate':
+        rate_vars = [var for var in ['Nat', 'GHG', 'OHF', 'Ant', 'Tot']
+                     if var in forc_arrays]
+    elif variable_mode == 'all':
+        rate_vars = list(forc_Group_names)
+        for reg_var in regress_vars:
+            if (reg_var in forc_arrays) and (reg_var not in rate_vars):
+                rate_vars.append(reg_var)
+        for agg_var in ['Ant', 'Tot']:
+            if (agg_var in forc_arrays) and (agg_var not in rate_vars):
+                rate_vars.append(agg_var)
+    else:
+        raise ValueError(
+            f"Unknown variable_mode='{variable_mode}'. "
+            "Use 'aggregate' or 'all'."
+        )
+
+    # Apply the rate function to each selected variable/ensemble combination.
     dfs_rates = []
-    arr_forc = np.empty(
-        (len(forc_Yrs), len(forc_Group_names)+2, len(forc_Ens_names)))
-    # Move the data for each forcing group into a separate array dimension
-    for vv in forc_Group_names:
-        arr_forc[:, rate_vars.index(vv), :] = df_forc[vv].values
-    arr_forc[:, rate_vars.index('Ant'), :] = (
-        arr_forc[:, rate_vars.index('GHG'), :] +
-        arr_forc[:, rate_vars.index('OHF'), :])
-    arr_forc[:, rate_vars.index('Tot'), :] = (
-        arr_forc[:, rate_vars.index('Ant'), :] +
-        arr_forc[:, rate_vars.index('Nat'), :]
-    )
+    arr_forc = np.stack([forc_arrays[var] for var in rate_vars], axis=1)
 
     for year in np.arange(1950, end_yr+1):
         print(f'Calculating AR6-definition ERF rate: {year}', end='\r')

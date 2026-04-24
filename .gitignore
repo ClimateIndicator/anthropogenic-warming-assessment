@@ -7,8 +7,8 @@ attribution_methods/GlobalWarmingIndex/models/FaIR_V2
 # Plots
 plots/
 
-# Anciliary results calculated on the fly
-results/anciliary/
+# Ancillary results calculated on the fly
+results/ancillary/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
