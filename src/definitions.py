@@ -56,6 +56,35 @@ VAR_NAMES = {
 }
 
 
+# Helper dictionary mapped mapping ERF component to colour
+def get_var_colours():
+    """Colour-code sub-variables using the corresponding aggregate category."""
+
+    var_colours = {
+        'Tot': '#d7827e',
+        'Ant': '#b4637a',
+        'Nat': '#56949f',
+        'GHG': '#907aa9',
+        'OHF': '#ea9d34',
+        'Res': '#9893a5',
+        'Obs': '#797593',
+        'PiC': '#cecacd'}
+
+    # Expand colour mappings for sub-variables implicitly if they lack a color
+    flatten_sub_vars = {
+        sub: parent
+        for parent, children in SUB_VAR_MAPPING.items()
+        for sub in children
+    }
+    for sub_var, parent_var in flatten_sub_vars.items():
+        # Preserve original aggregate colours; only assign inherited colours
+        # to variables that do not already have an explicit palette entry.
+        if (sub_var not in var_colours) and (parent_var in var_colours):
+            var_colours[sub_var] = var_colours[parent_var]
+
+    return var_colours
+
+
 ###############################################################################
 # DEFINE FUNCTIONS ############################################################
 ###############################################################################
@@ -416,6 +445,16 @@ def map_var_to_regression_aggregate(var_list_ERF, regress_vars):
         mapped[reg_var] = reg_var
 
     return mapped
+
+
+def get_plot_colour(var):
+    var_colours = get_var_colours()
+    if var in var_colours:
+        return var_colours[var]
+    mapped = map_var_to_regression_aggregate(
+        [var], regress_vars=['GHG', 'OHF', 'Nat']
+    ).get(var, var)
+    return var_colours.get(mapped, var_colours['Res'])
 
 
 def rate_ERF(end_yr, sigmas_all, variable_mode='aggregate',

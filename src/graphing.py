@@ -561,7 +561,7 @@ def Fig_3_8_validation_plot(
             (-1 + 0 * 0.45 + bar_width / 2), 0.6,
             str_Result,
             ha='center', va='center', color='black')
-        
+
         # Plot the updated re-assessment for 2010-2019 observations
         med_Obs = dict_updates_Obs_hl['Assessment'].loc[period, ('Obs', '50')]
         min_Obs = dict_updates_Obs_hl['Assessment'].loc[period, ('Obs', '5')]
