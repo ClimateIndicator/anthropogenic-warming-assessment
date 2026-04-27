@@ -8,9 +8,9 @@ import matplotlib.pyplot as plt
 
 from src import graphing as gr
 from src import definitions as defs
-import data.Temp.IGCC.IGCC_Obs as IGCC_Obs
-import data.Temp.IPCC.IPCC_Obs as IPCC_Obs
-import data.Temp.IPCC.IPCC_AGW as IPCC_AGW
+import data.Temp.IGCC.IGCC_Obs as IGCC_Obs_data
+import data.Temp.IPCC.IPCC_Obs as IPCC_Obs_data
+import data.Temp.IPCC.IPCC_AGW as IPCC_AGW_data
 
 
 def parse_arguments():
@@ -30,11 +30,11 @@ def parse_arguments():
     return refresh_ancillary_data
 
 
-def load_filtered_PiC(start_yr, end_yr, start_pi, end_pi, n_yrs):
+def load_filtered_PiC(START_YR, IGCC_YR, START_PI, END_PI, n_yrs):
     timeframes = [1, 3, 30]
-    df_temp_PiC = defs.load_PiC_CMIP6(n_yrs, start_pi, end_pi)
+    df_temp_PiC = defs.load_PiC_CMIP6(n_yrs, START_PI, END_PI)
     df_temp_PiC = defs.filter_PiControl(df_temp_PiC, timeframes)
-    df_temp_PiC.set_index(np.arange(n_yrs)+start_yr, inplace=True)
+    df_temp_PiC.set_index(np.arange(n_yrs)+START_YR, inplace=True)
     return df_temp_PiC
 
 
@@ -100,18 +100,18 @@ def multi_method_timeseries(assess_vars):
 def multi_method_headlines(
         dict_updates_hl,
         assess_vars,
-        end_yr,
-        sr15_yr,
-        ar6_yr):
+        IGCC_YR,
+        SR15_YR,
+        AR6_YR):
 
     # MULTI-METHOD ASSESSMENT - AR6 STYLE - HEADLINES #########################
     list_of_dfs = []
-    periods_to_assess = [f'{ar6_yr-9}\N{EN DASH}{ar6_yr}',
-                         f'{end_yr-9}\N{EN DASH}{end_yr}',
-                         f'{sr15_yr}',
-                         f'{end_yr}',
-                         f'{sr15_yr} (SR15 definition)',
-                         f'{end_yr} (SR15 definition)']
+    periods_to_assess = [f'{AR6_YR-9}\N{EN DASH}{AR6_YR}',
+                         f'{IGCC_YR-9}\N{EN DASH}{IGCC_YR}',
+                         f'{SR15_YR}',
+                         f'{IGCC_YR}',
+                         f'{SR15_YR} (SR15 definition)',
+                         f'{IGCC_YR} (SR15 definition)']
     for period in periods_to_assess:
 
         dict_updates_Assessment = {}
@@ -165,7 +165,7 @@ def multi_method_headlines(
     unendashed_assessment = defs.un_en_dash_ify(
         dict_updates_hl['Assessment'].copy())
     unendashed_assessment.to_csv(
-            f'results/Assessment-Update-{end_yr}_GMST_headlines.csv')
+            f'results/Assessment-Update-{IGCC_YR}_GMST_headlines.csv')
 
     return df_updates_Assessment
 
@@ -235,7 +235,7 @@ def figure_individual_timeseries(
             )
 
             ax.set_ylim(-1, 2)
-            ax.set_xlim(start_yr, end_yr)
+            ax.set_xlim(START_YR, IGCC_YR)
             ax.text(1875, -0.85, '1850\N{EN DASH}1900\nPreindustrial Baseline',
                     ha='center')
 
@@ -293,7 +293,7 @@ def figure_stacked_method_timeseries(
                 label=f'{m}: {labels[m]}')
 
     ax.set_ylim(-1, 2)
-    ax.set_xlim(start_yr, end_yr)
+    ax.set_xlim(START_YR, IGCC_YR)
     ax.text(1875, -0.85, '1850\N{EN DASH}1900\nPreindustrial Baseline',
             ha='center')
     fig.suptitle('Timeseries for each attribution method used '
@@ -323,7 +323,7 @@ def figure_aligned_method_timeseries(
         gr.gwi_timeseries(ax, df_temp_Obs, PiC, dict_updates_ts[m],
                           ['Tot', 'GHG', 'Nat', 'OHF'], var_colours)
         ax.set_ylim(-1, 2)
-        ax.set_xlim(1900, end_yr)
+        ax.set_xlim(1900, IGCC_YR)
         if methods.index(m) > 0:
             ax.set_ylabel('')
             ax.set_yticklabels([])
@@ -353,11 +353,12 @@ def plot_validation_plot(
     ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 0), rowspan=1, colspan=4)
     ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 4), rowspan=1, colspan=1)
 
-    gr.Fig_3_8_validation_plot(ax2, ['Ant'], '2017',
+    gr.Fig_3_8_validation_plot(ax2, ['Ant'], f'{SR15_YR}',
                                dict_IPCC_hl, dict_updates_hl,
                                dict_IPCC_Obs_hl, dict_updates_Obs_hl,
                                source_markers, var_colours, labels)
-    gr.Fig_3_8_validation_plot(ax1, bar_plot_vars, '2010\N{EN DASH}2019',
+    gr.Fig_3_8_validation_plot(ax1, bar_plot_vars,
+                               f'{AR6_YR-9}\N{EN DASH}{AR6_YR}',
                                dict_IPCC_hl, dict_updates_hl,
                                dict_IPCC_Obs_hl, dict_updates_Obs_hl,
                                source_markers, var_colours, labels)
@@ -383,14 +384,16 @@ def plot_validation_plot(
     fig.suptitle('Validation of updated lines of evidence for assessing '
                  'contributions to observed warming')
     fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
-             ('(a) 2010\N{EN DASH}2019 AR6 WG1 Ch.3 (left)\n' +
-              '      vs 2010\N{EN DASH}2019 repeat (right)'),
+             (f'(a) {AR6_YR-9}\N{EN DASH}{AR6_YR} AR6 WG1 Ch.3 (left)\n' +
+              f'      vs {AR6_YR-9}\N{EN DASH}{AR6_YR} repeat (right)'),
              ha='left', fontsize=matplotlib.rcParams['axes.titlesize'],
              fontweight='regular',
              #  fontstyle='italic'
              )
     fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
-             '(b) 2017 SR1.5 Ch.1 (left)\n      vs 2017 repeat (right)',
+             f'(b) {SR15_YR} SR1.5 Ch.1 (left)'
+             '\n      '
+             'vs {SR15_YR} repeat (right)',
              ha='left', fontsize=matplotlib.rcParams['axes.titlesize'],
              fontweight='regular',
              #  fontstyle='italic'
@@ -406,7 +409,8 @@ def figure_SPM2_full(
         dict_updates_Obs_hl,
         var_colours,
         var_names,
-        labels
+        labels,
+        assess_vars
 ):
 
     # Plot the headline SPM2-esque figure #####################################
@@ -417,19 +421,21 @@ def figure_SPM2_full(
     ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
     ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
     gr.Fig_SPM2_plot(
-        ax0, ['Obs'], ['2010\N{EN DASH}2019', '2016\N{EN DASH}2025'],
+        ax0,
+        ['Obs'],
+        [f'{AR6_YR-9}\N{EN DASH}{AR6_YR}', f'{IGCC_YR-9}\N{EN DASH}{IGCC_YR}'],
         dict_IPCC_hl, dict_updates_Obs_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
         ax1,
-        ['Ant', 'GHG', 'OHF', 'Nat'],
-        ['2010\N{EN DASH}2019', '2016\N{EN DASH}2025'],
+        assess_vars,
+        [f'{AR6_YR-9}\N{EN DASH}{AR6_YR}', f'{IGCC_YR-9}\N{EN DASH}{IGCC_YR}'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
         ax2,
-        ['Ant', 'GHG', 'OHF', 'Nat'],
-        ['2017 (SR15 definition)', '2025 (SR15 definition)'],
+        assess_vars,
+        [f'{SR15_YR} (SR15 definition)', f'{IGCC_YR} (SR15 definition)'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
 
@@ -516,7 +522,8 @@ def figure_SPM2_updates_only(
         dict_updates_Obs_hl,
         var_colours,
         var_names,
-        labels
+        labels,
+        assess_vars
 ):
 
     # Plot the headline SPM2-esque figure without IPCC comparisons ############
@@ -527,19 +534,19 @@ def figure_SPM2_updates_only(
     ax1 = plt.subplot2grid(shape=(1, 5), loc=(0, 1), rowspan=1, colspan=2)
     ax2 = plt.subplot2grid(shape=(1, 5), loc=(0, 3), rowspan=1, colspan=2)
     gr.Fig_SPM2_plot(
-        ax0, ['Obs'], ['2016\N{EN DASH}2025'],
+        ax0, ['Obs'], [f'{IGCC_YR-9}\N{EN DASH}{IGCC_YR}'],
         dict_IPCC_hl, dict_updates_Obs_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
         ax1,
-        ['Ant', 'GHG', 'OHF', 'Nat'],
-        ['2016\N{EN DASH}2025'],
+        assess_vars,
+        [f'{IGCC_YR-9}\N{EN DASH}{IGCC_YR}'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
     gr.Fig_SPM2_plot(
         ax2,
-        ['Ant', 'GHG', 'OHF', 'Nat'],
-        ['2025 (SR15 definition)'],
+        assess_vars,
+        [f'{IGCC_YR} (SR15 definition)'],
         dict_IPCC_hl, dict_updates_hl,
         var_colours, var_names, labels, text_toggle)
 
@@ -583,14 +590,15 @@ def figure_SPM2_updates_only(
              fontweight='bold'
              )
     fig.text(ax1.get_position().x0, ax1.get_position().y1+0.02,
-             ('(b) AR6 Update: 2016\N{EN DASH}2025 decade-average warming'
+             (f'(b) AR6 Update: {IGCC_YR-9}\N{EN DASH}{IGCC_YR} '
+              'decade-average warming'
               '\n      '
               'contributions assessed from attribution studies'),
              fontsize=matplotlib.rcParams['font.size'],
              fontweight='regular'
              )
     fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
-             ('(c) SR1.5 Update: 2025 present-day warming'
+             (f'(c) SR1.5 Update: {IGCC_YR} present-day warming'
               '\n      '
               'contributions assessed from attribution studies'),
              fontsize=matplotlib.rcParams['font.size'],
@@ -625,7 +633,7 @@ def figure_SPM2_updates_only(
 
 
 def tables_for_supplement(
-        end_yr, sr15_yr, ar6_yr,
+        IGCC_YR, SR15_YR, AR6_YR,
         dict_updates_hl, assess_vars):
     """ CREATE APPENDIX-LAYOUT TABLES FOR RESULTS."""
 
@@ -643,11 +651,11 @@ def tables_for_supplement(
         if refresh_ancillary_data and os.path.exists(table_gmst_path):
             os.remove(table_gmst_path)
         with open(table_gmst_path, 'w+') as f:
-            times = [f'{ar6_yr-9}\N{EN DASH}{ar6_yr}',
-                     f'{end_yr-9}\N{EN DASH}{end_yr}',
-                     f'{sr15_yr}', f'{end_yr}',
-                     f'{sr15_yr} (SR15 definition)',
-                     f'{end_yr} (SR15 definition)']
+            times = [f'{AR6_YR-9}\N{EN DASH}{AR6_YR}',
+                     f'{IGCC_YR-9}\N{EN DASH}{IGCC_YR}',
+                     f'{SR15_YR}', f'{IGCC_YR}',
+                     f'{SR15_YR} (SR15 definition)',
+                     f'{IGCC_YR} (SR15 definition)']
             f.write('variable, method, ' + ', '.join(times) + '\n')
             for v in assess_vars:
                 for m in ['Walsh', 'Ribes', 'Gillett', 'Assessment']:
@@ -690,10 +698,10 @@ def tables_for_supplement(
             os.remove(table_gsat_path)
         with open(table_gsat_path, 'w+') as f:
             times = [
-                f'{ar6_yr-9}\N{EN DASH}{ar6_yr}',
-                f'{end_yr-9}\N{EN DASH}{end_yr}',
-                f'{sr15_yr} (SR15 definition)',
-                f'{end_yr} (SR15 definition)']
+                f'{AR6_YR-9}\N{EN DASH}{AR6_YR}',
+                f'{IGCC_YR-9}\N{EN DASH}{IGCC_YR}',
+                f'{SR15_YR} (SR15 definition)',
+                f'{IGCC_YR} (SR15 definition)']
             f.write('variable, ' + ', '.join(times) + '\n')
             for v in assess_vars:
                 line = [v]
@@ -744,7 +752,7 @@ def rate_calculate_ERF(
         # Calculate the ERF aggregate rate dataset from scratch
         print('Calculating ERF aggregate rate dataset.')
         df_forc_rates_main = defs.rate_ERF(
-            end_yr, sigmas_all, variable_mode='aggregate'
+            IGCC_YR, sigmas_all, variable_mode='aggregate'
         )
         # Save the newly calculated dataset to cache for future runs
         df_forc_rates_main.to_csv(erf_cache_main)
@@ -770,7 +778,7 @@ def rate_calculate_ERF(
     if regenerate_full_erf:
         print('Calculating ERF full-variable rate dataset.')
         df_forc_rates_full = defs.rate_ERF(
-            end_yr, sigmas_all, variable_mode='all'
+            IGCC_YR, sigmas_all, variable_mode='all'
         )
         # Cache the new result so it can be reused later
         df_forc_rates_full.to_csv(erf_cache_full)
@@ -869,7 +877,7 @@ def figure_rates(
     else:
         print('Calculating HadCRUT rate dataset.')
         df_rates_GWI = defs.rate_HadCRUT5(
-            start_pi, end_pi, start_yr, end_yr, sigmas_all)
+            START_PI, END_PI, START_YR, IGCC_YR, sigmas_all)
         df_rates_GWI.to_csv(hadcrut_rate_cache)
 
     # Calculate the rates for IGCC temperature dataset ########################
@@ -884,8 +892,8 @@ def figure_rates(
             index_col=0,  header=[0, 1], skiprows=0)
     else:
         print('Calculating IGCC rate dataset.')
-        df_Obs_IGCC = defs.load_Temp_IGCC(start_pi, end_pi, end_yr)
-        df_Obs_IGCC_rate = defs.rate_IGCC(start_pi, end_pi, start_yr, end_yr)
+        df_Obs_IGCC = defs.load_Temp_IGCC(START_PI, END_PI, IGCC_YR)
+        df_Obs_IGCC_rate = defs.rate_IGCC(START_PI, END_PI, START_YR, IGCC_YR)
         df_Obs_IGCC_rate.to_csv(igcc_rate_cache)
 
     # ax1.plot(times,  df_Obs_IGCC_rate[('Obs', '50')]*10,
@@ -893,8 +901,8 @@ def figure_rates(
     #          label='Reference Observations: IGCC',
     #          lw=2)
 
-    rate_ticks = list(np.arange(1950, end_yr+1, 20))
-    rate_ticks.append(end_yr)
+    rate_ticks = list(np.arange(1950, IGCC_YR+1, 20))
+    rate_ticks.append(IGCC_YR)
 
     df_forc_rates_main, df_forc_rates_full = rate_calculate_ERF(
         sigmas_all
@@ -1007,7 +1015,7 @@ def figure_rates(
 
         # Add a line along the y=0 line
         ax1.axhline(0, color='black', lw=0.5)
-        ax1.set_xlim([1950, end_yr+1])
+        ax1.set_xlim([1950, IGCC_YR+1])
         ax1.set_title('(a) Attributed Global Warming',
                       loc='left',
                       fontweight='regular',
@@ -1030,7 +1038,7 @@ def figure_rates(
         )
 
         ax2.axhline(0, color='black', lw=0.5)
-        ax2.set_xlim([1950, end_yr+1])
+        ax2.set_xlim([1950, IGCC_YR+1])
         ax2.set_ylim([-1.5, 2.5])
         ax2.set_title('(b) Effective Radiative Forcing',
                       loc='left',
@@ -1071,14 +1079,14 @@ def figure_rates(
 
 
 def figure_definition_diagram(
-        end_yr, start_yr,
+        IGCC_YR, START_YR,
         dict_updates_hl, df_temp_Obs, dict_updates_ts,
         var_colours
 ):
 
     # Load the assessment results
     df_headlines = pd.read_csv(
-        f"results/Assessment-Update-{end_yr}_GMST_headlines.csv",
+        f"results/Assessment-Update-{IGCC_YR}_GMST_headlines.csv",
         index_col=0,  header=[0, 1], skiprows=0
     )
     df_headlines = defs.en_dash_ify(df_headlines)
@@ -1087,7 +1095,7 @@ def figure_definition_diagram(
     fig = plt.figure(figsize=(10, 6))
     ax1 = plt.subplot2grid((1, 1), (0, 0), colspan=1)
     gr.GWI_definition_diagram(
-        ax1, end_yr,
+        ax1, IGCC_YR,
         dict_updates_hl['Walsh'], df_temp_Obs, dict_updates_ts['Walsh'],
         var_colours)
     ax1.set_ylabel(
@@ -1096,11 +1104,11 @@ def figure_definition_diagram(
         )
 
     ax1.set_ylim(0.75, 1.6)
-    ticks = list(np.arange(start_yr, end_yr, 5))
-    ticks.append(end_yr)
+    ticks = list(np.arange(START_YR, IGCC_YR, 5))
+    ticks.append(IGCC_YR)
     ax1.set_xticks(ticks, ticks)
     ax1.set_yticks([1.0, 1.5])
-    ax1.set_xlim(2002.5, end_yr + 1)
+    ax1.set_xlim(2002.5, IGCC_YR + 1)
     # gr.overall_legend(fig, loc='lower center', ncol=4)
     # fig.suptitle(
     #     'Period Definitions for the IPCC Anthropogenic Warming Assesments',
@@ -1121,7 +1129,7 @@ def figure_definition_diagram(
 
 
 def compare_assess_years(
-        compare_years, end_yr, dict_updates_ts
+        compare_years, IGCC_YR, dict_updates_ts
 ):
 
     dict_analysis_ts = {}
@@ -1129,7 +1137,7 @@ def compare_assess_years(
     for method in dict_updates_ts.keys():
         dict_analysis_ts[method] = {}
         for year in compare_years:
-            if year == str(end_yr):
+            if year == str(IGCC_YR):
                 # If current analysis year, then just use the results already
                 # loaded into the dict_updates_ts dictionary earlier in script.
                 dict_analysis_ts[method][year] = dict_updates_ts[method]
@@ -1155,8 +1163,8 @@ def compare_assess_years(
 
 def figure_assessment_interannual_timeseries_difference(
     main_vars,
-    start_pi, end_pi,
-    end_yr, start_yr,
+    START_PI, END_PI,
+    IGCC_YR, START_YR,
     dict_updates_ts,
     var_colours,
     dict_analysis_ts,
@@ -1188,11 +1196,11 @@ def figure_assessment_interannual_timeseries_difference(
 
     ax.set_xlim(1850, int(min(compare_years)))
     # Set the xticks to be at 50 year intervals
-    ax.set_xticks(np.append(np.arange(start_pi, int(min(compare_years))+1, 50),
+    ax.set_xticks(np.append(np.arange(START_PI, int(min(compare_years))+1, 50),
                   int(min(compare_years))))
     ax.set_yticks(np.arange(-0.05, 0.05, 0.005))
 
-    ax.fill_between([start_pi, end_pi], [-5, -5], [+5, +5], color='#f4f2f1')
+    ax.fill_between([START_PI, END_PI], [-5, -5], [+5, +5], color='#f4f2f1')
     ax.text(1875, -0.055, '1850\N{EN DASH}1900\nPreindustrial Baseline',
             ha='center')
     ax.set_ylim(-0.06, 0.08)
@@ -1206,22 +1214,22 @@ def figure_assessment_interannual_timeseries_difference(
 
 
 def check_pi_average(
-        main_vars, dict_analysis_ts, end_yr):
+        main_vars, dict_analysis_ts, IGCC_YR):
 
     for method in sorted(dict_analysis_ts.keys()):
         print(f'Average of 1850-1900 for {method}:')
         for var in main_vars:
-            avg_1850_1900 = dict_analysis_ts[method][str(end_yr)].loc[
-                (dict_analysis_ts[method][str(end_yr)].index >= 1850) &
-                (dict_analysis_ts[method][str(end_yr)].index <= 1900),
+            avg_1850_1900 = dict_analysis_ts[method][str(IGCC_YR)].loc[
+                (dict_analysis_ts[method][str(IGCC_YR)].index >= 1850) &
+                (dict_analysis_ts[method][str(IGCC_YR)].index <= 1900),
                 (var, '50')
             ].mean()
             print(f'  {var}: {avg_1850_1900:.8f} °C')
 
 
 def figure_assessment_interannual_ant_update(
-    start_pi, end_pi,
-    end_yr, start_yr,
+    START_PI, END_PI,
+    IGCC_YR, START_YR,
     dict_analysis_ts,
     compare_years,
     var_colours,
@@ -1239,8 +1247,8 @@ def figure_assessment_interannual_ant_update(
         'Average': 'Multi-method Average'
     }
     year_colours = {
-        '2025': 'xkcd:teal',
-        '2024': 'xkcd:tomato',
+        f'{IGCC_YR}': 'xkcd:teal',
+        f'{IGCC_YR-1}': 'xkcd:tomato',
     }
     for year in compare_years:
         # TIMESERIES
@@ -1263,7 +1271,7 @@ def figure_assessment_interannual_ant_update(
     fig.suptitle('Anthropogenic warming best estimate: ' +
                  'three attribution methods and their multi-method average')
     ax.set_ylabel('Ant 50th percentile, °C')
-    ax.set_xlim(2000, end_yr+1)
+    ax.set_xlim(2000, IGCC_YR+1)
     ax.set_ylim(0.6, 1.6)
     gr.overall_legend(fig, 'lower center', 4)
     fig.savefig(f'{PLOT_FOLDER}/7_Compare_{"-".join(compare_years)}.png')
@@ -1320,7 +1328,7 @@ def write_interannual_ant_changes(
 
 
 def figure_raw_erfs():
-    df_forc = defs.load_ERF_CMIP6(end_yr)
+    df_forc = defs.load_ERF_CMIP6(IGCC_YR)
     # PLot the 0.05, 0.5, 0.95 quantile for each variable:
     fig = plt.figure(figsize=(12, 8))
     ax = plt.subplot2grid((1, 1), (0, 0), colspan=1)
@@ -1338,18 +1346,18 @@ def figure_raw_erfs():
 
 
 def extrapolate_assessment(
-        dict_updates_hl, methods, end_yr
+        dict_updates_hl, methods, IGCC_YR
 ):
     extrap_times = [
-        f'{end_yr}',
-        f'{end_yr} (SR15 definition)',
-        f'{end_yr-9}\N{EN DASH}{end_yr}'
+        f'{IGCC_YR}',
+        f'{IGCC_YR} (SR15 definition)',
+        f'{IGCC_YR-9}\N{EN DASH}{IGCC_YR}'
         ]
 
     extrap_times_new = [
-        f'{end_yr+1}',
-        f'{end_yr+1} (SR15 definition)',
-        f'{end_yr+1-9}\N{EN DASH}{end_yr+1}'
+        f'{IGCC_YR+1}',
+        f'{IGCC_YR+1} (SR15 definition)',
+        f'{IGCC_YR+1-9}\N{EN DASH}{IGCC_YR+1}'
         ]
     extrap_var = 'Ant'
     extrap_sigmas = ['5', '50', '95']
@@ -1369,7 +1377,7 @@ def extrapolate_assessment(
                     f'./results/{method}_GMST_rates.csv',
                     index_col=0, header=[0, 1], skiprows=0)
                 rate = df_rate.loc[
-                    f'{end_yr-9}-{end_yr} (AR6 rate definition)',
+                    f'{IGCC_YR-9}-{IGCC_YR} (AR6 rate definition)',
                     (extrap_var, p)]
                 extrap_result = current + rate
                 df_extrap.loc[
@@ -1416,7 +1424,7 @@ def extrapolate_assessment(
     unendashed_assessment = defs.un_en_dash_ify(
         dict_extrap['Assessment'].copy())
     unendashed_assessment.to_csv(
-            f'results/Assessment-Extrapolation-{end_yr+1}_GMST_headlines.csv')
+            f'results/Assessment-Extrapolation-{IGCC_YR+1}_GMST_headlines.csv')
 
 
 if __name__ == '__main__':
@@ -1435,10 +1443,11 @@ if __name__ == '__main__':
     # 2. IPCC Quoted reults (never update; quotes from IPCC AR6 and SR1.5)
 
     # Define date constants for the assessment
-    start_pi, end_pi = 1850, 1900
-    start_yr, end_yr = 1850, 2025
-    ar6_yr = 2019
-    sr15_yr = 2017
+    START_PI, END_PI = 1850, 1900
+    START_YR = 1850
+    IGCC_YR = 2025
+    AR6_YR = 2019
+    SR15_YR = 2017
 
     main_vars = ['Tot', 'Ant', 'GHG', 'Nat', 'OHF']
     assess_vars = ['Ant', 'GHG', 'Nat', 'OHF']
@@ -1455,24 +1464,24 @@ if __name__ == '__main__':
     # Load attribution reference datasets #####################################
     # Load reference observations used in attribution (HadCRUT)
     # TODO: Update file each year
-    df_temp_Obs = defs.load_HadCRUT(start_pi, end_pi, start_yr, end_yr)
+    df_temp_Obs = defs.load_HadCRUT(START_PI, END_PI, START_YR, IGCC_YR)
 
     # Load reference pi-control runs
     df_temp_PiC = load_filtered_PiC(
-        start_yr, end_yr, start_pi, end_pi, df_temp_Obs.shape[0])
+        START_YR, IGCC_YR, START_PI, END_PI, df_temp_Obs.shape[0])
 
     # LOAD IPCC-QUOTED RESULTS ################################################
     # Load IPCC-quoted observation results
-    df_AR6_Obs = IPCC_Obs.load_observation_assessment()
+    df_AR6_Obs = IPCC_Obs_data.load_observation_assessment()
     dict_IPCC_Obs_hl = {'Assessment': df_AR6_Obs}
 
     # Load IPCC-quoted attribution results
-    dict_IPCC_hl = IPCC_AGW.load_IPCC_df()
+    dict_IPCC_hl = IPCC_AGW_data.load_IPCC_df()
 
     # Load IGCC results #######################################################
     # Load IGCC observation assessment (IGCC Obs team to provide this as a csv)
     # TODO: Update file each year, and update the load_observation_assessment
-    df_IGCC_Obs = IGCC_Obs.load_observation_assessment(assess_yr=end_yr)
+    df_IGCC_Obs = IGCC_Obs_data.load_observation_assessment(assess_yr=IGCC_YR)
     dict_updates_Obs_hl = {'Assessment': df_IGCC_Obs}
 
     # Load attribution results
@@ -1485,7 +1494,7 @@ if __name__ == '__main__':
 
     # Create multi-method headline assessment
     df_updates_Assessment = multi_method_headlines(
-        dict_updates_hl, assess_vars, end_yr, sr15_yr, ar6_yr)
+        dict_updates_hl, assess_vars, IGCC_YR, SR15_YR, AR6_YR)
 
     # Definte colours, labels, and symbols for graphing
     var_colours = defs.get_var_colours()
@@ -1505,7 +1514,7 @@ if __name__ == '__main__':
         'Smith': 'AR6 WG1 Chapter 7',
         }
 
-    PLOT_FOLDER = f'./plots/{end_yr}/'
+    PLOT_FOLDER = f'./plots/{IGCC_YR}/'
     if not os.path.exists(PLOT_FOLDER):
         os.makedirs(PLOT_FOLDER)
 
@@ -1553,7 +1562,8 @@ if __name__ == '__main__':
         dict_updates_Obs_hl=dict_updates_Obs_hl,
         var_colours=var_colours,
         var_names=var_names,
-        labels=labels
+        labels=labels,
+        assess_vars=assess_vars
     )
 
     # PLOT SPM2-ESQUE FIGURE WITH UPDATES ONLY
@@ -1564,14 +1574,15 @@ if __name__ == '__main__':
         dict_updates_Obs_hl=dict_updates_Obs_hl,
         var_colours=var_colours,
         var_names=var_names,
-        labels=labels
+        labels=labels,
+        assess_vars=assess_vars
     )
 
     # CREATE TABLES FOR SUPPLEMENT
     tables_for_supplement(
-        end_yr=end_yr,
-        sr15_yr=sr15_yr,
-        ar6_yr=ar6_yr,
+        IGCC_YR=IGCC_YR,
+        SR15_YR=SR15_YR,
+        AR6_YR=AR6_YR,
         dict_updates_hl=dict_updates_hl,
         assess_vars=assess_vars
     )
@@ -1590,21 +1601,21 @@ if __name__ == '__main__':
 
     # PLOT DEFINITION DIAGRAM
     figure_definition_diagram(
-        end_yr=end_yr,
-        start_yr=start_yr,
+        IGCC_YR=IGCC_YR,
+        START_YR=START_YR,
         dict_updates_hl=dict_updates_hl,
         df_temp_Obs=df_temp_Obs,
         dict_updates_ts=dict_updates_ts,
         var_colours=var_colours
     )
 
-    compare_years = [str(end_yr), str(end_yr-1)]
+    compare_years = [str(IGCC_YR), str(IGCC_YR-1)]
     linestyles = {'Walsh':   '-', 'Ribes':   '--', 'Gillett': ':'}
 
     # Compare assessment years
     dict_analysis_ts = compare_assess_years(
         compare_years=compare_years,
-        end_yr=end_yr,
+        IGCC_YR=IGCC_YR,
         dict_updates_ts=dict_updates_ts
     )
 
@@ -1612,16 +1623,16 @@ if __name__ == '__main__':
     check_pi_average(
         main_vars=main_vars,
         dict_analysis_ts=dict_analysis_ts,
-        end_yr=end_yr
+        IGCC_YR=IGCC_YR
     )
 
     # Plot comparison figure
     figure_assessment_interannual_timeseries_difference(
         main_vars=main_vars,
-        start_pi=start_pi,
-        end_pi=end_pi,
-        end_yr=end_yr,
-        start_yr=start_yr,
+        START_PI=START_PI,
+        END_PI=END_PI,
+        IGCC_YR=IGCC_YR,
+        START_YR=START_YR,
         dict_updates_ts=dict_updates_ts,
         var_colours=var_colours,
         dict_analysis_ts=dict_analysis_ts,
@@ -1631,10 +1642,10 @@ if __name__ == '__main__':
 
     # Plot the anthropogenic warming best estimate comparison figure
     figure_assessment_interannual_ant_update(
-        start_pi=start_pi,
-        end_pi=end_pi,
-        end_yr=end_yr,
-        start_yr=start_yr,
+        START_PI=START_PI,
+        END_PI=END_PI,
+        IGCC_YR=IGCC_YR,
+        START_YR=START_YR,
         dict_analysis_ts=dict_analysis_ts,
         compare_years=compare_years,
         var_colours=var_colours,
