@@ -53,8 +53,7 @@ def load_attribution_results(assess_vars):
         df_method_hl = pd.read_csv(
             f'results/{file_hs}',
             index_col=0,  header=[0, 1], skiprows=0)
-        if method == 'Walsh':
-            n = file_ts.split('.csv')[0].split('_')[-1]
+
         df_method_hl = defs.en_dash_ify(df_method_hl)
 
         dict_updates_hl[method] = df_method_hl
@@ -85,7 +84,7 @@ def load_attribution_results(assess_vars):
             :,
             _df.columns.get_level_values(0).isin(assess_vars)]
 
-    return dict_updates_hl, dict_updates_ts, n
+    return dict_updates_hl, dict_updates_ts
 
 
 def multi_method_timeseries(assess_vars):
@@ -393,7 +392,7 @@ def plot_validation_plot(
     fig.text(ax2.get_position().x0, ax2.get_position().y1+0.02,
              f'(b) {SR15_YR} SR1.5 Ch.1 (left)'
              '\n      '
-             'vs {SR15_YR} repeat (right)',
+             f'vs {SR15_YR} repeat (right)',
              ha='left', fontsize=matplotlib.rcParams['axes.titlesize'],
              fontweight='regular',
              #  fontstyle='italic'
@@ -1486,7 +1485,7 @@ if __name__ == '__main__':
 
     # Load attribution results
     # TODO: Update files each year
-    dict_updates_hl, dict_updates_ts, n = load_attribution_results(main_vars)
+    dict_updates_hl, dict_updates_ts = load_attribution_results(main_vars)
 
     # Create multi-method timeseries assessment
     # PLACEHOLDER
