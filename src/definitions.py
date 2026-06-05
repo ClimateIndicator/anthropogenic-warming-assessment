@@ -201,6 +201,30 @@ def load_Temp_IGCC(start_pi, end_pi, end_yr):
     return df_temp_Obs
 
 
+def load_metoffice_projection(igcc_yr):
+    """Return the Met Office HadCRUT projection for igcc_yr+1.
+
+    Values are stored in data/Temp/MetOffice/HadCRUT_annual_projections.csv.
+    Add a new row (and source URL comment) to that file each year.
+
+    Raises ValueError if no projection for igcc_yr+1 is found.
+    """
+    here = Path(__file__).parent
+    proj_path = here / '../data/Temp/MetOffice/HadCRUT_annual_projections.csv'
+    df = pd.read_csv(proj_path, comment='#')
+    df.columns = df.columns.str.strip()
+    target_year = igcc_yr + 1
+    row = df.loc[df['year'] == target_year, 'GMST_projection']
+    if row.empty:
+        raise ValueError(
+            f"No Met Office HadCRUT projection found for {target_year} in\n"
+            f"  {proj_path.resolve()}\n"
+            f"Append a row  '{target_year},<value>'  and record the source URL "
+            f"in the comment block at the top of that file."
+        )
+    return float(row.iloc[0])
+
+
 def load_PiC_CMIP6(n_yrs, start_pi, end_pi):
     """Create DataFrame of piControl data from .MAG files."""
     # Create list of all .MAG files recursively inside the directory

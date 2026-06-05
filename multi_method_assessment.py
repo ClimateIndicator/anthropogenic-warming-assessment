@@ -1127,6 +1127,299 @@ def figure_definition_diagram(
     fig.savefig(f'{PLOT_FOLDER}/1_definition_diagram_GWI.pdf')
 
 
+def figure_COP_context(
+        IGCC_YR, START_PI, END_PI,
+        dict_updates_ts,
+        dict_updates_hl,
+        metoffice_proj_next_yr,
+        ant_sr15_proj_increment,
+):
+    """Create the COP communication figure.
+
+    Shows observed GMST and the SR1.5-definition human-induced warming
+    timeseries, a forward projection for the upcoming year, and a
+    decade-average band. Designed for COP plenary readability.
+
+    Parameters
+    ----------
+    metoffice_proj_next_yr : float
+        Met Office HadCRUT projection for IGCC_YR+1. Update each year.
+    ant_sr15_proj_increment : float
+        Projected 1-year increase in multi-method mean Ant SR15 warming.
+        Update each year (e.g. from the annual attribution rate).
+    """
+    print('Creating COP context figure...')
+
+    # -------------------------------------------------------------------------
+    # COP-specific matplotlib styling — applied via rc_context so it does not
+    # bleed into other figures. Adjust here to tune the look for COP presentations.
+    # -------------------------------------------------------------------------
+    _font = 'Arial'
+    cop_style = {
+        'font.family': _font,
+        'font.size': 14,
+        'mathtext.fontset': 'custom',
+        'mathtext.rm': _font,
+        'mathtext.bf': f'{_font}:bold',
+        'mathtext.cal': _font,
+        'legend.frameon': False,
+        'axes.spines.bottom': True,
+        'axes.spines.left': False,
+        'axes.spines.right': False,
+        'axes.spines.top': False,
+        'axes.linewidth': 2,
+        'axes.facecolor': 'white',
+        'axes.titleweight': 'regular',
+        'axes.edgecolor': '#D1CFCD',
+        'xtick.color': '#D1CFCD',
+        'xtick.labelcolor': '#6F6F6F',
+        'ytick.color': '#6F6F6F',
+        'axes.grid': True,
+        'axes.grid.axis': 'y',
+        'grid.color': '#D1CFCD',
+        'grid.linewidth': 1.5,
+        'ytick.major.size': 0,
+        'ytick.major.width': 0,
+    }
+
+    # Colour scheme for this communication figure (bold red/black)
+    cop_colours = {
+        'Obs': 'black',
+        'Ant': '#C71518',
+        'Ant decade': '#C71518',
+    }
+
+    # -------------------------------------------------------------------------
+    # Data computation (outside rc_context)
+    # -------------------------------------------------------------------------
+    df_Obs_IGCC = defs.load_Temp_IGCC(START_PI, END_PI, IGCC_YR)
+
+    # Compute SR1.5-definition warming per method: for each year, fit a
+    # 15-year linear trend to the Ant timeseries and record the final-year
+    # value of that trend (the SR1.5 "present-day warming" definition).
+    dict_updates_SR15 = {}
+    hl_years = np.arange(1990, IGCC_YR + 1)
+    for method in ['Walsh', 'Ribes', 'Gillett']:
+        trunc_Yrs = dict_updates_ts[method].index.values
+        df_method_SR15 = dict_updates_ts[method].copy()
+        df_method_SR15[:] = np.zeros(df_method_SR15.shape)
+        for year in hl_years:
+            mask = (year - 14 <= trunc_Yrs) & (trunc_Yrs <= year)
+            trend_end = np.apply_along_axis(
+                func1d=defs.final_value_of_trend,
+                axis=0,
+                arr=dict_updates_ts[method].values[mask, :]
+            )
+            df_method_SR15.loc[year, :] = trend_end
+        dict_updates_SR15[method] = df_method_SR15
+
+    sr15_mmm = (
+        dict_updates_SR15['Walsh'] +
+        dict_updates_SR15['Ribes'] +
+        dict_updates_SR15['Gillett']
+    ) / 3
+
+    df_headlines = dict_updates_hl['Assessment']  # already en-dashed in memory
+    decade_label = f'{IGCC_YR-9}\N{EN DASH}{IGCC_YR}'
+
+    obs_year = int(df_Obs_IGCC.index[-1])
+    obs_value = float(df_Obs_IGCC['GMST'].iloc[-1])
+    ant_sr15_now = float(sr15_mmm[('Ant', '50')].loc[IGCC_YR])
+    decade_avg_value = float(df_headlines[('Ant', '50')].loc[decade_label])
+    human_label_value = float(
+        df_headlines[('Ant', '50')].loc[f'{IGCC_YR} (SR15 definition)'])
+
+    # -------------------------------------------------------------------------
+    # Annotation spacing — adjust these to tune label positions
+    # -------------------------------------------------------------------------
+    arrow_offset = 0.1   # gap between data point and arrowhead (years)
+    arm_length = 2.5     # length of horizontal level arrow (years)
+    FLICK_X = 1.0        # horizontal component of 45° flick to text (years)
+    FLICK_Y = 0.05       # vertical component of 45° flick (°C); tune for visual angle
+    arrow_width = 1.2
+    arrow_head_size = 20
+
+    # -------------------------------------------------------------------------
+    # Figure — everything inside rc_context uses the COP-specific styling
+    # -------------------------------------------------------------------------
+    with matplotlib.rc_context(cop_style):
+        fig = plt.figure(figsize=(12, 7))
+        ax = plt.subplot2grid(shape=(1, 1), loc=(0, 0))
+        marker_size = 3
+        marker_size_highlight = 7
+
+        # Observed GMST solid line
+        ax.plot(
+            df_Obs_IGCC.index, df_Obs_IGCC['GMST'],
+            color=cop_colours['Obs'],
+            linewidth=1.2, alpha=1.0,
+            marker='o', markersize=marker_size,
+            label='Observed warming'
+        )
+        # Human-induced (SR1.5-definition, multi-method mean) solid line
+        ax.plot(
+            sr15_mmm.index, sr15_mmm[('Ant', '50')],
+            color=cop_colours['Ant'],
+            linewidth=2.5, alpha=1.0,
+            marker='o', markersize=marker_size,
+            label='Human-induced warming'
+        )
+
+        # Highlighted dots at IGCC_YR
+        ax.scatter(
+            IGCC_YR, ant_sr15_now,
+            color=cop_colours['Ant'], s=marker_size_highlight * 8,
+            edgecolor=cop_colours['Ant'], marker='o', lw=0
+        )
+        ax.scatter(
+            IGCC_YR, obs_value,
+            color=cop_colours['Obs'], s=marker_size_highlight * 8,
+            edgecolor=cop_colours['Obs'], marker='o', lw=0
+        )
+
+        # Key policy / scientific events — update the COP entry each year
+        key_dates = {
+            2010: 'Cancún Agreement',
+            2015: 'Paris Agreement',
+            2021: 'IPCC AR6 WGI',
+            2026: 'COP31 Antalya',  # ← upc date label (and year if needed) each year
+        }
+        for year, label in key_dates.items():
+            ax.axvline(
+                x=year, color='#cfd1d0', linestyle='-', linewidth=0.5, zorder=0)
+            ax.text(
+                x=year - 0.6, y=0.5 + 0.015, s=label,
+                rotation=90, verticalalignment='bottom',
+                color='#6F6F6F', fontsize=12
+            )
+
+        # Decade-average human-induced warming band (last 10 years of assessment)
+        ax.plot(
+            df_Obs_IGCC.index[-10:],
+            [decade_avg_value] * 10,
+            color=cop_colours['Ant decade'], alpha=0.5, linestyle='-', lw=0.5
+        )
+        ax.fill_between(
+            df_Obs_IGCC.index[-10:],
+            [decade_avg_value] * 10,
+            sr15_mmm[('Ant', '50')].iloc[-10:],
+            color=cop_colours['Ant decade'], alpha=0.05, lw=0
+        )
+        ax.scatter(
+            IGCC_YR - 9 + 4.5, decade_avg_value,
+            color=cop_colours['Ant decade'], s=marker_size_highlight * 8,
+            edgecolor=cop_colours['Ant decade'], marker='o', alpha=0.5, lw=0
+        )
+
+        # Annotations: horizontal arm from the data point, then a short 45°
+        # flick leading to the separated text label. A single annotate call
+        # with connectionstyle="angle" guarantees a gap-free elbow.
+        # angleB=0 keeps the arm horizontal at the data end.
+        # angleA must exit the text end leftward (toward data): 135° for
+        # upward flick (text above arm), 225° for downward (text below arm),
+        # i.e. angleA = 180 - 45*flick_sign.
+        # Red annotations flick downward; black (obs) flicks upward.
+        # Tune arm_length, FLICK_X, FLICK_Y above to adjust layout.
+        def _cop_annotate(data_x, data_y, flick_up, text_str, color, alpha=1.0):
+            flick_sign = 1 if flick_up else -1
+            text_x = data_x + arm_length + FLICK_X
+            text_y = data_y + flick_sign * FLICK_Y
+            ax.annotate(
+                text_str,
+                xy=(data_x + arrow_offset, data_y),
+                xytext=(text_x, text_y),
+                color=color, alpha=alpha, fontweight='regular',
+                arrowprops=dict(
+                    color=color,
+                    arrowstyle='->',
+                    mutation_scale=arrow_head_size,
+                    linewidth=arrow_width,
+                    alpha=alpha,
+                    # tail attaches at left edge of text box, halfway up
+                    relpos=(0, 0.5),
+                    # shrinkA=5, shrinkB=0,
+                    connectionstyle=f"angle,angleA={45 * flick_sign},angleB=0,rad=5",
+                ),
+                verticalalignment='center',
+                horizontalalignment='left',
+                # annotation_clip=False,
+            )
+
+        _cop_annotate(
+            obs_year, obs_value, True,
+            'Observed\n' + f'{obs_year}\n' +
+            r"$\bf{" + f"{obs_value:.2f}" + "}$ °C",
+            cop_colours['Obs'],
+        )
+        _cop_annotate(
+            IGCC_YR, ant_sr15_now, False,
+            'Human-induced\n' + f'{IGCC_YR}\n' +
+            r"$\bf{" + f"{human_label_value:.2f}" + "}$ °C",
+            cop_colours['Ant'],
+        )
+        _cop_annotate(
+            IGCC_YR, decade_avg_value, False,
+            'Human-induced\n' +
+            f'{IGCC_YR-9}\N{EN DASH}{IGCC_YR} average\n' +
+            r"$\bf{" + f"{decade_avg_value:.2f}" + "}$ °C",
+            cop_colours['Ant decade'],
+            alpha=0.5,
+        )
+
+        # Axis formatting
+        ax.set_ylabel('Global Surface Temperature Increase\n')
+        ax.yaxis.label.set_size(16)
+        # Fixed y-range for COP communication; update if warming exceeds 1.55 °C
+        ax.set_ylim(0.5, 1.55)
+        ax.set_yticks([0.5, 1.0, 1.5], ['0.5 °C ', '1.0 °C ', '1.5 °C '])
+        ax.get_yticklabels()[2].set_color(cop_colours['Ant'])
+        ax.get_ygridlines()[2].set_color(cop_colours['Ant'])
+
+        # x-axis: 5-year ticks up to and including IGCC_YR; projection year
+        # is shown via the dashed line but gets no tick to avoid crowding
+        ticks = list(np.arange(1990, IGCC_YR, 5)) + [IGCC_YR]
+        ax.set_xticks(ticks, ticks)
+        ax.set_xlim(1999.5, IGCC_YR + 2.2)
+
+        fig.tight_layout(rect=(0.02, 0.06, 0.98, 0.94))
+
+        # ---------------------------------------------------------------------
+        # Version 1 — without next-year projection. Everything above is shared
+        # by both versions; save the figure as-is here first.
+        # ---------------------------------------------------------------------
+        fig.savefig(f'{PLOT_FOLDER}/8_COP_context_no_projection.png', dpi=300)
+        fig.savefig(f'{PLOT_FOLDER}/8_COP_context_no_projection.pdf')
+
+        # ---------------------------------------------------------------------
+        # Version 2 — add the dashed next-year projection segments on top of
+        # the shared figure, then re-save. Keeping this as an additive block
+        # means both versions stay in sync when updated in future years.
+        # ---------------------------------------------------------------------
+        # Dashed projection segments from IGCC_YR → IGCC_YR+1
+        ax.plot(
+            [IGCC_YR, IGCC_YR + 1],
+            [df_Obs_IGCC['GMST'].loc[IGCC_YR], metoffice_proj_next_yr],
+            color=cop_colours['Obs'],
+            linewidth=1.2, linestyle='--',
+            marker='o', markersize=marker_size,
+            markerfacecolor='none',
+            markeredgecolor=cop_colours['Obs'],
+            markeredgewidth=2
+        )
+        ax.plot(
+            [IGCC_YR, IGCC_YR + 1],
+            [ant_sr15_now, ant_sr15_now + ant_sr15_proj_increment],
+            color=cop_colours['Ant'],
+            linewidth=1.2, linestyle='--',
+            marker='o', markersize=marker_size,
+            markerfacecolor='none',
+            markeredgecolor=cop_colours['Ant'],
+            markeredgewidth=2
+        )
+        fig.savefig(f'{PLOT_FOLDER}/8_COP_context.png', dpi=300)
+        fig.savefig(f'{PLOT_FOLDER}/8_COP_context.pdf')
+
+
 def compare_assess_years(
         compare_years, IGCC_YR, dict_updates_ts
 ):
@@ -1448,6 +1741,19 @@ if __name__ == '__main__':
     AR6_YR = 2019
     SR15_YR = 2017
 
+    # =========================================================================
+    # Annual manual inputs for figure_COP_context — update each year
+    # =========================================================================
+    # Met Office HadCRUT projection for IGCC_YR+1: loaded from
+    # data/Temp/MetOffice/HadCRUT_annual_projections.csv — append a row there.
+    METOFFICE_PROJ_NEXT_YR = defs.load_metoffice_projection(IGCC_YR)
+
+    # Projected 1-year increase in multi-method mean Ant SR15 warming.
+    # Derived from the annual rate of change in the attribution timeseries.
+    ANT_SR15_PROJ_INCREMENT = 0.027  # TODO: update each year if needed
+
+    # =========================================================================
+
     main_vars = ['Tot', 'Ant', 'GHG', 'Nat', 'OHF']
     assess_vars = ['Ant', 'GHG', 'Nat', 'OHF']
     var_names = defs.VAR_NAMES.copy()
@@ -1606,6 +1912,17 @@ if __name__ == '__main__':
         df_temp_Obs=df_temp_Obs,
         dict_updates_ts=dict_updates_ts,
         var_colours=var_colours
+    )
+
+    # PLOT COP CONTEXT FIGURE
+    figure_COP_context(
+        IGCC_YR=IGCC_YR,
+        START_PI=START_PI,
+        END_PI=END_PI,
+        dict_updates_ts=dict_updates_ts,
+        dict_updates_hl=dict_updates_hl,
+        metoffice_proj_next_yr=METOFFICE_PROJ_NEXT_YR,
+        ant_sr15_proj_increment=ANT_SR15_PROJ_INCREMENT,
     )
 
     compare_years = [str(IGCC_YR), str(IGCC_YR-1)]

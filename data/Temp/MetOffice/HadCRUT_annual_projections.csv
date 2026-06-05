@@ -1,0 +1,8 @@
+# Met Office HadCRUT annual global mean surface temperature projections.
+# Each row is the Met Office forecast for that calendar year, published at the
+# start of the year. Append one row per year and record the source URL below.
+#
+# Sources:
+# 2026: https://www.metoffice.gov.uk/about-us/news-and-media/media-centre/weather-and-climate-news/2025/2026-outlook-likely-another-year-above-1.4c
+year,GMST_projection
+2026,1.46
